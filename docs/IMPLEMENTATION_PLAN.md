@@ -112,24 +112,24 @@ S2, S3, and S4 run **in parallel** after S1; S4 starts on mocks during S1.
 ### Tasks
 | ID | Task and approach | Owner | Depends on | Done when |
 |---|---|---|---|---|
-| S0-01 | **Benchmark logistics:** consent forms (STT_BENCHMARK_PLAN App. A), recording sessions with OBS two-track setup, clip metadata sheet | Gaurav | — | 20 core + 2 long clips recorded with signed consent |
-| S0-02 | **Provider pre-flight actions** (STT_PREFLIGHT §6): Sarvam training opt-out + screenshot + credits top-up, Deepgram account + `mip_opt_out` check, Gemini billing-enabled Cloud project, rate-limit notes | Gaurav | — | All 9 pre-flight actions ticked |
+| S0-01 | **Benchmark logistics:** consent forms (STT_BENCHMARK_PLAN App. A), recording sessions with OBS two-track setup, clip metadata sheet | Anirudh | — | 20 core + 2 long clips recorded with signed consent |
+| S0-02 | **Provider pre-flight actions** (STT_PREFLIGHT §6): Sarvam training opt-out + screenshot + credits top-up, Deepgram account + `mip_opt_out` check, Gemini billing-enabled Cloud project, rate-limit notes | Anirudh | — | All 9 pre-flight actions ticked |
 | S0-03 | **Annotation guideline and canonical Hinglish spelling list v1** (STT_BENCHMARK_PLAN §4.2) | Anirudh | — | Guideline doc + spelling list committed (no audio) |
-| S0-04 | **Reference transcripts**, clips 1–10, plus review of clips 11–20 | Gaurav | S0-01, S0-03 | Clips annotated and cross-reviewed |
+| S0-04 | **Reference transcripts**, clips 1–10, plus review of clips 11–20 | Anirudh | S0-01, S0-03 | Clips annotated and cross-reviewed |
 | S0-05 | **Reference transcripts**, clips 11–20, plus review of clips 1–10; double-annotation agreement check | Anirudh | S0-01, S0-03 | Agreement < 5% WER or guideline fixed |
-| S0-06 | **Batch runner:** sends each prepared file to each provider/config, saves raw JSON + run metadata | Gaurav | S0-02 | Phase A raw results stored |
+| S0-06 | **Batch runner:** sends each prepared file to each provider/config, saves raw JSON + run metadata | Anirudh | S0-02 | Phase A raw results stored |
 | S0-07 | **Streaming replay harness:** plays PCM at real-time speed in 100 ms chunks to each provider, records message arrival times, handles keep-alive/reconnect | Anirudh | S0-02 | Phases B and C runnable for all providers |
 | S0-08 | **Normalizer + scorer:** STT_BENCHMARK_PLAN §5–§6 (WER, CER, code-switch WER, entity accuracy, DER, latency, hallucination, echo) | Anirudh | S0-03 | Results sheet generated from raw outputs |
 | S0-09 | **Benchmark Phases D–G** (Opus vs PCM, boosting, downstream summary test) and analysis | Anirudh | S0-06..08 | Results analysed |
-| S0-10 | **Display readability test** (Phase G) — prepare blind samples, collect both ratings | Gaurav | S0-06 | Ratings recorded |
+| S0-10 | **Display readability test** (Phase G) — prepare blind samples, collect both ratings | Anirudh | S0-06 | Ratings recorded |
 | S0-11 | **ADR-0001** STT provider(s) | Anirudh | S0-09, S0-10 | ADR accepted; AGENTS.md D-03 closed |
-| S0-12 | **ADR-0002 checks** 2, 3, 5, 6 (Cloud SQL pgvector, backup retention, cost estimate, credits) | Gaurav | — | Checks recorded in ADR §9 |
+| S0-12 | **ADR-0002 checks** 2, 3, 5, 6 (Cloud SQL pgvector, backup retention, cost estimate, credits) | Anirudh | — | Checks recorded in ADR §9 |
 | S0-13 | **ADR-0002 checks** 1 and 4 (Cloud Run WebSocket behaviour, latency from Mumbai to vendors) | Anirudh | S0-07 | ADR-0002 Accepted |
 | S0-14 | **ADR-0004** auth and token model; **ADR-0005** queue and outbox | Anirudh | — | Both accepted |
-| S0-15 | **Monorepo setup:** pnpm workspaces, TypeScript strict, ESLint/Prettier/EditorConfig, Vitest, `.gitignore`, `.vscode/extensions.json`, CI (lint, typecheck, test) | Gaurav | GitHub repo created | CI green on an empty skeleton |
+| S0-15 | **Monorepo setup:** pnpm workspaces, TypeScript strict, ESLint/Prettier/EditorConfig, Vitest, `.gitignore`, `.vscode/extensions.json`, CI (lint, typecheck, test) | Anirudh | GitHub repo created | CI green on an empty skeleton |
 | S0-16 | **Shared contracts v0** in `shared/`: capture events, WebSocket protocol messages, REST DTO skeleton, summary JSON schema (zod) + generated JSON Schema | Anirudh | S0-15 | Contracts merged with tests |
-| S0-17 | **Design tokens and fonts** as CSS variables (DESIGN §5), bundled font files, icon set | Gaurav | S0-15 | Token package merged |
-| S0-18 | **Draft legal texts:** privacy policy, terms of use, consent explainer, sub-processor list | Gaurav | ADR-0001 for vendor names | Drafts ready for legal review in S6 |
+| S0-17 | **Design tokens and fonts** as CSS variables (DESIGN §5), bundled font files, icon set | Anirudh | S0-15 | Token package merged |
+| S0-18 | **Draft legal texts:** privacy policy, terms of use, consent explainer, sub-processor list | Anirudh | ADR-0001 for vendor names | Drafts ready for legal review in S6 |
 
 **Exit criteria:** ADR-0001, ADR-0002, ADR-0004, ADR-0005 accepted · repository with green CI ·
 contracts v0 merged · tokens package merged.
@@ -137,14 +137,18 @@ contracts v0 merged · tokens package merged.
 ### Stage 0 status (2026-10-28, branch `feature/stage-0`)
 
 All repository and document work for S0-01..S0-18 was prepared by Anirudh (Claude Code). Items marked
-🟡 need people, accounts, or real recordings and keep their original owner.
+🟡 need people, accounts, or real recordings.
+
+> **Ownership change (2026-10-28):** Anirudh owns **all** Stage 0 tasks (S0-01..S0-18), including
+> those first assigned to Gaurav. Where the plan needs two people (double annotation, two raters),
+> see ANNOTATION_GUIDELINE §8 and STT_BENCHMARK_PLAN §10.
 
 | Task | Status | What exists / what is left |
 |---|---|---|
-| S0-01 | 🟡 Kit ready | [Consent form](benchmark/CONSENT_FORM.md), [topic cards](benchmark/TOPIC_CARDS.md) (20 + 2), [recording guide](benchmark/RECORDING_GUIDE.md) with OBS setup, [metadata sheet](benchmark/templates/clip-metadata.csv). **Left:** recruit participants, sign consent, record sessions (Gaurav) |
-| S0-02 | 🟡 Runbook ready | [Pre-flight runbook](benchmark/PREFLIGHT_RUNBOOK.md). **Left:** console actions — Sarvam opt-out + top-up, Deepgram account, billing-enabled Gemini project, keys (Gaurav) |
+| S0-01 | 🟡 Kit ready | [Consent form](benchmark/CONSENT_FORM.md), [topic cards](benchmark/TOPIC_CARDS.md) (20 + 2), [recording guide](benchmark/RECORDING_GUIDE.md) with OBS setup, [metadata sheet](benchmark/templates/clip-metadata.csv). **Left:** recruit participants, sign consent, record sessions (Anirudh) |
+| S0-02 | 🟡 Runbook ready | [Pre-flight runbook](benchmark/PREFLIGHT_RUNBOOK.md). **Left:** console actions — Sarvam opt-out + top-up, Deepgram account, billing-enabled Gemini project, keys (Anirudh) |
 | S0-03 | ✅ Done | [Annotation guideline](benchmark/ANNOTATION_GUIDELINE.md); canonical Hinglish list v1 (92 entries) in `tools/stt-benchmark/data/` |
-| S0-04 / S0-05 | 🟡 Blocked on S0-01 | Reference format + example + validation in the scorer. **Left:** annotate clips (Gaurav 1–10, Anirudh 11–20) |
+| S0-04 / S0-05 | 🟡 Blocked on S0-01 | Reference format + example + validation in the scorer. **Left:** annotate all 20 clips (Anirudh) + self-consistency check |
 | S0-06 | ✅ Built | `bench run-batch` for Sarvam (SDK jobs), Deepgram (pre-recorded), Gemini (Files + Interactions). **Left:** first live run (Phase A) |
 | S0-07 | ✅ Built | `bench run-stream`: real-time 100 ms replay, keep-alive, Gemini 10-min rotation. **Left:** first live run (Phases B–C) |
 | S0-08 | ✅ Built | Normalizer (Devanagari→Roman, canonical spellings, numbers) + scorer (WER/CER, code-switch, entities, DER, hallucination, echo, latency); 48 tests |

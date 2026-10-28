@@ -336,6 +336,11 @@ Hinglish targets, record the gap and decide whether to (a) accept and improve vi
 
 ## 10. Timeline and roles (proposal)
 
+> **2026-10-28:** Anirudh does all Stage 0 benchmark work alone. The split below is kept for
+> reference; with one person, plan ~6 weeks instead of 4, use a self-consistency check instead of
+> double annotation (ANNOTATION_GUIDELINE §8), and one rater for Phase G (or ask Gaurav for ~15
+> minutes of blind ratings).
+
 | Week | Work | Anirudh | Gaurav |
 |---|---|---|---|
 | 1 | Consent forms, topic cards, provider pre-flight checklist, OBS setup, record clips | Annotation guideline, canonical spelling list, topic cards | Consent forms, recording sessions and OBS setup, provider accounts and pre-flight checklist |

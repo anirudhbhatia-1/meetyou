@@ -37,7 +37,9 @@ rewriting anything.
 - **Contracts first:** `shared/` schemas and fixtures come before the code that uses them; UI is
   built against mocks until services are ready.
 - **Rules for agents:** [AGENTS.md](AGENTS.md) (both tools read it; `CLAUDE.md` imports it).
-- Gaurav's separate Antigravity setup guide was removed on purpose (2026-10-28) — do not recreate it.
+- `GAURAV_ANTIGRAVITY_SETUP.md` was removed by Anirudh, then re-added by Gaurav on `main` (2026-10-28); it is Gaurav's file.
+- **Stage 0 ownership (2026-10-28):** Anirudh does all of Stage 0 (S0-01..S0-18).
+- Anirudh's git rule: work on `anirudh`, push it, then fast-forward `main`; no new branches.
 
 ---
 
@@ -131,7 +133,7 @@ All dated 2026-10-28 unless noted.
 
 | ID | Question | Status / next step | Owner of next step |
 |---|---|---|---|
-| D-03 | STT provider(s) | Benchmark Sarvam, Deepgram Nova-3 multilingual, Gemini Transcribe (S0-01..S0-11) → ADR-0001 | Anirudh (analysis), Gaurav (logistics) |
+| D-03 | STT provider(s) | Benchmark Sarvam, Deepgram Nova-3 multilingual, Gemini Transcribe (S0-01..S0-11) → ADR-0001 | Anirudh |
 | D-04 | LLM for summaries | Evaluation in S3-05 → ADR-0007; Gemini Flash is a candidate | Anirudh |
 | D-05 | Consent notice default mode | Proposed One click (used in DESIGN) — confirm | Both |
 | D-06 | Audio transport: Opus vs PCM | Benchmark Phase D → ADR-0003 | Anirudh |
@@ -139,7 +141,7 @@ All dated 2026-10-28 unless noted.
 | D-09 | Product name | "Minutes" is a working name | Both |
 | D-10 | `me` lane follows Meet mute by default | Proposed On — confirm in M1 | Both |
 | D-11 | Hinglish note markers (`faisla:`, `kaam:`, `sawaal:`, `zaroori:`) | Decide by M2 | Both |
-| ADR-0002 | Remaining checks: #2 pgvector version, #5 pricing calculator (Gaurav); #4 Cloud Shell latency run, #1 live 2-hour test in S1-11 (Anirudh) | Checks 3, 6 done; 1, 4 partly | as listed |
+| ADR-0002 | Remaining checks: #2 pgvector version, #5 pricing calculator, #4 Cloud Shell latency run, #1 live 2-hour test in S1-11 (all Anirudh) | Checks 3, 6 done; 1, 4 partly | as listed |
 | ADR-0004 / 0005 | Approve, then run their verification items | Proposed | Both |
 
 ---
@@ -163,18 +165,16 @@ Facts learned so far that change how we build. Full sources in STT_PREFLIGHT.md 
 
 ## 7. What happens next
 
-Full status table: IMPLEMENTATION_PLAN.md → "Stage 0 status".
+Full status table: IMPLEMENTATION_PLAN.md → "Stage 0 status". **All of Stage 0 is Anirudh's.**
 
-1. Review and merge `feature/stage-0`; give Gaurav collaborator access.
-2. Gaurav (people/accounts): S0-02 pre-flight runbook (Sarvam opt-out + top-up, Deepgram, billing
-   Gemini project) → S0-01 recordings with consent → S0-04 references for clips 1–10 → S0-10 ratings;
-   ADR-0002 checks 2 and 5.
-3. Anirudh: S0-05 references for clips 11–20 + agreement check → first live runs of the benchmark
-   tools (fix `[Verify]` items) → S0-09 analysis → S0-11 ADR-0001; ADR-0002 check 4 from Cloud Shell.
-4. Both: approve ADR-0004 and ADR-0005.
-5. Stage 1 can start in parallel: Gaurav S1-01 (prompt already prepared), Anirudh S1-02.
-
----
+1. S0-02 provider setup (PREFLIGHT_RUNBOOK): Sarvam opt-out + top-up, Deepgram, billing-enabled
+   Gemini project, keys.
+2. Smoke-test the benchmark tools on one short synthetic clip per provider; fix `[Verify]` items.
+3. S0-01 recordings with consent (participants still needed — 2 to 6 people per clip).
+4. S0-04/S0-05 references for all 20 clips + self-consistency check.
+5. S0-09 Phases A–G → S0-10 ratings → S0-11 ADR-0001.
+6. ADR-0002 checks #2, #4, #5; approve ADR-0004 and ADR-0005.
+7. Give Gaurav collaborator access; Stage 1 (e.g. S1-01) can run in parallel.
 
 ## 8. Conventions for this file
 

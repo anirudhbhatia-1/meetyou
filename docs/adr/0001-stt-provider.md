@@ -5,7 +5,7 @@
 | Status | **Pending benchmark** — results sections are filled in after Phases A–G |
 | Decision | D-03 (PRD §22) |
 | Inputs | [STT_BENCHMARK_PLAN.md](../STT_BENCHMARK_PLAN.md) · [STT_PREFLIGHT.md](../STT_PREFLIGHT.md) · `results/scores.csv` from `tools/stt-benchmark` |
-| Owner | Anirudh (analysis) · Gaurav (logistics, Phase G) |
+| Owner | Anirudh (all Stage 0 work, 2026-10-28) |
 
 ---
 

@@ -96,7 +96,7 @@ HTTPS. No custom crypto. [Verify current versions at implementation time.]
 |---|---|---|
 | 1 | `launchWebAuthFlow` from the MV3 service worker and from the onboarding page (both work?) | Anirudh (with S1-01 skeleton) |
 | 2 | Google OAuth client type and redirect URI rules for `chromiumapp.org` | Anirudh |
-| 3 | Basic-scope consent screen needs only brand verification, not sensitive-scope review | Gaurav |
+| 3 | Basic-scope consent screen needs only brand verification, not sensitive-scope review | Anirudh |
 | 4 | `jose` ES256 + JWKS performance in Cloud Run cold starts | Anirudh |
 
 ## 7. Sources

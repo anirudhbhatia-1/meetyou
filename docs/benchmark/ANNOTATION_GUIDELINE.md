@@ -3,7 +3,7 @@
 | Field | Value |
 |---|---|
 | Version | 1.0 (2026-10-28) |
-| Used by | S0-04 (clips 1–10, Gaurav), S0-05 (clips 11–20, Anirudh) |
+| Used by | S0-04, S0-05 — all 20 clips annotated by Anirudh (2026-10-28) |
 | Spelling list | [`tools/stt-benchmark/data/hinglish-canonical.json`](../../tools/stt-benchmark/data/hinglish-canonical.json) |
 | File format | [`tools/stt-benchmark/examples/reference.example.json`](../../tools/stt-benchmark/examples/reference.example.json), schema in `tools/stt-benchmark/src/schemas.ts` (`Reference`) |
 
@@ -96,6 +96,9 @@ cards include at least one 10-second pause). Used to measure hallucinations.
    together, and the guideline or spelling list is updated if the rule was unclear.
 5. Clips `hx-001` and `hx-011` are annotated by **both** people independently. Score one against the
    other with the scorer; agreement must be **< 5% WER**, otherwise fix the guideline first.
+   **With a single annotator:** re-annotate `hx-001` and `hx-011` from scratch at least 5 days later
+   without looking at the first version, and score the two versions against each other (same
+   < 5% target). If possible, ask a second person to review one clip.
 
 ## 9. Checklist per file
 
