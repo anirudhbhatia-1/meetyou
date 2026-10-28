@@ -1,0 +1,16 @@
+{
+  "clips": [
+    {
+      "id": "hx-001",
+      "set": "core",
+      "lanes": { "me": "audio/hx-001.me.wav", "them": "audio/hx-001.them.wav" },
+      "languageMix": "Hinglish ~60% hi / 40% en",
+      "participants": 3,
+      "localSetup": "laptop mic + speakers",
+      "environment": "moderate noise (fan)",
+      "scenario": "sprint planning",
+      "vocabulary": ["Rahul Mehta", "Neha Iyer", "Razorpay", "staging"],
+      "consentRefs": ["CF-001", "CF-002", "CF-003"]
+    }
+  ]
+}

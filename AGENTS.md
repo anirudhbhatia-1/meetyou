@@ -11,8 +11,9 @@ tasks owned by your developer unless they say otherwise.
 single source of truth for scope, architecture, and working style. If a rule here conflicts with an
 agent's default behavior, this file wins.
 
-> **Project status: research & design.** No production code exists yet. Do not scaffold the
-> project, install dependencies, or create source files unless a developer explicitly asks.
+> **Project status: Stage 0 (foundations).** The pnpm workspace, `shared/contracts`,
+> `shared/design-tokens`, and `tools/stt-benchmark` exist. Product code (`extension/`, `backend/`)
+> starts in Stage 1 — create it only for IMPLEMENTATION_PLAN tasks your developer has started.
 
 ---
 
@@ -103,10 +104,13 @@ session.started      { sessionId, platform, meetingTitle?, startedAt }
 participant.joined   { sessionId, participantId, displayName, at }
 participant.left     { sessionId, participantId, at }
 speaker.active       { sessionId, participantId, at }          // e.g. from Meet DOM
-audio.chunk          { sessionId, lane: "me" | "them", seq, pcm16k, capturedAt }
+mic.mute_changed     { sessionId, muted, at }                  // me-lane gating (FR-CAP-11)
 caption.observed     { sessionId, participantId?, text, at }   // optional naming/timing signal
-session.ended        { sessionId, endedAt }
+consent.notice       { sessionId, mode, outcome, text?, at }   // consent log (FR-CON-03)
+session.ended        { sessionId, reason, endedAt }
 ```
+Audio travels as binary frames (`lane u8 | seq u32 | captureMs u32 | payload`, little-endian), not as
+an event. **Source of truth:** `shared/contracts` (zod schemas + tests); this block is a summary.
 
 ### Transcript segment (stored)
 ```
@@ -117,14 +121,19 @@ session.ended        { sessionId, endedAt }
 
 ---
 
-## 5. Proposed repository layout (not created yet)
+## 5. Repository layout
 
 ```
-extension/   Chrome MV3: service worker, offscreen document, side panel, Meet adapter
-backend/     API, WebSocket relay, STT/LLM providers, processing pipeline
-shared/      Event schema and types shared by extension and backend
-docs/        Research notes and architecture decision records (ADRs)
+shared/contracts       ✅ zod schemas: capture events, WS protocol, REST DTOs, summary output
+shared/design-tokens   ✅ colour/type/radius tokens, tokens.css, bundled fonts, contrast tests
+tools/stt-benchmark    ✅ STT benchmark: runner, streaming harness, normalizer, scorer
+extension/             (Stage 1) Chrome MV3: service worker, offscreen document, side panel, Meet adapter
+backend/               (Stage 2) API, gateway, workers, providers, db
+docs/                  PRD, features, architecture, design, plan, research, ADRs, benchmark kit, legal drafts
 ```
+
+Commands (pnpm workspace, Node 24): `pnpm install`, then `pnpm check` (format, lint, typecheck,
+tests) before every PR. CI runs the same.
 
 Proposed language: **TypeScript** across extension, backend, and shared code. Confirm with the
 developers before scaffolding.

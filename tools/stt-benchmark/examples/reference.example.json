@@ -1,0 +1,22 @@
+{
+  "clipId": "hx-001",
+  "lane": "them",
+  "words": [
+    { "text": "kal", "lang": "hi", "start": 12.4, "end": 12.62 },
+    { "text": "ka", "lang": "hi", "start": 12.62, "end": 12.75 },
+    { "text": "deployment", "lang": "en", "start": 12.75, "end": 13.3 },
+    { "text": "push", "lang": "en", "start": 13.3, "end": 13.55 },
+    { "text": "kar", "lang": "hi", "start": 13.55, "end": 13.7 },
+    { "text": "dete", "lang": "hi", "start": 13.7, "end": 13.9 },
+    { "text": "hain", "lang": "hi", "start": 13.9, "end": 14.1 },
+    { "text": "um", "lang": "other", "filler": true },
+    { "text": "Rahul", "lang": "hi", "start": 15.0, "end": 15.3 },
+    { "text": "Mehta", "lang": "hi", "start": 15.3, "end": 15.6 }
+  ],
+  "entities": [{ "type": "person", "startWord": 8, "endWord": 9 }],
+  "turns": [
+    { "speaker": "neha", "start": 12.4, "end": 14.1 },
+    { "speaker": "rahul", "start": 15.0, "end": 15.6 }
+  ],
+  "nonSpeech": [{ "start": 40.0, "end": 51.5 }]
+}

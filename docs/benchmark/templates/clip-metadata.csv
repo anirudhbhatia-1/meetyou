@@ -1,0 +1,2 @@
+clip_id,set,duration,language_mix,participants,participant_names,local_setup,environment,scenario,topic_card,meet_noise_cancellation,vocabulary,consent_refs,recorded_by,recorded_on,notes
+hx-001,core,10:12,"Hinglish ~60% hi / 40% en",3,"Rahul; Neha; Sameer","laptop mic + speakers","moderate noise (fan)","sprint planning",TC-01,default,"Rahul Mehta; Neha Iyer; Razorpay; staging","CF-001; CF-002; CF-003",Gaurav,2026-11-03,"overlap at 03:10 and 07:45"

@@ -284,8 +284,9 @@ set, so web pages cannot message the extension.
 
 ### 5.4 Normalized capture events (adapter → core)
 The contract defined in [AGENTS.md §4](../AGENTS.md):
-`session.started`, `participant.joined`, `participant.left`, `speaker.active`, `audio.chunk`,
-`caption.observed` (optional), `session.ended`. Any change to this schema requires an ADR, because
+`session.started`, `participant.joined`, `participant.left`, `speaker.active`,
+`mic.mute_changed`, `caption.observed` (optional), `consent.notice`, `session.ended`; audio as binary
+frames (§5.2). Implemented and tested in `shared/contracts`. Any change to this schema requires an ADR, because
 every future adapter (desktop, upload, bot) emits the same events.
 
 ### 5.5 Clock model
@@ -423,9 +424,11 @@ regenerated if content changed materially.
 ## 9. Post-meeting processing pipeline
 
 ### 9.1 Events and jobs
-- Services write domain events to an **outbox table** in the same transaction as the data change;
-  a dispatcher turns outbox rows into jobs. This guarantees no event is lost if a process crashes.
-- Jobs live in a Postgres-backed queue (proposed) with retries, backoff, and a dead-letter state.
+- Jobs are created **in the same transaction** as the data change that causes them (outbox
+  guarantee), using graphile-worker's SQL `add_job` behind a small `enqueue` helper
+  ([ADR-0005](adr/0005-job-queue-and-outbox.md), proposed). No event is lost if a process crashes.
+- The queue provides retries with backoff, scheduling, job keys for de-duplication, and a
+  dead-letter sweep into `failed_jobs`.
 
 ### 9.2 Pipeline DAG
 ```
@@ -555,7 +558,7 @@ REST over HTTPS, JSON, versioned under `/v1`. Realtime uses the WebSocket protoc
 |---|---|
 | Auth | `POST /v1/auth/google` (exchange Google ID token) · `POST /v1/auth/refresh` · `POST /v1/auth/logout` |
 | Me & settings | `GET /v1/me` · `GET/PATCH /v1/settings` |
-| Sessions | `POST /v1/sessions` · `POST /v1/sessions/{id}/end` · `POST /v1/sessions/{id}/recover` |
+| Sessions | `POST /v1/sessions` · `POST /v1/sessions/{id}/stream-token` (reconnects, ADR-0004) · `POST /v1/sessions/{id}/end` · `POST /v1/sessions/{id}/recover` |
 | Meetings | `GET /v1/meetings` · `GET/PATCH/DELETE /v1/meetings/{id}` · `POST /v1/meetings/{id}:restore` (within the delete grace period) |
 | Action items | `GET /v1/action-items?status=open\|done\|all&owner=me\|any&cursor=` · status, owner, and due changes via `PATCH /v1/summary-items/{id}` |
 | Glossary | `GET /v1/glossary` · `PUT /v1/glossary` (replace list; validated against provider limits) |
@@ -891,8 +894,10 @@ backend/
     db/                schema, migrations, data-access layer with tenancy enforcement
     observability/     logging (field allow-list), metrics, tracing
 shared/
-  schemas/             event schema, WS protocol, REST DTOs, summary JSON schema (single source)
-  types/               generated/derived types for extension and backend
+  contracts/           event schema, WS protocol, REST DTOs, summary JSON schema (zod, single source)
+  design-tokens/       colour/type tokens, tokens.css, bundled fonts
+tools/
+  stt-benchmark/       STT benchmark tooling (Stage 0)
 infra/                 infrastructure as code, environment configs (later)
 docs/                  PRD, features, architecture, research, ADRs
 ```
@@ -963,11 +968,11 @@ contracts. Changing them requires an ADR and a migration plan.
 ### 26.1 ADRs to write (in `docs/adr/`)
 | ADR | Topic | Needed by |
 |---|---|---|
-| 0001 | STT provider(s) for streaming and batch | M0 |
+| [0001](adr/0001-stt-provider.md) | STT provider(s) for streaming and batch — pending benchmark | M0 |
 | [0002](adr/0002-backend-stack-and-hosting.md) | Backend stack and hosting/region — **Option B selected:** TypeScript/Node on Google Cloud Mumbai (Cloud Run, Cloud SQL, Cloud Storage) | M1 |
 | 0003 | Audio transport format: Opus vs PCM (D-06) | M1 |
-| 0004 | Auth and token model for the extension | M1 |
-| 0005 | Job queue and outbox implementation | M1 |
+| [0004](adr/0004-auth-and-token-model.md) | Auth and token model — **Proposed:** launchWebAuthFlow + PKCE, our JWT access + rotating refresh + stream tokens | M1 |
+| [0005](adr/0005-job-queue-and-outbox.md) | Job queue and outbox — **Proposed:** graphile-worker with transactional `add_job` | M1 |
 | 0006 | Library surface: extension page vs web app (D-07) | M2 |
 | 0007 | LLM provider and prompt/version management | M2 |
 | 0008 | Desktop app approach (native vs cross-platform; build vs SDK) | Phase 2 |

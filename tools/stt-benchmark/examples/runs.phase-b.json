@@ -1,0 +1,40 @@
+{
+  "runs": [
+    {
+      "id": "sarvam-v3rt-translit-stream",
+      "mode": "stream",
+      "options": {
+        "provider": "sarvam",
+        "model": "saaras:v3-realtime",
+        "languageCode": "hi-IN",
+        "mode": "translit"
+      }
+    },
+    {
+      "id": "sarvam-v4-translit-stream",
+      "mode": "stream",
+      "options": {
+        "provider": "sarvam",
+        "model": "saaras:v4",
+        "languageCode": "hi-IN",
+        "mode": "translit"
+      }
+    },
+    {
+      "id": "deepgram-nova3-multi-stream",
+      "mode": "stream",
+      "options": {
+        "provider": "deepgram",
+        "model": "nova-3",
+        "language": "multi",
+        "languageHint": ["hi", "en"],
+        "diarize": true
+      }
+    },
+    {
+      "id": "gemini-live-stream",
+      "mode": "stream",
+      "options": { "provider": "gemini", "model": "gemini-3.5-transcribe-live" }
+    }
+  ]
+}

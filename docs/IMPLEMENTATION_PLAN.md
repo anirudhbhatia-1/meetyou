@@ -134,6 +134,31 @@ S2, S3, and S4 run **in parallel** after S1; S4 starts on mocks during S1.
 **Exit criteria:** ADR-0001, ADR-0002, ADR-0004, ADR-0005 accepted · repository with green CI ·
 contracts v0 merged · tokens package merged.
 
+### Stage 0 status (2026-10-28, branch `feature/stage-0`)
+
+All repository and document work for S0-01..S0-18 was prepared by Anirudh (Claude Code). Items marked
+🟡 need people, accounts, or real recordings and keep their original owner.
+
+| Task | Status | What exists / what is left |
+|---|---|---|
+| S0-01 | 🟡 Kit ready | [Consent form](benchmark/CONSENT_FORM.md), [topic cards](benchmark/TOPIC_CARDS.md) (20 + 2), [recording guide](benchmark/RECORDING_GUIDE.md) with OBS setup, [metadata sheet](benchmark/templates/clip-metadata.csv). **Left:** recruit participants, sign consent, record sessions (Gaurav) |
+| S0-02 | 🟡 Runbook ready | [Pre-flight runbook](benchmark/PREFLIGHT_RUNBOOK.md). **Left:** console actions — Sarvam opt-out + top-up, Deepgram account, billing-enabled Gemini project, keys (Gaurav) |
+| S0-03 | ✅ Done | [Annotation guideline](benchmark/ANNOTATION_GUIDELINE.md); canonical Hinglish list v1 (92 entries) in `tools/stt-benchmark/data/` |
+| S0-04 / S0-05 | 🟡 Blocked on S0-01 | Reference format + example + validation in the scorer. **Left:** annotate clips (Gaurav 1–10, Anirudh 11–20) |
+| S0-06 | ✅ Built | `bench run-batch` for Sarvam (SDK jobs), Deepgram (pre-recorded), Gemini (Files + Interactions). **Left:** first live run (Phase A) |
+| S0-07 | ✅ Built | `bench run-stream`: real-time 100 ms replay, keep-alive, Gemini 10-min rotation. **Left:** first live run (Phases B–C) |
+| S0-08 | ✅ Built | Normalizer (Devanagari→Roman, canonical spellings, numbers) + scorer (WER/CER, code-switch, entities, DER, hallucination, echo, latency); 48 tests |
+| S0-09 | 🟡 Blocked on data | Run configs for Phases A, B, E in `tools/stt-benchmark/examples/`; Opus prep in README. **Left:** run D–G and analyse |
+| S0-10 | 🟡 Tool ready | `bench blind-samples` creates provider-blind samples + key. **Left:** both people rate |
+| S0-11 | 🟡 Template ready | [ADR-0001](adr/0001-stt-provider.md) with gates, results tables, weighted score. **Left:** fill after benchmark |
+| S0-12 | 🟡 Mostly checked | ADR-0002 §9 checks 2, 3, 6 recorded; **left:** pgvector version, pricing calculator (check 5) |
+| S0-13 | 🟡 Partly done | Cloud Run WebSocket rules from docs; latency measured from India laptop. **Left:** Cloud Shell run in `asia-south1`, live 2-hour test (S1-11) |
+| S0-14 | ✅ Proposed | [ADR-0004](adr/0004-auth-and-token-model.md), [ADR-0005](adr/0005-job-queue-and-outbox.md). **Left:** approval + verification items |
+| S0-15 | ✅ Done | pnpm workspace, TypeScript 6 strict (erasable syntax only), ESLint, Prettier, EditorConfig, Vitest, `.vscode/extensions.json`, GitHub Actions CI, `pnpm check` |
+| S0-16 | ✅ Done | `shared/contracts`: events, WS protocol + binary frames, segments, REST DTOs, summary schema + JSON Schema; 11 tests |
+| S0-17 | ✅ Done | `shared/design-tokens`: light/dark tokens, generated `tokens.css`, bundled fonts, icon list; 34 tests incl. WCAG contrast for both themes |
+| S0-18 | ✅ Drafted | [Privacy policy](legal/PRIVACY_POLICY.md), [terms](legal/TERMS_OF_USE.md), [consent explainer](legal/CONSENT_EXPLAINER.md), [sub-processors](legal/SUBPROCESSORS.md) — legal review in S6-05 |
+
 ---
 
 ## Stage 1 — Capture spike (M1)

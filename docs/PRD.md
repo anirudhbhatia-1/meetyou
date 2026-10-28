@@ -817,7 +817,7 @@ Store review. **[Verify]** final list during M1.
 | `offscreen` | Run audio capture and processing outside the service worker |
 | `sidePanel` | Live transcript, notes, and summary UI |
 | `storage` | Settings and small state |
-| `identity` (if used for Google sign-in) | Sign-in flow |
+| `identity` | Google sign-in via `chrome.identity.launchWebAuthFlow` with PKCE ([ADR-0004](adr/0004-auth-and-token-model.md), proposed) |
 | Host permission `https://meet.google.com/*` | Content script for call detection, metadata, active speaker, chat notice |
 | Host permission for our API domain | Backend communication |
 | `notifications` | "Notes ready" and "Your export is ready" alerts when the user has left the side panel (O1, DESIGN §8.7) |

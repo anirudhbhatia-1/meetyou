@@ -226,17 +226,20 @@ Cloud Run. The portability rules below keep that switch cheap. This requires a n
 
 | # | Check | Owner |
 |---|---|---|
-| 1 | Cloud Run WebSocket behaviour in `asia-south1`: 60-min timeout, session affinity, SIGTERM grace on deploy | Anirudh |
-| 2 | Cloud SQL Postgres version and pgvector availability in `asia-south1` | Gaurav |
-| 3 | Backup/PITR retention can be set ≤ 30 days | Gaurav |
-| 4 | Latency from `asia-south1` to Sarvam, Deepgram, and Gemini endpoints | Anirudh (with benchmark) |
-| 5 | Monthly cost estimate with the pricing calculator for the §6 setup | Gaurav |
-| 6 | Startup credit programs we may be eligible for (Google for Startups, others) | Gaurav |
+| 1 | Cloud Run WebSocket behaviour in `asia-south1`: 60-min timeout, session affinity, SIGTERM grace on deploy | Anirudh — **Docs checked 2026-10-28:** request timeout up to 60 min applies to WebSockets; session affinity is best effort; clients must reconnect. SIGTERM grace period [Verify]. Live 2-hour test in S1-11 |
+| 2 | Cloud SQL Postgres version and pgvector availability in `asia-south1` | Gaurav — **Partly checked:** pgvector is supported on Cloud SQL for PostgreSQL (secondary source); exact extension version still to confirm on Google's extensions page |
+| 3 | Backup/PITR retention can be set ≤ 30 days | Gaurav — **Checked (secondary sources):** automated backup count is configurable (e.g. 7) and PITR log retention is configurable (default 7 days) → ≤ 30 days achievable. Confirm limits in Google docs when provisioning |
+| 4 | Latency from `asia-south1` to Sarvam, Deepgram, and Gemini endpoints | Anirudh — **Partly done:** `bench measure-latency` from a laptop in India (2026-10-28): TLS connect Sarvam ~70–90 ms, Gemini ~40 ms (first byte 130–460 ms), Deepgram ~510–610 ms (first byte ~770–870 ms). Re-run from Cloud Shell in `asia-south1` |
+| 5 | Monthly cost estimate with the pricing calculator for the §6 setup | Gaurav — **Open:** needs the Google Cloud pricing calculator with chosen tiers |
+| 6 | Startup credit programs we may be eligible for (Google for Startups, others) | Gaurav — **Checked:** Google for Startups Cloud Program has a self-serve *Start* tier (reported up to ~$2,000 for 1 year, for startups not yet equity-funded) and a *Scale* tier for VC-funded startups (much larger credits); apply via cloud.google.com/startup |
 | 7 | ~~Team familiarity (D9) and preference between B and C~~ — **Done 2026-10-28: Option B** | Both |
 
 ---
 
 ## 10. Sources
+
+- [Google for Startups Cloud Program FAQ](https://cloud.google.com/startup/faq) · [Benefits](https://cloud.google.com/startup/benefits)
+- [Cloud SQL backups and PITR (tutorial)](https://oneuptime.com/blog/post/2026-02-17-how-to-configure-automated-backups-and-point-in-time-recovery-in-cloud-sql/markdown) · [PITR without impacting storage (Google blog)](https://cloud.google.com/blog/products/databases/point-in-time-recovery-without-impacting-instance-storage/)
 
 - [Cloud Run — Using WebSockets](https://docs.cloud.google.com/run/docs/triggering/websockets) (request timeout up to 60 minutes; clients must reconnect)
 - [Cloud Run — Session affinity](https://docs.cloud.google.cn/run/docs/configuring/session-affinity?hl=en) (best-effort affinity)

@@ -1,0 +1,10 @@
+{
+  "recommendations": [
+    "dbaeumer.vscode-eslint",
+    "esbenp.prettier-vscode",
+    "EditorConfig.EditorConfig",
+    "vitest.explorer",
+    "usernamehw.errorlens",
+    "eamodio.gitlens"
+  ]
+}

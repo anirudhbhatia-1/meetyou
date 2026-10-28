@@ -8,3 +8,9 @@ node_modules/
 *.m4a
 *.opus
 *.webm
+dist/
+coverage/
+# Benchmark data, references, and results never go in git (STT_BENCHMARK_PLAN §3.6)
+bench-data/
+tools/stt-benchmark/results/
+tools/stt-benchmark/refs/

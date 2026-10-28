@@ -1,0 +1,20 @@
+{
+  "name": "@meetyou/stt-benchmark",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "STT benchmark tooling (docs/STT_BENCHMARK_PLAN.md): batch runner, streaming replay harness, normalizer, scorer.",
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json",
+    "test": "vitest run",
+    "bench": "node src/cli/main.ts"
+  },
+  "dependencies": {
+    "sarvamai": "1.1.11",
+    "ws": "^8.22.0",
+    "zod": "^4.6.7"
+  },
+  "devDependencies": {
+    "@types/ws": "^8.18.2"
+  }
+}

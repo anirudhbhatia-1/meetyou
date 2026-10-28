@@ -1,0 +1,5 @@
+pnpm-lock.yaml
+docs/
+*.md
+ai_meeting_recorders_master_architecture_blueprint.md
+shared/design-tokens/src/tokens.css

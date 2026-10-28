@@ -1,0 +1,52 @@
+{
+  "runs": [
+    {
+      "id": "sarvam-v3-translit-batch",
+      "mode": "batch",
+      "options": {
+        "provider": "sarvam",
+        "model": "saaras:v3",
+        "languageCode": "hi-IN",
+        "mode": "translit",
+        "diarize": true
+      }
+    },
+    {
+      "id": "sarvam-v3-codemix-batch",
+      "mode": "batch",
+      "options": {
+        "provider": "sarvam",
+        "model": "saaras:v3",
+        "languageCode": "hi-IN",
+        "mode": "codemix",
+        "diarize": true
+      }
+    },
+    {
+      "id": "deepgram-nova3-multi-batch",
+      "mode": "batch",
+      "options": {
+        "provider": "deepgram",
+        "model": "nova-3",
+        "language": "multi",
+        "languageHint": ["hi", "en"],
+        "diarize": true
+      }
+    },
+    {
+      "id": "deepgram-nova3-hi-batch",
+      "mode": "batch",
+      "options": { "provider": "deepgram", "model": "nova-3", "language": "hi", "diarize": true }
+    },
+    {
+      "id": "gemini-transcribe-batch",
+      "mode": "batch",
+      "options": {
+        "provider": "gemini",
+        "model": "gemini-3.5-transcribe",
+        "diarize": true,
+        "wordTimestamps": true
+      }
+    }
+  ]
+}

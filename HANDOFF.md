@@ -6,10 +6,10 @@ pointer to where the full detail lives — the linked document stays the source 
 
 | Field | Value |
 |---|---|
-| Last updated | 2026-10-28 |
+| Last updated | 2026-10-28 (Stage 0 build) |
 | Updated by | Anirudh (Claude Code) |
 | Repository | [anirudhbhatia-1/meetyou](https://github.com/anirudhbhatia-1/meetyou) — branches `main`, `anirudh` |
-| Current stage | Before **Stage 0** — research and design complete, no code yet |
+| Current stage | **Stage 0** in progress — repo tooling, contracts, tokens, benchmark tools, ADR drafts done on `feature/stage-0`; people-dependent tasks open (§7) |
 
 ---
 
@@ -109,7 +109,19 @@ All dated 2026-10-28 unless noted.
 - Meet overlay in Shadow DOM; no restyling of Meet's own tiles; fonts bundled in the extension.
 - Consent notice modes: One click (default) · Automatic · Off (Off needs confirmation).
 
-### 4.6 Repository
+### 4.6 Stage 0 engineering decisions (2026-10-28)
+- pnpm workspace, Node 24, **TypeScript ~6.0** (typescript-eslint does not support TS 7 yet),
+  `erasableSyntaxOnly` so Node can run `.ts` files directly; Vitest; ESLint flat config; Prettier.
+- Packages: `@meetyou/contracts`, `@meetyou/design-tokens`, `@meetyou/stt-benchmark`.
+- Contracts add two events to AGENTS §4: `mic.mute_changed`, `consent.notice`; `session.ended` has a
+  `reason`. Binary audio frames: `lane u8 | seq u32 | captureMs u32`, little-endian, protocol v1.
+- **Proposed** ADR-0004: Google sign-in via `launchWebAuthFlow` + PKCE; our ES256 JWT access (15 min),
+  rotating hashed refresh tokens (30 days, family revocation), single-use stream tokens.
+- **Proposed** ADR-0005: graphile-worker, jobs added in the same transaction (queue = outbox).
+- Dependencies are pinned to releases at least ~2 weeks old (pnpm minimum release age); e.g.
+  `sarvamai` pinned to 1.1.11.
+
+### 4.7 Repository
 - Repo created and pushed 2026-10-28: `main` and `anirudh` at the same commit. Work happens on
   personal/feature branches; `main` only through reviewed PRs.
 
@@ -127,7 +139,8 @@ All dated 2026-10-28 unless noted.
 | D-09 | Product name | "Minutes" is a working name | Both |
 | D-10 | `me` lane follows Meet mute by default | Proposed On — confirm in M1 | Both |
 | D-11 | Hinglish note markers (`faisla:`, `kaam:`, `sawaal:`, `zaroori:`) | Decide by M2 | Both |
-| ADR-0002 | Verification checks §9 (#1–#6) | Anirudh: #1, #4 · Gaurav: #2, #3, #5, #6 | as listed |
+| ADR-0002 | Remaining checks: #2 pgvector version, #5 pricing calculator (Gaurav); #4 Cloud Shell latency run, #1 live 2-hour test in S1-11 (Anirudh) | Checks 3, 6 done; 1, 4 partly | as listed |
+| ADR-0004 / 0005 | Approve, then run their verification items | Proposed | Both |
 
 ---
 
@@ -150,11 +163,16 @@ Facts learned so far that change how we build. Full sources in STT_PREFLIGHT.md 
 
 ## 7. What happens next
 
-1. Stage 0 kick-off: create GitHub collaborator access for Gaurav.
-2. Gaurav: S0-01 (benchmark consent + recordings), S0-02 (provider pre-flight actions), S0-15
-   (monorepo + CI), S0-17 (design tokens), S0-12 (ADR-0002 checks 2, 3, 5, 6).
-3. Anirudh: S0-03 (annotation guideline + spelling list), S0-07 (streaming harness), S0-08
-   (scorer), S0-14 (ADR-0004, ADR-0005), S0-16 (shared contracts v0), S0-13 (ADR-0002 checks 1, 4).
+Full status table: IMPLEMENTATION_PLAN.md → "Stage 0 status".
+
+1. Review and merge `feature/stage-0`; give Gaurav collaborator access.
+2. Gaurav (people/accounts): S0-02 pre-flight runbook (Sarvam opt-out + top-up, Deepgram, billing
+   Gemini project) → S0-01 recordings with consent → S0-04 references for clips 1–10 → S0-10 ratings;
+   ADR-0002 checks 2 and 5.
+3. Anirudh: S0-05 references for clips 11–20 + agreement check → first live runs of the benchmark
+   tools (fix `[Verify]` items) → S0-09 analysis → S0-11 ADR-0001; ADR-0002 check 4 from Cloud Shell.
+4. Both: approve ADR-0004 and ADR-0005.
+5. Stage 1 can start in parallel: Gaurav S1-01 (prompt already prepared), Anirudh S1-02.
 
 ---
 
@@ -171,6 +189,25 @@ Facts learned so far that change how we build. Full sources in STT_PREFLIGHT.md 
 ## 9. Session log
 
 Newest first. One entry per working session (either person).
+
+### 2026-10-28 (later) — Anirudh (Claude Code): Stage 0 build
+**Done** (branch `feature/stage-0`)
+- S0-15 workspace + CI; S0-16 `shared/contracts`; S0-17 `shared/design-tokens` (WCAG checks pass in
+  light and dark); S0-06/07/08 `tools/stt-benchmark` (batch runner, streaming harness, normalizer,
+  scorer, blind samples, latency probe). `pnpm check` green: 93 tests.
+- S0-03 annotation guideline + canonical Hinglish list; S0-01/02/10 kits (consent form, topic cards,
+  recording guide, metadata sheet, pre-flight runbook); ADR-0001 template; ADR-0004 and ADR-0005
+  (proposed); ADR-0002 checks updated; S0-18 legal drafts.
+- Vendor formats verified from docs: Sarvam realtime WS + batch SDK, Deepgram listen WS/REST,
+  Gemini Live setup + Interactions API. Latency from India laptop: Sarvam ~70–90 ms, Gemini ~40 ms,
+  Deepgram ~510–610 ms TLS.
+
+**Not done (needs people/accounts):** recordings and consent, vendor console actions and keys,
+annotation, live benchmark runs, ratings, ADR-0001 decision, pricing calculator, Cloud Shell latency.
+
+**Notes for Gaurav**
+- Start with `docs/benchmark/PREFLIGHT_RUNBOOK.md`, then `RECORDING_GUIDE.md`.
+- The benchmark tools have only been unit-tested; the first live run may surface `[Verify]` issues.
 
 ### 2026-10-28 — Anirudh (Claude Code)
 **Done**

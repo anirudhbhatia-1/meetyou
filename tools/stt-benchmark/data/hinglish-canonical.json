@@ -1,0 +1,406 @@
+{
+  "version": "1.0.0",
+  "updated": "2026-10-28",
+  "notes": "Canonical Roman spellings for Hinglish (ANNOTATION_GUIDELINE.md §4). `variants` are rewritten to `canonical` on both reference and hypothesis before scoring. `ambiguous` variants collide with English or other Hindi words and are NOT rewritten automatically; annotators resolve them by context.",
+  "entries": [
+    {
+      "canonical": "hai",
+      "variants": ["hae"],
+      "ambiguous": ["he", "h", "hy", "hay"]
+    },
+    {
+      "canonical": "hain",
+      "variants": ["hein", "hn", "hai'n"],
+      "ambiguous": ["hen"]
+    },
+    {
+      "canonical": "nahi",
+      "variants": ["nahin", "nahee", "nhi", "nahiin", "nahii"],
+      "ambiguous": ["nai", "na"]
+    },
+    {
+      "canonical": "kya",
+      "variants": ["kyaa", "kyaaa"],
+      "ambiguous": ["kia"]
+    },
+    {
+      "canonical": "kyun",
+      "variants": ["kyon", "kyu", "kyoon", "kyoun", "kyuun"]
+    },
+    {
+      "canonical": "kyunki",
+      "variants": ["kyonki", "kyuki", "kyuke", "kyunke", "kyunkee"]
+    },
+    {
+      "canonical": "accha",
+      "variants": ["acha", "achha", "acchha", "achchha", "achcha", "achaa", "achhaa"]
+    },
+    {
+      "canonical": "theek",
+      "variants": ["thik", "teek", "thheek", "thek"]
+    },
+    {
+      "canonical": "matlab",
+      "variants": ["mtlb", "matalab", "matlb"]
+    },
+    {
+      "canonical": "abhi",
+      "variants": ["abhee", "abi", "abhii"]
+    },
+    {
+      "canonical": "kal",
+      "variants": [],
+      "ambiguous": ["kl"]
+    },
+    {
+      "canonical": "aaj",
+      "variants": ["aj", "aajj"]
+    },
+    {
+      "canonical": "haan",
+      "variants": ["haa", "haaan", "haaa"],
+      "ambiguous": ["han", "ha"]
+    },
+    {
+      "canonical": "mein",
+      "variants": ["mei", "mien", "mai'n"],
+      "ambiguous": ["me", "main", "mai", "mae"]
+    },
+    {
+      "canonical": "yeh",
+      "variants": ["ye", "yah", "yehh"],
+      "ambiguous": ["yeah"]
+    },
+    {
+      "canonical": "woh",
+      "variants": ["wo", "vo", "voh", "vah", "wah"]
+    },
+    {
+      "canonical": "bhi",
+      "variants": ["bhee", "bhii"],
+      "ambiguous": ["bi"]
+    },
+    {
+      "canonical": "ji",
+      "variants": ["jee", "jii"]
+    },
+    {
+      "canonical": "kaise",
+      "variants": ["kese", "kaisey", "kaisay"]
+    },
+    {
+      "canonical": "kaisa",
+      "variants": ["kesa", "kaisaa"]
+    },
+    {
+      "canonical": "kaun",
+      "variants": ["kon", "kaon", "koun"]
+    },
+    {
+      "canonical": "kahan",
+      "variants": ["kahaan", "kahaa"],
+      "ambiguous": ["kaha"]
+    },
+    {
+      "canonical": "kitna",
+      "variants": ["kitnaa", "kitana"]
+    },
+    {
+      "canonical": "kitne",
+      "variants": ["kitney", "kitane"]
+    },
+    {
+      "canonical": "bahut",
+      "variants": ["bahot", "bohot", "bohat", "bhot", "bht", "bahuth", "bahoot"]
+    },
+    {
+      "canonical": "thoda",
+      "variants": ["thora", "thodaa", "thoraa"]
+    },
+    {
+      "canonical": "thodi",
+      "variants": ["thori", "thodee"]
+    },
+    {
+      "canonical": "zyada",
+      "variants": ["jyada", "zyaada", "jyaada", "zada", "jada", "ziada"]
+    },
+    {
+      "canonical": "sab",
+      "variants": ["sb"]
+    },
+    {
+      "canonical": "sabko",
+      "variants": ["sbko"]
+    },
+    {
+      "canonical": "kuch",
+      "variants": ["kuchh", "kch", "kuchch", "kooch"]
+    },
+    {
+      "canonical": "chahiye",
+      "variants": ["chahie", "chaiye", "chaahiye", "chahiyeh", "chahye", "chaahie"]
+    },
+    {
+      "canonical": "karna",
+      "variants": ["krna", "karnaa"]
+    },
+    {
+      "canonical": "karo",
+      "variants": ["kro"]
+    },
+    {
+      "canonical": "kar",
+      "variants": [],
+      "ambiguous": ["kr", "car"]
+    },
+    {
+      "canonical": "karte",
+      "variants": ["krte", "kartey"]
+    },
+    {
+      "canonical": "karenge",
+      "variants": ["karege", "krenge", "karengey", "karenghe"]
+    },
+    {
+      "canonical": "kiya",
+      "variants": ["kiyaa", "kiyya"],
+      "ambiguous": ["kia"]
+    },
+    {
+      "canonical": "raha",
+      "variants": ["rha", "rahaa"]
+    },
+    {
+      "canonical": "rahe",
+      "variants": ["rhe", "rahey"]
+    },
+    {
+      "canonical": "rahi",
+      "variants": ["rhi", "rahee"]
+    },
+    {
+      "canonical": "hoga",
+      "variants": ["hogaa"]
+    },
+    {
+      "canonical": "hogi",
+      "variants": ["hogee"]
+    },
+    {
+      "canonical": "gaya",
+      "variants": ["gya", "gayaa"]
+    },
+    {
+      "canonical": "gayi",
+      "variants": ["gyi", "gayee", "gai"]
+    },
+    {
+      "canonical": "dunga",
+      "variants": ["doonga", "dungaa"]
+    },
+    {
+      "canonical": "dungi",
+      "variants": ["doongi", "dungee"]
+    },
+    {
+      "canonical": "jayega",
+      "variants": ["jaayega", "jaega", "jaaega", "jaayga", "jaiga"]
+    },
+    {
+      "canonical": "jayegi",
+      "variants": ["jaayegi", "jaegi", "jaaegi"]
+    },
+    {
+      "canonical": "lagta",
+      "variants": ["lgta", "lagtaa"]
+    },
+    {
+      "canonical": "samajh",
+      "variants": ["samaj", "smjh", "samjh"]
+    },
+    {
+      "canonical": "samjha",
+      "variants": ["smjha", "samjhaa", "samajha"]
+    },
+    {
+      "canonical": "samajhna",
+      "variants": ["samjhna", "smjhna", "samajhnaa"]
+    },
+    {
+      "canonical": "pata",
+      "variants": ["pta", "pataa"]
+    },
+    {
+      "canonical": "chalo",
+      "variants": ["chlo", "chaloo"]
+    },
+    {
+      "canonical": "yaar",
+      "variants": ["yar", "yaarr", "yaara"]
+    },
+    {
+      "canonical": "arre",
+      "variants": ["arey", "aree", "arrey"],
+      "ambiguous": ["are"]
+    },
+    {
+      "canonical": "shayad",
+      "variants": ["shaayad", "sayad", "shyad"]
+    },
+    {
+      "canonical": "zaroor",
+      "variants": ["jaroor", "zarur", "jarur", "zaroorr"]
+    },
+    {
+      "canonical": "zaroori",
+      "variants": ["jaruri", "zaruri", "jaroori", "zaroorie"]
+    },
+    {
+      "canonical": "lekin",
+      "variants": ["lekn", "lkin", "leken"]
+    },
+    {
+      "canonical": "magar",
+      "variants": ["mgr"]
+    },
+    {
+      "canonical": "aur",
+      "variants": ["aurr"],
+      "ambiguous": ["or"]
+    },
+    {
+      "canonical": "toh",
+      "variants": ["tho", "tohh"],
+      "ambiguous": ["to"]
+    },
+    {
+      "canonical": "wala",
+      "variants": ["waala", "vala", "waalaa"]
+    },
+    {
+      "canonical": "wali",
+      "variants": ["waali", "vali", "waalee"]
+    },
+    {
+      "canonical": "wale",
+      "variants": ["waale", "vale", "waley"]
+    },
+    {
+      "canonical": "apna",
+      "variants": ["apnaa"]
+    },
+    {
+      "canonical": "hamara",
+      "variants": ["humara", "hmara", "hamaara", "humaara"]
+    },
+    {
+      "canonical": "tumhara",
+      "variants": ["tumhra", "tumhaara"]
+    },
+    {
+      "canonical": "mera",
+      "variants": ["meraa"]
+    },
+    {
+      "canonical": "subah",
+      "variants": ["subha", "subeh", "subh"]
+    },
+    {
+      "canonical": "shaam",
+      "variants": ["shaaam"],
+      "ambiguous": ["sham"]
+    },
+    {
+      "canonical": "raat",
+      "variants": ["raath"],
+      "ambiguous": ["rat"]
+    },
+    {
+      "canonical": "baje",
+      "variants": ["baaje", "bajey"]
+    },
+    {
+      "canonical": "baat",
+      "variants": ["baath"],
+      "ambiguous": ["bat"]
+    },
+    {
+      "canonical": "kaam",
+      "variants": ["kaaam"],
+      "ambiguous": ["kam"]
+    },
+    {
+      "canonical": "lakh",
+      "variants": ["lac", "lacs", "lakhs", "laakh"]
+    },
+    {
+      "canonical": "crore",
+      "variants": ["cr", "crores", "karod", "karor", "karore"]
+    },
+    {
+      "canonical": "hazaar",
+      "variants": ["hazar", "hajar", "hajaar", "hazaaar"]
+    },
+    {
+      "canonical": "rupaye",
+      "variants": ["rupay", "rupaiye", "rupye", "rupee", "rupees", "rs"]
+    },
+    {
+      "canonical": "bilkul",
+      "variants": ["bilkool", "bilkl"]
+    },
+    {
+      "canonical": "sahi",
+      "variants": ["sahee", "shi"]
+    },
+    {
+      "canonical": "galat",
+      "variants": ["galt", "glt"]
+    },
+    {
+      "canonical": "pehle",
+      "variants": ["pahle", "pehley", "phle", "pehele"]
+    },
+    {
+      "canonical": "baad",
+      "variants": [],
+      "ambiguous": ["bad"]
+    },
+    {
+      "canonical": "phir",
+      "variants": ["fir", "phirse"]
+    },
+    {
+      "canonical": "isliye",
+      "variants": ["islie", "isiliye"]
+    },
+    {
+      "canonical": "agar",
+      "variants": ["agr"]
+    },
+    {
+      "canonical": "deadline",
+      "variants": ["dead-line"]
+    },
+    {
+      "canonical": "okay",
+      "variants": ["ok", "okk", "okayy"]
+    },
+    {
+      "canonical": "meeting",
+      "variants": ["meating"]
+    }
+  ],
+  "splits": {
+    "kardo": "kar do",
+    "dedo": "de do",
+    "karlo": "kar lo",
+    "kardunga": "kar dunga",
+    "kardungi": "kar dungi",
+    "kardiya": "kar diya",
+    "hogaya": "ho gaya",
+    "hogya": "ho gaya"
+  },
+  "fillers": ["um", "umm", "uh", "uhh", "hmm", "hm", "er", "erm", "ah", "aah"]
+}
