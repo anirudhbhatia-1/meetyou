@@ -3,7 +3,11 @@
 Shared instructions for every AI coding agent on this project. Two developers work here:
 **Anirudh** (using **Claude Code**) and **Gaurav** (using **Google Antigravity**). Who builds what,
 in which order, is in [docs/IMPLEMENTATION_PLAN.md](docs/IMPLEMENTATION_PLAN.md) — work only on
-tasks owned by your developer unless they say otherwise. Both tools read this file, so keep it as the
+tasks owned by your developer unless they say otherwise.
+
+> **Every session:** read [HANDOFF.md](HANDOFF.md) first (shared context, decisions, open
+> questions, latest session log). Before ending a session that changed anything, add a session-log
+> entry there and update its "Last updated" line. Both tools read this file, so keep it as the
 single source of truth for scope, architecture, and working style. If a rule here conflicts with an
 agent's default behavior, this file wins.
 
