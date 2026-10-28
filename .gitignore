@@ -1,0 +1,10 @@
+.DS_Store
+.env
+.env.*
+node_modules/
+# Never commit meeting audio or real transcripts (AGENTS.md §8)
+*.wav
+*.mp3
+*.m4a
+*.opus
+*.webm
