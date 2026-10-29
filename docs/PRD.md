@@ -915,7 +915,7 @@ Phase 2 planning starts after M3 data is available.
 | D-03 | STT provider | Decided by benchmark (15.3) | Team | M0 |
 | D-04 | LLM provider for summaries | Decided by evaluation (14.6) | Team | M2 |
 | D-05 | Consent notice default mode | One-click (proposed) / automatic / off | Team | M1 |
-| D-06 | Stream raw PCM or compressed audio to the relay | PCM (simpler) / Opus (bandwidth) | Team | M1 |
+| D-06 | Stream raw PCM or compressed audio to the relay | **Decided 2026-10-29:** Opus 24 kbps ([ADR-0003](adr/0003-audio-transport-format.md)) | Team | ✅ Closed |
 | D-07 | Library surface in beta | Extension page / web app | Team | M2 |
 | D-08 | Backend stack and hosting region | **Option B selected 2026-10-28** ([ADR-0002](adr/0002-backend-stack-and-hosting.md)): TypeScript/Node on Google Cloud Mumbai (Cloud Run, Cloud SQL, Cloud Storage); final after ADR §9 checks | Team | M1 |
 | D-09 | Product name and branding | — | Team | M3 |

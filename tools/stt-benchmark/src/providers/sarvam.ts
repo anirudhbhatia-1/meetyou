@@ -115,9 +115,11 @@ export const sarvamStream: StreamProvider<SarvamOptions> = {
 
 const SarvamBatchOutput = z.object({
   transcript: z.string(),
+  // Docs describe `chunks`; real batch output (2026-10-29) uses `words`. Accept both.
   timestamps: z
     .object({
-      chunks: z.array(z.string()),
+      words: z.array(z.string()).optional(),
+      chunks: z.array(z.string()).optional(),
       start_time_seconds: z.array(z.number()),
       end_time_seconds: z.array(z.number()),
     })
@@ -180,16 +182,15 @@ export const sarvamBatch: BatchProvider<SarvamOptions> = {
       };
     }
     const t = o.timestamps;
+    const pieces = t?.words ?? t?.chunks ?? [];
     return {
       text: o.transcript,
       words: [],
-      segments: t
-        ? t.chunks.map((text, i) => ({
-            text,
-            start: t.start_time_seconds[i],
-            end: t.end_time_seconds[i],
-          }))
-        : [],
+      segments: pieces.map((text, i) => ({
+        text,
+        start: t?.start_time_seconds[i],
+        end: t?.end_time_seconds[i],
+      })),
     };
   },
 };

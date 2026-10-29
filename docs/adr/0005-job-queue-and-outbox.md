@@ -2,7 +2,7 @@
 
 | Field | Value |
 |---|---|
-| Status | **Proposed** — needs approval from both developers |
+| Status | **Accepted** (Anirudh, 2026-10-29) — verification items below run in Stage 1; a failed check reopens this ADR |
 | Date | 2026-10-28 |
 | Related | [ARCHITECTURE §9](../ARCHITECTURE.md) · [ADR-0002](0002-backend-stack-and-hosting.md) |
 

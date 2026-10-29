@@ -1,6 +1,6 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { request } from 'node:https';
-import { join, resolve } from 'node:path';
+import { dirname, join, resolve } from 'node:path';
 import { parseArgs } from 'node:util';
 import { Normalizer, loadCanonicalList } from '../normalize/index.ts';
 import { transliterate } from '../normalize/devanagari.ts';
@@ -24,6 +24,7 @@ import {
   scoreText,
 } from '../score/metrics.ts';
 import { runStream } from '../stream-runner.ts';
+import { importKaldi, summarizeScores } from './extras.ts';
 import { assertSpeechFormat, readWav } from '../wav.ts';
 
 const USAGE = `Usage: pnpm --filter @meetyou/stt-benchmark bench <command> [options]
@@ -34,6 +35,8 @@ Commands
   score            Score raw outputs against references; writes CSV          (§6 metrics)
   blind-samples    Make provider-blind Roman display samples for rating      (Phase G)
   measure-latency  Time TCP+TLS connects to vendor endpoints                 (ADR-0002 check 4)
+  summarize        Markdown table per run from results/<--out> CSV            (ADR-0001)
+  import-kaldi     Build clips + references from a Kaldi corpus (--src DIR, --prefix, --limit, --max-seconds)
 
 Options
   --data DIR       Benchmark data directory (outside git)   default: $BENCH_DATA_DIR
@@ -41,6 +44,7 @@ Options
   --config FILE    Run config JSON                           (required for run-*/score/blind-samples)
   --clips IDS      Comma-separated clip IDs to include       default: all
   --speed N        Stream replay speed (1 = real time)       default: 1
+  --out FILE       score: CSV name under results/             default: scores.csv
 `;
 
 const { values, positionals } = parseArgs({
@@ -51,6 +55,12 @@ const { values, positionals } = parseArgs({
     config: { type: 'string' },
     clips: { type: 'string' },
     speed: { type: 'string', default: '1' },
+    out: { type: 'string', default: 'scores.csv' },
+    src: { type: 'string' },
+    prefix: { type: 'string', default: 'kx' },
+    limit: { type: 'string', default: '20' },
+    'max-seconds': { type: 'string', default: '240' },
+    scenario: { type: 'string', default: 'Kaldi import' },
     help: { type: 'boolean', short: 'h' },
   },
 });
@@ -136,6 +146,7 @@ async function runStreams(): Promise<void> {
         const audio = readWav(path);
         assertSpeechFormat(audio, path);
         const log = outPath('stream', run.id, `${clip.id}.${lane}.jsonl`);
+        mkdirSync(dirname(log), { recursive: true });
         writeFileSync(
           `${log}.meta.json`,
           JSON.stringify(
@@ -239,6 +250,7 @@ function score(): void {
           refTokens: s.counts.refLength,
           wer: s.wer,
           werRaw: raw.wer,
+          werPhonetic: s.werPhonetic,
           cer: s.cer,
           werHi: s.werByLang.hi,
           werEn: s.werByLang.en,
@@ -272,8 +284,9 @@ function score(): void {
     ...rows.map((r) => headers.map((h) => csvCell(r[h])).join(',')),
   ].join('\n');
   mkdirSync(outPath(), { recursive: true });
-  writeFileSync(outPath('scores.csv'), `${csv}\n`);
-  console.log(`Wrote ${outPath('scores.csv')} (${rows.length} rows)`);
+  const target = outPath(values.out ?? 'scores.csv');
+  writeFileSync(target, `${csv}\n`);
+  console.log(`Wrote ${target} (${rows.length} rows)`);
 }
 
 function blindSamples(): void {
@@ -361,6 +374,20 @@ const commands: Record<string, () => Promise<void> | void> = {
   score,
   'blind-samples': blindSamples,
   'measure-latency': measureLatency,
+  summarize: () =>
+    console.log(summarizeScores(readFileSync(outPath(values.out ?? 'scores.csv'), 'utf8'))),
+  'import-kaldi': () => {
+    if (!values.src) throw new Error('--src is required');
+    const log = importKaldi({
+      src: resolve(values.src),
+      dataDir: dataDir(),
+      prefix: values.prefix ?? 'kx',
+      limit: Number(values.limit),
+      maxSeconds: Number(values['max-seconds']),
+      scenario: values.scenario ?? 'Kaldi import',
+    });
+    console.log(log.join('\n'));
+  },
 };
 
 const command = positionals[0];

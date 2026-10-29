@@ -6,7 +6,13 @@ import { ProviderOptions, StreamLogLine } from '../schemas.ts';
 import { runStream } from '../stream-runner.ts';
 import { buildWav, parseWav } from '../wav.ts';
 import { deepgramBatch, deepgramParams } from './deepgram.ts';
-import { geminiBatch, geminiInteractionBody, geminiLiveSetup } from './gemini.ts';
+import {
+  assertTierAllowed,
+  geminiBatch,
+  geminiInteractionBody,
+  geminiLiveSetup,
+  retryDelaySeconds,
+} from './gemini.ts';
 import { sarvamBatch, sarvamStreamParams } from './sarvam.ts';
 import { requireConfirmed, type StreamProvider } from './types.ts';
 
@@ -88,6 +94,13 @@ describe('sarvam', () => {
       timestamps: { chunks: ['a', 'b'], start_time_seconds: [0, 1], end_time_seconds: [1, 2] },
     });
     expect(chunks.segments).toHaveLength(2);
+    // Real batch output uses `timestamps.words` (seen 2026-10-29).
+    const words = sarvamBatch.toHypothesis({
+      transcript: 'a b',
+      timestamps: { words: ['a', 'b'], start_time_seconds: [0, 1], end_time_seconds: [1, 2] },
+      diarized_transcript: null,
+    });
+    expect(words.segments.map((x) => x.text)).toEqual(['a', 'b']);
   });
 });
 
@@ -112,6 +125,16 @@ describe('gemini', () => {
       /vocabulary/,
     );
     expect(() => geminiInteractionBody({ ...gm, mode: 'smart' }, 'u', [])).toThrow(/smart/);
+  });
+
+  it('stops on a free-tier key unless free tier was accepted, and reads retry delays', () => {
+    const err = new Error(
+      'POST /v1beta/interactions → 429: limit: 10000 input tokens per minute on Free Tier. Please retry in 30s',
+    );
+    expect(() => assertTierAllowed(err, false)).toThrow(/FREE tier/);
+    expect(() => assertTierAllowed(err, true)).not.toThrow();
+    expect(retryDelaySeconds(err)).toBe(30);
+    expect(retryDelaySeconds(new Error('500 internal'))).toBeUndefined();
   });
 
   it('parses word_info annotations', () => {

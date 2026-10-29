@@ -73,8 +73,37 @@ function rate(errors: number, total: number): number | null {
   return total === 0 ? null : errors / total;
 }
 
+/**
+ * Spelling-insensitive key for Roman text: approximates how a word sounds so that a transliterated
+ * Devanagari loanword ("klik", "thandarbard") matches its English spelling ("click", "thunderbird").
+ * Vowels after the first letter are dropped, common digraphs and soft c/g are folded, repeats
+ * collapsed. Used only for `werPhonetic`, never for display.
+ */
+export function phoneticKey(token: string): string {
+  if (!/^[a-z]+$/.test(token)) return token;
+  let s = token
+    .replace(/ph/g, 'f')
+    .replace(/[ckq]h/g, 'k')
+    .replace(/gh/g, 'g')
+    .replace(/[td]h/g, (m) => m[0] ?? '')
+    .replace(/bh/g, 'b')
+    .replace(/sh/g, 's')
+    .replace(/ch/g, 'c')
+    .replace(/c(?=[eiy])/g, 's')
+    .replace(/[cq]/g, 'k')
+    .replace(/x/g, 'ks')
+    .replace(/w/g, 'v')
+    .replace(/z/g, 'j')
+    .replace(/g(?=[eiy])/g, 'j');
+  const first = /[aeiouy]/.test(s[0] ?? '') ? 'V' : (s[0] ?? '');
+  s = first + s.slice(1).replace(/[aeiouy]/g, '');
+  return s.replace(/(.)\1+/g, '$1');
+}
+
 export interface TextScore {
   wer: number;
+  /** WER counting substitutions with equal phoneticKey as matches (script/spelling-insensitive). */
+  werPhonetic: number;
   cer: number;
   counts: ErrorCounts;
   werByLang: Record<Lang, number | null>;
@@ -140,6 +169,17 @@ export function scoreText(
     ops,
     score: {
       wer: errorRate(counts),
+      werPhonetic: errorRate({
+        ...counts,
+        sub:
+          counts.sub -
+          ops.filter(
+            (op) =>
+              op.type === 'sub' &&
+              phoneticKey(prepRef.tokens[op.ref] ?? '') ===
+                phoneticKey(prepHyp.tokens[op.hyp] ?? ''),
+          ).length,
+      }),
       cer: cer(prepRef.tokens, prepHyp.tokens),
       counts,
       werByLang: {

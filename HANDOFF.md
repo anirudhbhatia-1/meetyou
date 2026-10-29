@@ -6,7 +6,7 @@ pointer to where the full detail lives — the linked document stays the source 
 
 | Field | Value |
 |---|---|
-| Last updated | 2026-10-28 (Stage 0 build) |
+| Last updated | 2026-10-29 (Stage 0 continued) |
 | Updated by | Anirudh (Claude Code) |
 | Repository | [anirudhbhatia-1/meetyou](https://github.com/anirudhbhatia-1/meetyou) — branches `main`, `anirudh` |
 | Current stage | **Stage 0** in progress — repo tooling, contracts, tokens, benchmark tools, ADR drafts done on `feature/stage-0`; people-dependent tasks open (§7) |
@@ -117,9 +117,9 @@ All dated 2026-10-28 unless noted.
 - Packages: `@meetyou/contracts`, `@meetyou/design-tokens`, `@meetyou/stt-benchmark`.
 - Contracts add two events to AGENTS §4: `mic.mute_changed`, `consent.notice`; `session.ended` has a
   `reason`. Binary audio frames: `lane u8 | seq u32 | captureMs u32`, little-endian, protocol v1.
-- **Proposed** ADR-0004: Google sign-in via `launchWebAuthFlow` + PKCE; our ES256 JWT access (15 min),
+- **Accepted 2026-10-29** ADR-0004: Google sign-in via `launchWebAuthFlow` + PKCE; our ES256 JWT access (15 min),
   rotating hashed refresh tokens (30 days, family revocation), single-use stream tokens.
-- **Proposed** ADR-0005: graphile-worker, jobs added in the same transaction (queue = outbox).
+- **Accepted 2026-10-29** ADR-0005: graphile-worker, jobs added in the same transaction (queue = outbox).
 - Dependencies are pinned to releases at least ~2 weeks old (pnpm minimum release age); e.g.
   `sarvamai` pinned to 1.1.11.
 
@@ -136,13 +136,13 @@ All dated 2026-10-28 unless noted.
 | D-03 | STT provider(s) | Benchmark Sarvam, Deepgram Nova-3 multilingual, Gemini Transcribe (S0-01..S0-11) → ADR-0001 | Anirudh |
 | D-04 | LLM for summaries | Evaluation in S3-05 → ADR-0007; Gemini Flash is a candidate | Anirudh |
 | D-05 | Consent notice default mode | Proposed One click (used in DESIGN) — confirm | Both |
-| D-06 | Audio transport: Opus vs PCM | Benchmark Phase D → ADR-0003 | Anirudh |
+| D-06 | ✅ Closed 2026-10-29: Opus 24 kbps ([ADR-0003](docs/adr/0003-audio-transport-format.md), accepted) | Re-check with chosen provider in S1-11 | Anirudh |
 | D-07 | Library surface in beta: extension page vs web app | ADR-0006 before beta | Gaurav |
 | D-09 | Product name | "Minutes" is a working name | Both |
 | D-10 | `me` lane follows Meet mute by default | Proposed On — confirm in M1 | Both |
 | D-11 | Hinglish note markers (`faisla:`, `kaam:`, `sawaal:`, `zaroori:`) | Decide by M2 | Both |
 | ADR-0002 | Remaining checks: #2 pgvector version, #5 pricing calculator, #4 Cloud Shell latency run, #1 live 2-hour test in S1-11 (all Anirudh) | Checks 3, 6 done; 1, 4 partly | as listed |
-| ADR-0004 / 0005 | Approve, then run their verification items | Proposed | Both |
+| ADR-0003 / 0004 / 0005 | Accepted 2026-10-29; run their verification items in Stage 1 | Accepted | Anirudh |
 
 ---
 
@@ -173,7 +173,7 @@ Full status table: IMPLEMENTATION_PLAN.md → "Stage 0 status". **All of Stage 0
 3. S0-01 recordings with consent (participants still needed — 2 to 6 people per clip).
 4. S0-04/S0-05 references for all 20 clips + self-consistency check.
 5. S0-09 Phases A–G → S0-10 ratings → S0-11 ADR-0001.
-6. ADR-0002 checks #2, #4, #5; approve ADR-0004 and ADR-0005.
+6. ADR-0002 checks #4, #5 (ADR-0003/0004/0005 accepted 2026-10-29).
 7. Give Gaurav collaborator access; Stage 1 (e.g. S1-01) can run in parallel.
 
 ## 8. Conventions for this file
@@ -189,6 +189,16 @@ Full status table: IMPLEMENTATION_PLAN.md → "Stage 0 status". **All of Stage 0
 ## 9. Session log
 
 Newest first. One entry per working session (either person).
+
+### 2026-10-29 — Anirudh (Claude Code): Stage 0 continued
+**Done**
+- Synthetic smoke-test data (macOS TTS voices Rishi, Lekha, Aman — no real people, safe on any API
+  tier): `~/meetyou-benchmark-data/smoke` with 2 lanes, references, manifest, `runs.smoke.json`.
+- CLI end-to-end tests (`score` on batch + stream outputs; data-use guard refusal). 95 tests total.
+- ADR-0002 check 2 done (pgvector 0.8.5 on PostgreSQL 13+); check 5 estimated: production ≈
+  $160–260/month, staging ≈ $40–80/month (higher than the first guess of $60–130).
+
+**Blocked on Anirudh's console actions:** no vendor keys set yet (S0-02), so no live smoke run.
 
 ### 2026-10-28 (later) — Anirudh (Claude Code): Stage 0 build
 **Done** (branch `feature/stage-0`)

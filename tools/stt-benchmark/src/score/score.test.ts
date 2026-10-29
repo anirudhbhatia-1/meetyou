@@ -7,6 +7,7 @@ import { analyseStream, detectSpeech } from './latency.ts';
 import {
   echoLeakage,
   hallucinationRate,
+  phoneticKey,
   prepareHypothesis,
   prepareReference,
   scoreText,
@@ -116,6 +117,25 @@ describe('text scoring', () => {
     );
     const { ops } = scoreText(meRef, mePrep, meHyp);
     expect(echoLeakage(ops, meHyp, prepRef)).toBe(1);
+  });
+});
+
+describe('phonetic key', () => {
+  it.each([
+    ['klik', 'click'],
+    ['taib', 'tab'],
+    ['thandarbard', 'thunderbird'],
+    ['ophis', 'office'],
+    ['akaaunt', 'account'],
+    ['tyootoriyal', 'tutorial'],
+    ['linaks', 'linux'],
+    ['maisejes', 'messages'],
+  ])('%s ≈ %s', (a, b) => expect(phoneticKey(a)).toBe(phoneticKey(b)));
+
+  it('keeps genuinely different words apart', () => {
+    expect(phoneticKey('hain')).not.toBe(phoneticKey('hai'));
+    expect(phoneticKey('save')).not.toBe(phoneticKey('send'));
+    expect(phoneticKey('15')).toBe('15');
   });
 });
 

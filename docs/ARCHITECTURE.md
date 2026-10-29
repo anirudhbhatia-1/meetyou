@@ -301,8 +301,8 @@ every future adapter (desktop, upload, bot) emits the same events.
 | PCM16, 16 kHz | ~512 kbps | Simplest; every STT provider accepts it; heavy on weak connections |
 | Opus 24–32 kbps | ~48–64 kbps | Needs decoding (or provider support); benchmark Phase D checks accuracy impact |
 
-Proposal: **Opus over the wire, decoded to PCM in the gateway** if the benchmark shows no accuracy
-loss; PCM as fallback. Stored audio is Opus either way.
+**Decided ([ADR-0003](adr/0003-audio-transport-format.md)):** Opus 24 kbps over the wire, decoded to PCM
+in the gateway; PCM as fallback. Phase D showed ≤ 0.5-point accuracy difference. Stored audio is Opus.
 
 ---
 
@@ -426,7 +426,7 @@ regenerated if content changed materially.
 ### 9.1 Events and jobs
 - Jobs are created **in the same transaction** as the data change that causes them (outbox
   guarantee), using graphile-worker's SQL `add_job` behind a small `enqueue` helper
-  ([ADR-0005](adr/0005-job-queue-and-outbox.md), proposed). No event is lost if a process crashes.
+  ([ADR-0005](adr/0005-job-queue-and-outbox.md), accepted). No event is lost if a process crashes.
 - The queue provides retries with backoff, scheduling, job keys for de-duplication, and a
   dead-letter sweep into `failed_jobs`.
 
@@ -970,9 +970,9 @@ contracts. Changing them requires an ADR and a migration plan.
 |---|---|---|
 | [0001](adr/0001-stt-provider.md) | STT provider(s) for streaming and batch — pending benchmark | M0 |
 | [0002](adr/0002-backend-stack-and-hosting.md) | Backend stack and hosting/region — **Option B selected:** TypeScript/Node on Google Cloud Mumbai (Cloud Run, Cloud SQL, Cloud Storage) | M1 |
-| 0003 | Audio transport format: Opus vs PCM (D-06) | M1 |
-| [0004](adr/0004-auth-and-token-model.md) | Auth and token model — **Proposed:** launchWebAuthFlow + PKCE, our JWT access + rotating refresh + stream tokens | M1 |
-| [0005](adr/0005-job-queue-and-outbox.md) | Job queue and outbox — **Proposed:** graphile-worker with transactional `add_job` | M1 |
+| [0003](adr/0003-audio-transport-format.md) | Audio transport — **Accepted:** Opus 24 kbps over the wire and in storage, decoded to PCM in the gateway | M1 |
+| [0004](adr/0004-auth-and-token-model.md) | Auth and token model — **Accepted:** launchWebAuthFlow + PKCE, our JWT access + rotating refresh + stream tokens | M1 |
+| [0005](adr/0005-job-queue-and-outbox.md) | Job queue and outbox — **Accepted:** graphile-worker with transactional `add_job` | M1 |
 | 0006 | Library surface: extension page vs web app (D-07) | M2 |
 | 0007 | LLM provider and prompt/version management | M2 |
 | 0008 | Desktop app approach (native vs cross-platform; build vs SDK) | Phase 2 |

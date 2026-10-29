@@ -212,6 +212,12 @@ Work like a careful senior engineer pairing with the developer.
   successfully generated, never before. Retention applies to audio only; transcripts, notes, and
   summaries stay until the user deletes them.
 
+- **2026-10-29 — ADRs accepted** (verification items run in Stage 1):
+  [ADR-0003](docs/adr/0003-audio-transport-format.md) Opus 24 kbps transport and storage (D-06);
+  [ADR-0004](docs/adr/0004-auth-and-token-model.md) Google sign-in via `launchWebAuthFlow` + PKCE,
+  own JWT access / rotating refresh / single-use stream tokens;
+  [ADR-0005](docs/adr/0005-job-queue-and-outbox.md) graphile-worker with transactional job creation.
+
 ### Open (do not assume an answer)
 - STT provider — to be chosen by benchmarking Sarvam, Deepgram Nova-3 multilingual, and Gemini
   Transcribe on our own Hinglish recordings.

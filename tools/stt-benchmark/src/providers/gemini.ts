@@ -18,13 +18,21 @@ const API = 'https://generativelanguage.googleapis.com';
 const LIVE_URL =
   'wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1beta.GenerativeService.BidiGenerateContent';
 
-/** Free-tier data may be used for training and human review; benchmark audio has real voices (STT_PREFLIGHT §4.3). */
-function guard(): string {
-  requireConfirmed(
-    'GEMINI_BILLING_ENABLED',
-    'confirmed the API key belongs to a billing-enabled Cloud project',
-  );
-  return requireEnv('GEMINI_API_KEY');
+/**
+ * Free-tier data may be used for training and human review (STT_PREFLIGHT §4.3). A run needs either
+ * GEMINI_BILLING_ENABLED=true (paid key) or GEMINI_FREE_TIER_ACCEPTED=true (Anirudh's decision of
+ * 2026-10-29: free tier for public/synthetic benchmark data only — never real user meetings).
+ */
+function guard(): { key: string; freeTierAccepted: boolean } {
+  const freeTierAccepted = process.env.GEMINI_FREE_TIER_ACCEPTED === 'true';
+  if (!freeTierAccepted) {
+    requireConfirmed(
+      'GEMINI_BILLING_ENABLED',
+      'confirmed the API key belongs to a billing-enabled Cloud project ' +
+        '(or set GEMINI_FREE_TIER_ACCEPTED=true for public/synthetic benchmark data only)',
+    );
+  }
+  return { key: requireEnv('GEMINI_API_KEY'), freeTierAccepted };
 }
 
 /** Setup message for gemini-3.5-transcribe-live (ai.google.dev live-transcribe guide). */
@@ -60,7 +68,7 @@ export const geminiStream: StreamProvider<GeminiOptions> = {
   // Live transcription sessions are limited to 10 minutes; the runner rotates before that.
   maxSessionMs: 10 * 60 * 1000,
   async open(options, ctx, emit) {
-    const key = guard();
+    const { key } = guard();
     const ws = new WebSocket(`${LIVE_URL}?key=${encodeURIComponent(key)}`);
     await new Promise<void>((resolve, reject) => {
       ws.once('open', () => resolve());
@@ -226,17 +234,58 @@ function seconds(offset: string | undefined): number | undefined {
   return offset === undefined ? undefined : Number.parseFloat(offset.replace(/s$/, ''));
 }
 
+/**
+ * The billing confirmation is only an assertion by the user; Google's rate-limit errors name the
+ * tier, so a free-tier key claimed as paid is caught on the first 429 and the run stops.
+ */
+export function assertTierAllowed(error: unknown, freeTierAccepted: boolean): void {
+  const message = error instanceof Error ? error.message : String(error);
+  if (/free tier/i.test(message) && !freeTierAccepted) {
+    throw new Error(
+      'Gemini reports this key is on the FREE tier. Stop: free-tier data may be used for training ' +
+        'and human review. Use a paid key, or set GEMINI_FREE_TIER_ACCEPTED=true for ' +
+        'public/synthetic benchmark data only.',
+    );
+  }
+}
+
+/** Seconds to wait from a 429 message ("Please retry in 30s"), or undefined if not a rate limit. */
+export function retryDelaySeconds(error: unknown): number | undefined {
+  const message = error instanceof Error ? error.message : String(error);
+  if (!/→ 429/.test(message)) return undefined;
+  const m = /retry in ([\d.]+)\s*s/i.exec(message);
+  return m ? Number.parseFloat(m[1] ?? '30') : 30;
+}
+
+async function withRetry<T>(fn: () => Promise<T>, freeTierAccepted: boolean): Promise<T> {
+  for (let attempt = 1; ; attempt++) {
+    try {
+      return await fn();
+    } catch (e) {
+      assertTierAllowed(e, freeTierAccepted);
+      const wait = retryDelaySeconds(e);
+      if (wait === undefined || attempt >= 12) throw e;
+      console.log(`Gemini rate limit — retrying in ${Math.ceil(wait) + 2} s (attempt ${attempt})`);
+      await sleep((wait + 2) * 1000);
+    }
+  }
+}
+
 export const geminiBatch: BatchProvider<GeminiOptions> = {
   async transcribe(options, wavPath, ctx) {
-    const key = guard();
-    const uri = await uploadFile(key, wavPath);
+    const { key, freeTierAccepted } = guard();
+    const uri = await withRetry(() => uploadFile(key, wavPath), freeTierAccepted);
     const headers = { 'x-goog-api-key': key, 'Content-Type': 'application/json' };
     let result = Interaction.parse(
-      await fetchJson(`${API}/v1beta/interactions`, {
-        method: 'POST',
-        headers,
-        body: JSON.stringify(geminiInteractionBody(options, uri, ctx.vocabulary)),
-      }),
+      await withRetry(
+        () =>
+          fetchJson(`${API}/v1beta/interactions`, {
+            method: 'POST',
+            headers,
+            body: JSON.stringify(geminiInteractionBody(options, uri, ctx.vocabulary)),
+          }),
+        freeTierAccepted,
+      ),
     );
     // [Verify] polling: the documented example returns status "completed" directly.
     for (let i = 0; i < 300 && result.status && result.status !== 'completed' && result.id; i++) {

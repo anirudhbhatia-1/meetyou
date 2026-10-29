@@ -149,15 +149,15 @@ All repository and document work for S0-01..S0-18 was prepared by Anirudh (Claud
 | S0-02 | 🟡 Runbook ready | [Pre-flight runbook](benchmark/PREFLIGHT_RUNBOOK.md). **Left:** console actions — Sarvam opt-out + top-up, Deepgram account, billing-enabled Gemini project, keys (Anirudh) |
 | S0-03 | ✅ Done | [Annotation guideline](benchmark/ANNOTATION_GUIDELINE.md); canonical Hinglish list v1 (92 entries) in `tools/stt-benchmark/data/` |
 | S0-04 / S0-05 | 🟡 Blocked on S0-01 | Reference format + example + validation in the scorer. **Left:** annotate all 20 clips (Anirudh) + self-consistency check |
-| S0-06 | ✅ Built | `bench run-batch` for Sarvam (SDK jobs), Deepgram (pre-recorded), Gemini (Files + Interactions). **Left:** first live run (Phase A) |
-| S0-07 | ✅ Built | `bench run-stream`: real-time 100 ms replay, keep-alive, Gemini 10-min rotation. **Left:** first live run (Phases B–C) |
-| S0-08 | ✅ Built | Normalizer (Devanagari→Roman, canonical spellings, numbers) + scorer (WER/CER, code-switch, entities, DER, hallucination, echo, latency); 48 tests |
+| S0-06 | ✅ Built | `bench run-batch` for Sarvam (SDK jobs), Deepgram (pre-recorded), Gemini (Files + Interactions); CLI end-to-end tests. Synthetic smoke clip (macOS TTS, no real people) + config in `~/meetyou-benchmark-data/smoke` (outside git). **Left:** smoke run with real keys, then Phase A |
+| S0-07 | ✅ Built | `bench run-stream`: real-time 100 ms replay, keep-alive, Gemini 10-min rotation. **Left:** smoke run with real keys, then Phases B–C |
+| S0-08 | ✅ Built | Normalizer (Devanagari→Roman, canonical spellings, numbers) + scorer (WER/CER, code-switch, entities, DER, hallucination, echo, latency); 50 tests incl. CLI end-to-end |
 | S0-09 | 🟡 Blocked on data | Run configs for Phases A, B, E in `tools/stt-benchmark/examples/`; Opus prep in README. **Left:** run D–G and analyse |
 | S0-10 | 🟡 Tool ready | `bench blind-samples` creates provider-blind samples + key. **Left:** both people rate |
 | S0-11 | 🟡 Template ready | [ADR-0001](adr/0001-stt-provider.md) with gates, results tables, weighted score. **Left:** fill after benchmark |
-| S0-12 | 🟡 Mostly checked | ADR-0002 §9 checks 2, 3, 6 recorded; **left:** pgvector version, pricing calculator (check 5) |
+| S0-12 | 🟡 Nearly done | ADR-0002 checks 2 (pgvector 0.8.5 on PG 13+), 3, 6 done; check 5 estimated (production ≈ $160–260/month). **Left:** confirm check 5 in the pricing calculator |
 | S0-13 | 🟡 Partly done | Cloud Run WebSocket rules from docs; latency measured from India laptop. **Left:** Cloud Shell run in `asia-south1`, live 2-hour test (S1-11) |
-| S0-14 | ✅ Proposed | [ADR-0004](adr/0004-auth-and-token-model.md), [ADR-0005](adr/0005-job-queue-and-outbox.md). **Left:** approval + verification items |
+| S0-14 | ✅ Accepted | [ADR-0004](adr/0004-auth-and-token-model.md), [ADR-0005](adr/0005-job-queue-and-outbox.md) accepted 2026-10-29 (also [ADR-0003](adr/0003-audio-transport-format.md), Opus). Verification items run in Stage 1 |
 | S0-15 | ✅ Done | pnpm workspace, TypeScript 6 strict (erasable syntax only), ESLint, Prettier, EditorConfig, Vitest, `.vscode/extensions.json`, GitHub Actions CI, `pnpm check` |
 | S0-16 | ✅ Done | `shared/contracts`: events, WS protocol + binary frames, segments, REST DTOs, summary schema + JSON Schema; 11 tests |
 | S0-17 | ✅ Done | `shared/design-tokens`: light/dark tokens, generated `tokens.css`, bundled fonts, icon list; 34 tests incl. WCAG contrast for both themes |

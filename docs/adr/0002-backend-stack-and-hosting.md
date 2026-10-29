@@ -108,7 +108,7 @@ good enterprise credibility; API and workers can scale to zero.
 and session affinity is best-effort — clients **will** reconnect during long meetings and on deploys.
 Our protocol already supports resume + replay (ARCHITECTURE §5.3, §6.2), so this is acceptable but
 must be tested. Cloud SQL and Memorystore have baseline costs.
-**Rough Phase 1 cost:** ~USD 60–130/month.
+**Rough Phase 1 cost:** ~USD 60–130/month (first guess). Revised from published unit rates on 2026-10-29: **production ~USD 160–260/month, staging ~USD 40–80/month** — see §9 check 5.
 
 ### Option C — Supabase (Mumbai) + container host
 | Component | Service |
@@ -227,16 +227,18 @@ Cloud Run. The portability rules below keep that switch cheap. This requires a n
 | # | Check | Owner |
 |---|---|---|
 | 1 | Cloud Run WebSocket behaviour in `asia-south1`: 60-min timeout, session affinity, SIGTERM grace on deploy | Anirudh — **Docs checked 2026-10-28:** request timeout up to 60 min applies to WebSockets; session affinity is best effort; clients must reconnect. SIGTERM grace period [Verify]. Live 2-hour test in S1-11 |
-| 2 | Cloud SQL Postgres version and pgvector availability in `asia-south1` | Anirudh — **Partly checked:** pgvector is supported on Cloud SQL for PostgreSQL (secondary source); exact extension version still to confirm on Google's extensions page |
+| 2 | Cloud SQL Postgres version and pgvector availability in `asia-south1` | Anirudh — **✅ Done 2026-10-29:** Google's Cloud SQL extensions page lists **pgvector 0.8.5 for PostgreSQL 13 and later** (0.7.4 on PG 12, 0.5.1 on PG 11). Use a current PostgreSQL major version |
 | 3 | Backup/PITR retention can be set ≤ 30 days | Anirudh — **Checked (secondary sources):** automated backup count is configurable (e.g. 7) and PITR log retention is configurable (default 7 days) → ≤ 30 days achievable. Confirm limits in Google docs when provisioning |
 | 4 | Latency from `asia-south1` to Sarvam, Deepgram, and Gemini endpoints | Anirudh — **Partly done:** `bench measure-latency` from a laptop in India (2026-10-28): TLS connect Sarvam ~70–90 ms, Gemini ~40 ms (first byte 130–460 ms), Deepgram ~510–610 ms (first byte ~770–870 ms). Re-run from Cloud Shell in `asia-south1` |
-| 5 | Monthly cost estimate with the pricing calculator for the §6 setup | Anirudh — **Open:** needs the Google Cloud pricing calculator with chosen tiers |
+| 5 | Monthly cost estimate with the pricing calculator for the §6 setup | Anirudh — **Estimated 2026-10-29 (confirm in the pricing calculator before provisioning):** Cloud SQL Enterprise 1 vCPU / 3.75 GiB + 20 GB SSD ≈ $55–85 (general rates $0.0413/vCPU-h, $0.007/GiB-h; a third-party Mumbai listing suggests higher regional prices) · Cloud Run gateway, 1 always-on 1 vCPU / 512 MiB instance ≈ $50–70 ($0.000018/vCPU-s instance-based, ×1.4 if Mumbai is a Tier 2 region) · worker min instance ≈ $50–70 in production, $0 in staging · API scale-to-zero ≈ < $10 · Redis: serverless ≈ $0–10 or smallest Memorystore ≈ $35+ · Storage, secrets, logs ≈ < $5. **Production ≈ $160–260/month; staging ≈ $40–80/month** (shared-core SQL, no min instances). Startup credits (check 6) would cover this |
 | 6 | Startup credit programs we may be eligible for (Google for Startups, others) | Anirudh — **Checked:** Google for Startups Cloud Program has a self-serve *Start* tier (reported up to ~$2,000 for 1 year, for startups not yet equity-funded) and a *Scale* tier for VC-funded startups (much larger credits); apply via cloud.google.com/startup |
 | 7 | ~~Team familiarity (D9) and preference between B and C~~ — **Done 2026-10-28: Option B** | Both |
 
 ---
 
 ## 10. Sources
+
+- [Cloud SQL for PostgreSQL extensions (pgvector)](https://docs.cloud.google.com/sql/docs/postgres/extensions) · [Cloud Run pricing](https://cloud.google.com/run/pricing) · [Cloud SQL pricing guide (Bytebase)](https://www.bytebase.com/blog/understanding-google-cloud-sql-pricing/) · [Cloud SQL Mumbai instance prices (Bytebase)](https://www.bytebase.com/dbcost/cloudsql/instance/db-standard-4/)
 
 - [Google for Startups Cloud Program FAQ](https://cloud.google.com/startup/faq) · [Benefits](https://cloud.google.com/startup/benefits)
 - [Cloud SQL backups and PITR (tutorial)](https://oneuptime.com/blog/post/2026-02-17-how-to-configure-automated-backups-and-point-in-time-recovery-in-cloud-sql/markdown) · [PITR without impacting storage (Google blog)](https://cloud.google.com/blog/products/databases/point-in-time-recovery-without-impacting-instance-storage/)
