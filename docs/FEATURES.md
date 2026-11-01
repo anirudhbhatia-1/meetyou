@@ -126,7 +126,7 @@ changes per platform (Meet extension, desktop app, bot, file upload).
 | J1 | Talk-time and meeting analytics | 3 | — |
 | J2 | Topic and keyword trackers | 3 | — |
 | **K. Video** ||||
-| K1 | Video recording, storage, playback | 3 | — |
+| K1 | Video recording, storage, playback | **1** | FR-CAP-12..15, ADR-0011 |
 | K2 | Clips and soundbites | 3 | — |
 | **L. Privacy and security** ||||
 | L1 | Retention controls | 1 | FR-SET-01 |
@@ -574,8 +574,9 @@ show Hindi/Hinglish in Roman script by default.
 languages but code-switched Hinglish quality varies. Indian-language providers (e.g. Sarvam) offer
 native Roman (`translit`) and mixed-script (`codemix`) output modes.
 
-**Best way for us.** Prefer a provider that outputs Roman natively for finals; transliterate interim
-text ourselves if needed. Maintain a **canonical Hinglish spelling list** (from the benchmark) to
+**Best way for us.** Google Chirp 3 (ADR-0001) returns Hindi in Devanagari, so the assembler
+transliterates finals and interims to Roman and keeps the original as `raw_text`; English loanwords
+written in Devanagari are mapped back through the canonical list. Maintain a **canonical Hinglish spelling list** (from the benchmark) to
 normalize variants. Make search script-insensitive later (H2/H3).
 
 ---
@@ -1049,16 +1050,27 @@ transcripts; dashboards of mentions over time with links to segments.
 ## K. Video
 
 ### K1. Video recording, storage, playback
-**Phase 3**
+**Phase 1** (moved from Phase 3 on 2026-11-01 — [ADR-0011](adr/0011-video-screen-recording.md))
 
-**What.** Record the meeting video (grid and screen share) for replay.
+**What.** Record the meeting video — the Meet tab as the user sees it: participant grid and anyone's
+shared screen — with a playback mix of both audio lanes, and replay it next to the transcript.
 
 **How others do it.** Bots and some extensions (Scribbl, Bluedot) record video; files are stored as
 MP4/WebM and streamed for playback.
 
-**Best way for us.** Opt-in per meeting. Record in fragments uploaded continuously so crashes do not
-corrupt files; transcode to adaptive streaming for playback; signed URLs; same retention rules as
-audio. Budget for ~0.5–1 GB per hour at 720p.
+**Best way for us.**
+- Use the video track of the same `tabCapture` stream (no extra prompt). "Record my whole screen"
+  (screen picker) is a P1 option for people presenting their own screen, because the Meet tab then
+  shows "You are presenting" instead of the content.
+- `MediaRecorder` in the offscreen document, 720p max at 15 fps, 10-second fragments written to
+  IndexedDB first, then one signed PUT per fragment at lowest priority — audio always wins. Data
+  saver (480p) switches on automatically when the upload falls behind.
+- Notes never wait for video. A worker remuxes fragments into one `faststart` MP4 aligned to the
+  session clock, so clicking a transcript line seeks the video.
+- Setting "Record video" (default on), per-meeting toggle, same retention as audio (7 days by
+  default; off when retention is "Delete immediately"). Consent notice says audio and screen.
+- Budget ≈ 470 MB per hour at standard quality, ≈ 200 MB in data saver.
+- Adaptive streaming (HLS) arrives with clips in Phase 3.
 
 ---
 
@@ -1225,13 +1237,15 @@ Foundation (A1–A4) ──► Capture C1–C4 ──► Live STT D1 ──► T
                                               ▼                                   ▼
                                         Batch D2 (needs L1 retention)       Library H1, Export G1
                                                                                   │
+                       Capture C1–C4 ──► Video K1 (fragments → finalize → player in meeting view)
+                                                                                  │
 Phase 1 complete ◄────────────────────────────────────────────────────────────────┘
 
 Phase 2: C5 upload (reuses D2) → C6 desktop (new adapter) → B2 calendar → B4 brief (needs H3, H4)
          H3 RAG chat → I2 MCP (reuses H3) → I1 delivery → N1/N2 billing → E3/E4/F8/F9/G2
 
 Phase 3: A2 teams → M1–M5 enterprise → I3–I5 integrations/automations → J1–J2 analytics
-         K1–K2 video → C7 bot (buy first) → L4 redaction → C8 mobile
+         K2 clips + HLS video → C7 bot (buy first) → L4 redaction → C8 mobile
 ```
 
 **Key dependency rules**
@@ -1248,7 +1262,7 @@ The product is **complete** when a user can, end to end:
 
 1. **Set up** in under a minute with clear privacy choices (A1–A4).
 2. **Record** any meeting — Meet, Zoom, Teams, in-person, or an uploaded file — without a bot by
-   default (C1, C5, C6), with an optional bot for video (C7).
+   default (C1, C5, C6), with screen video (K1) and an optional bot (C7).
 3. **See** an accurate live transcript in English, Hindi, or Hinglish with correct speakers (D1–D5).
 4. **Steer** the notes with their own live notes and highlights (E2, E3).
 5. **Get** structured, cited notes, decisions, and owned action items within a minute, in their

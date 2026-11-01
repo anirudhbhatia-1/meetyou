@@ -1,12 +1,14 @@
 import { describe, expect, it } from 'vitest';
 import {
   AUDIO_FRAME_HEADER_BYTES,
+  CONSENT_MESSAGE_AUDIO_ONLY,
   CaptureEvent,
   ClientMessage,
   DEFAULT_USER_SETTINGS,
   PCM16_FRAME_BYTES,
   Segment,
   ServerMessage,
+  SignVideoFragmentsRequest,
   StartSessionResponse,
   SummaryOutput,
   UserSettings,
@@ -38,6 +40,25 @@ describe('capture events', () => {
       { type: 'mic.mute_changed', sessionId: 's1', muted: true, at: 1300 },
       { type: 'caption.observed', sessionId: 's1', text: 'hello', at: 1400 },
       { type: 'consent.notice', sessionId: 's1', mode: 'one_click', outcome: 'posted', at: 10 },
+      {
+        type: 'video.part_started',
+        sessionId: 's1',
+        partId: `vp_${ULID}`,
+        source: 'tab',
+        mimeType: 'video/mp4',
+        width: 1280,
+        height: 720,
+        fps: 15,
+        at: 20,
+      },
+      {
+        type: 'video.part_stopped',
+        sessionId: 's1',
+        partId: `vp_${ULID}`,
+        fragments: 180,
+        reason: 'stopped',
+        at: 1_800_000,
+      },
       {
         type: 'session.ended',
         sessionId: 's1',
@@ -174,6 +195,34 @@ describe('rest dto', () => {
     expect(settings.hindiScript).toBe('roman');
     expect(settings.retentionPolicy).toBe('7d');
     expect(settings.consentMode).toBe('one_click');
+    expect(settings.recordVideo).toBe(true);
+    expect(settings.consentMessage).toMatch(/screen/);
+    expect(CONSENT_MESSAGE_AUDIO_ONLY).not.toMatch(/screen/);
+  });
+
+  it('signs at most 50 fragments of a valid video part', () => {
+    const req = { partId: `vp_${ULID}`, indices: [0, 1, 2], contentType: 'video/mp4' };
+    expect(SignVideoFragmentsRequest.safeParse(req).success).toBe(true);
+    expect(SignVideoFragmentsRequest.safeParse({ ...req, partId: 'p1' }).success).toBe(false);
+    expect(
+      SignVideoFragmentsRequest.safeParse({
+        ...req,
+        indices: Array.from({ length: 51 }, (_, i) => i),
+      }).success,
+    ).toBe(false);
+    expect(
+      CaptureEvent.safeParse({
+        type: 'video.part_started',
+        sessionId: 's1',
+        partId: `vp_${ULID}`,
+        source: 'tab',
+        mimeType: 'video/mp4',
+        width: 3840,
+        height: 2160,
+        fps: 15,
+        at: 0,
+      }).success,
+    ).toBe(false);
   });
 
   it('requires a wss stream URL', () => {
@@ -183,6 +232,7 @@ describe('rest dto', () => {
       streamToken: 't',
       expiresAt: '2026-10-28T10:10:00Z',
       audioFormat: { codec: 'opus', sampleRate: 16000, channels: 1, frameMs: 100 },
+      video: null,
     };
     expect(
       StartSessionResponse.safeParse({ ...res, streamUrl: 'wss://gw.example.com/v1/stream' })

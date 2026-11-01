@@ -6,7 +6,7 @@ pointer to where the full detail lives — the linked document stays the source 
 
 | Field | Value |
 |---|---|
-| Last updated | 2026-10-29 (Stage 0 continued) |
+| Last updated | 2026-11-01 (Stage 0 complete; video + Google STT decisions) |
 | Updated by | Anirudh (Claude Code) |
 | Repository | [anirudhbhatia-1/meetyou](https://github.com/anirudhbhatia-1/meetyou) — branches `main`, `anirudh` |
 | Current stage | **Stage 0** in progress — repo tooling, contracts, tokens, benchmark tools, ADR drafts done on `feature/stage-0`; people-dependent tasks open (§7) |
@@ -70,7 +70,7 @@ All dated 2026-10-28 unless noted.
 |---|---|---|
 | Start with Google Meet only | Other platforms later through new adapters | PRD §7, AGENTS §2 |
 | Chrome extension, no bot | Bot is optional in product Phase 3, and we buy (bot API vendor) before building | FEATURES C1, C7 |
-| Phase 1 is audio only | No video until Phase 3 | PRD §3.3 |
+| Phase 1 records audio **and the meeting screen** (2026-11-01) | Meet tab video with a playback mix; clips and adaptive streaming stay in Phase 3 | [ADR-0011](docs/adr/0011-video-screen-recording.md), PRD FR-CAP-12..15 |
 | Two lanes (`me` / `them`) end to end | Never mixed before transcription | ARCHITECTURE §1 |
 | Take the best ideas from competitors, not everything | Phased list; features and ideas only — no copied code, UI, or branding | FEATURES §1, appendix in PRD |
 | Differentiators | Hinglish accuracy, bot-free, cited anchored notes, visible privacy, India pricing | PRD §5.3 |
@@ -82,7 +82,10 @@ All dated 2026-10-28 unless noted.
 |---|---|---|
 | **D-01** | Hindi/Hinglish transcripts display in **Roman script** by default; always store the provider's original output (`raw_text`); Devanagari display later as a setting; mixed-script fallback if transliteration benchmarks poorly | AGENTS §9, PRD ML-03/04 |
 | **D-02** | Audio retention default **7 days**; user can choose "delete after notes" (only after successful processing) or 30 days; transcripts and notes stay until the user deletes them | AGENTS §9, PRD FR-SET-01 |
-| **D-08** | Backend: **TypeScript/Node.js on Google Cloud Mumbai** (Cloud Run, Cloud SQL, Cloud Storage). ADR-0002 "Option B selected"; becomes Accepted after verification checks | [ADR-0002](docs/adr/0002-backend-stack-and-hosting.md) |
+| **D-03** (2026-11-01) | STT: **Google Cloud Speech-to-Text V2 Chirp 3** primary once it passes the benchmark gate (S1-14), **Deepgram Nova-3** fallback, **Sarvam dropped**, Gemini not used for STT | [ADR-0001](docs/adr/0001-stt-provider.md) |
+| **D-06** (2026-10-29) | Opus 24 kbps transport and storage | [ADR-0003](docs/adr/0003-audio-transport-format.md) |
+| **D-08** | Backend: **TypeScript/Node.js on Google Cloud Mumbai** (Cloud Run, Cloud SQL, Cloud Storage). ADR-0002 **Accepted 2026-11-01**; live checks in S1-11 | [ADR-0002](docs/adr/0002-backend-stack-and-hosting.md) |
+| **D-12** (2026-11-01) | Record video of the meeting screen in Phase 1; setting on by default; same retention as audio; off when retention is "delete immediately" | [ADR-0011](docs/adr/0011-video-screen-recording.md) |
 
 ### 4.3 Architecture and engineering rules
 - Platform-specific code only in **adapters**; the core consumes normalized events only.
@@ -97,8 +100,9 @@ All dated 2026-10-28 unless noted.
 - Docs language English; monorepo with `extension/`, `backend/`, `shared/`, `docs/` (ARCHITECTURE §23).
 
 ### 4.4 Privacy and vendor rules
-- **Free API tiers only with fully synthetic audio** — never real voices or personal information,
-  even with consent (Gemini free-tier terms forbid personal info).
+- **Free Gemini key = development and testing only** (2026-11-01): synthetic audio/transcripts and
+  public licensed datasets, local and CI. Never real meetings, even with consent (Gemini free-tier
+  terms forbid personal info); staging/production refuse free keys. **Deepgram is the STT backup.**
 - Deepgram: `mip_opt_out=true` on every request. Sarvam: turn off training in account settings
   first. Gemini: billing-enabled Cloud project only.
 - Never: training on user data, voiceprints across meetings, emotion inference from voice/video,
@@ -133,7 +137,7 @@ All dated 2026-10-28 unless noted.
 
 | ID | Question | Status / next step | Owner of next step |
 |---|---|---|---|
-| D-03 | STT provider(s) | Benchmark Sarvam, Deepgram Nova-3 multilingual, Gemini Transcribe (S0-01..S0-11) → ADR-0001 | Anirudh |
+| D-03 gate | Chirp 3 must reach the ADR-0001 §6.2 targets on the 20 MUCS clips; else Deepgram is primary | S1-14, needs the Cloud project (S1-10) | Anirudh |
 | D-04 | LLM for summaries | Evaluation in S3-05 → ADR-0007; Gemini Flash is a candidate | Anirudh |
 | D-05 | Consent notice default mode | Proposed One click (used in DESIGN) — confirm | Both |
 | D-06 | ✅ Closed 2026-10-29: Opus 24 kbps ([ADR-0003](docs/adr/0003-audio-transport-format.md), accepted) | Re-check with chosen provider in S1-11 | Anirudh |
@@ -141,8 +145,7 @@ All dated 2026-10-28 unless noted.
 | D-09 | Product name | "Minutes" is a working name | Both |
 | D-10 | `me` lane follows Meet mute by default | Proposed On — confirm in M1 | Both |
 | D-11 | Hinglish note markers (`faisla:`, `kaam:`, `sawaal:`, `zaroori:`) | Decide by M2 | Both |
-| ADR-0002 | Remaining checks: #2 pgvector version, #5 pricing calculator, #4 Cloud Shell latency run, #1 live 2-hour test in S1-11 (all Anirudh) | Checks 3, 6 done; 1, 4 partly | as listed |
-| ADR-0003 / 0004 / 0005 | Accepted 2026-10-29; run their verification items in Stage 1 | Accepted | Anirudh |
+| ADR-0002 / 0003 / 0004 / 0005 / 0011 | Accepted; run their verification items in Stage 1 (S1-11, S1-13) | Accepted | Anirudh |
 
 ---
 
@@ -152,7 +155,9 @@ Facts learned so far that change how we build. Full sources in STT_PREFLIGHT.md 
 
 | Topic | Finding |
 |---|---|
-| Sarvam | `translit` mode outputs Roman script; `codemix` gives mixed script; streaming interim text is not transliterated; diarization batch only; ₹0.49/min; trains on API data by default (opt out) |
+| Benchmark (MUCS 2021, 20 clips) | Streaming: Deepgram 14.2% spelling-insensitive WER, final P90 2.8 s; Gemini Live 15.9% but final P90 20 s and English loanwords in Devanagari; Sarvam 15.8%, P90 9.8 s. Opus 24k costs ≤ 0.5 pt. Full tables in ADR-0001 §4 |
+| Google Chirp 3 | Streaming ≤ 5 min per stream (rotate), 300 concurrent streams per region, `hi-IN` GA, diarization batch only, word timestamps batch only, regions `us`/`eu` only, ~$0.016/min [Verify] |
+| Sarvam (dropped) | `translit` mode outputs Roman script; `codemix` gives mixed script; streaming interim text is not transliterated; diarization batch only; ₹0.49/min; trains on API data by default (opt out) |
 | Deepgram | Nova-3 uses `keyterm` (500-token limit); mid-stream updates via a `Configure` message; closes after ~10 s without audio (send KeepAlive); Hindi inside `multi` code-switching is unclear — test 3 configurations |
 | Gemini | `gemini-3.5-transcribe-live`: 10-minute sessions, no diarization, no word timestamps; batch model has diarization (≤ 30 min with diarization); free tier may train and be human-reviewed; Gemini 3.8 Flash price doubles from 1 Jan 2027 |
 | Cloud Run | WebSockets limited to 60 minutes per connection; affinity is best effort → our resume/replay protocol handles it |
@@ -165,16 +170,13 @@ Facts learned so far that change how we build. Full sources in STT_PREFLIGHT.md 
 
 ## 7. What happens next
 
-Full status table: IMPLEMENTATION_PLAN.md → "Stage 0 status". **All of Stage 0 is Anirudh's.**
+Stage 0 is complete (status table: IMPLEMENTATION_PLAN.md → "Stage 0 status"). Next, Stage 1:
 
-1. S0-02 provider setup (PREFLIGHT_RUNBOOK): Sarvam opt-out + top-up, Deepgram, billing-enabled
-   Gemini project, keys.
-2. Smoke-test the benchmark tools on one short synthetic clip per provider; fix `[Verify]` items.
-3. S0-01 recordings with consent (participants still needed — 2 to 6 people per clip).
-4. S0-04/S0-05 references for all 20 clips + self-consistency check.
-5. S0-09 Phases A–G → S0-10 ratings → S0-11 ADR-0001.
-6. ADR-0002 checks #4, #5 (ADR-0003/0004/0005 accepted 2026-10-29).
-7. Give Gaurav collaborator access; Stage 1 (e.g. S1-01) can run in parallel.
+1. **Gaurav:** S1-01 extension skeleton (add `unlimitedStorage` to the manifest — PRD §18), S1-07
+   Meet adapter, S1-10 staging infrastructure (the Cloud project also unblocks the STT gate).
+2. **Anirudh:** S1-02..S1-06 capture path, **S1-13 video capture spike** (ADR-0011 checks), **S1-14
+   ADR-0001 gate** with Google Chirp 3 (needs `GOOGLE_CLOUD_PROJECT` + ADC login in `.env.bench`).
+3. Record consented dogfooding meetings for benchmark Phases E–G (kit in `docs/benchmark/`).
 
 ## 8. Conventions for this file
 
@@ -189,6 +191,24 @@ Full status table: IMPLEMENTATION_PLAN.md → "Stage 0 status". **All of Stage 0
 ## 9. Session log
 
 Newest first. One entry per working session (either person).
+
+### 2026-11-01 — Anirudh (Claude Code): Stage 0 complete
+**Decisions (Anirudh):** use Google's speech library for transcription and drop Sarvam; record the
+meeting screen (video) along with audio.
+**Done**
+- ADR-0001 accepted with a gate: Google Chirp 3 primary, Deepgram fallback; results tables from the
+  MUCS runs. Google streaming provider added to `tools/stt-benchmark` (`@google-cloud/speech`,
+  `examples/runs.google.json`); Sarvam's partial run left as is.
+- ADR-0011 (video): Meet tab video via `MediaRecorder`, 10 s fragments, signed PUT uploads at
+  lowest priority, `video.finalize` remux to MP4, click-to-seek, same retention.
+- Contracts: `video.part_started/stopped`, `recordVideo`, `videoQuality`, `Meeting.video`,
+  `recordingExpiresAt` (was `audioExpiresAt`), fragment-signing and playback DTOs.
+- ADR-0002 accepted (checks 1 and 4 in S1-11). PRD, FEATURES (K1 → Phase 1), ARCHITECTURE, DESIGN,
+  plan (S1-13, S1-14, S2-14, S4-17), legal drafts updated.
+- Benchmark data moved to `recording/bench-data/` (gitignored).
+- Later the same day: Anirudh confirmed **Deepgram as the STT backup** and the **free Gemini key
+  for development and testing only** (ADR-0001 §7).
+**Not done:** Chirp 3 has not been benchmarked yet (no Cloud project); all ADR-0011 checks are open.
 
 ### 2026-10-29 — Anirudh (Claude Code): Stage 0 continued
 **Done**

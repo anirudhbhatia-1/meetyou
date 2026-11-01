@@ -13,6 +13,7 @@ import {
   geminiLiveSetup,
   retryDelaySeconds,
 } from './gemini.ts';
+import { googleResults, googleStreamingConfig } from './google.ts';
 import { sarvamBatch, sarvamStreamParams } from './sarvam.ts';
 import { requireConfirmed, type StreamProvider } from './types.ts';
 
@@ -171,6 +172,49 @@ describe('gemini', () => {
     });
     expect(hyp.text).toBe('Hello world');
     expect(hyp.words[1]).toEqual({ text: 'world', start: 0.5, end: 0.8, speaker: 'spk_1' });
+  });
+});
+
+describe('google', () => {
+  const go = ProviderOptions.parse({
+    provider: 'google',
+    languageCodes: ['hi-IN', 'en-IN'],
+    keyterms: true,
+  });
+  it('builds a Chirp 3 streaming config with PCM16 decoding and inline phrases', () => {
+    if (go.provider !== 'google') throw new Error('type');
+    const c = googleStreamingConfig(go, 'proj-1', ['Ravi', 'GST']);
+    expect(c.recognizer).toBe('projects/proj-1/locations/us/recognizers/_');
+    expect(c.streamingConfig.config.model).toBe('chirp_3');
+    expect(c.streamingConfig.config.explicitDecodingConfig.sampleRateHertz).toBe(16000);
+    expect(c.streamingConfig.config.languageCodes).toEqual(['hi-IN', 'en-IN']);
+    expect(c.streamingConfig.config.adaptation?.phraseSets[0]?.inlinePhraseSet.phrases).toEqual([
+      { value: 'Ravi', boost: 10 },
+      { value: 'GST', boost: 10 },
+    ]);
+    expect(c.streamingConfig.streamingFeatures.interimResults).toBe(true);
+    const plain = googleStreamingConfig({ ...go, keyterms: false }, 'p', ['Ravi']);
+    expect('adaptation' in plain.streamingConfig.config).toBe(false);
+  });
+
+  it('parses interim and final results with end offsets', () => {
+    expect(
+      googleResults({
+        results: [
+          {
+            alternatives: [{ transcript: ' kal meeting hai ' }],
+            isFinal: true,
+            resultEndOffset: { seconds: '3', nanos: 500000000 },
+          },
+          { alternatives: [{ transcript: 'aur' }], isFinal: false },
+          { alternatives: [{ transcript: '' }], isFinal: true },
+        ],
+      }),
+    ).toEqual([
+      { final: true, text: 'kal meeting hai', end: 3.5 },
+      { final: false, text: 'aur' },
+    ]);
+    expect(googleResults({})).toEqual([]);
   });
 });
 

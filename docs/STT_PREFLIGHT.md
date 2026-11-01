@@ -3,9 +3,9 @@
 | Field | Value |
 |---|---|
 | Purpose | Complete the provider pre-flight checklist ([STT_BENCHMARK_PLAN.md §2.3](STT_BENCHMARK_PLAN.md)) before any audio is sent |
-| Providers | Sarvam AI, Deepgram, Google Gemini |
+| Providers | Sarvam AI (dropped 2026-11-01), Deepgram, Google Gemini; Google Cloud Speech-to-Text Chirp 3 added 2026-11-01 (§5a) |
 | Researched | 2026-10-28, from vendor docs and pages (sources at the end) |
-| Status | Desk research only — nothing tested yet |
+| Status | Benchmarked on public data 2026-10-29 (results in [ADR-0001](adr/0001-stt-provider.md)) |
 
 > **Confidence labels.** **[Docs]** = stated in the vendor's official docs or terms.
 > **[3rd-party]** = from blogs or aggregators, not confirmed by the vendor. **[Unknown]** = not
@@ -196,6 +196,22 @@ summary (~15k input, ~2k output tokens) costs about $0.02 now, ~$0.04 after the 
 No provider is ruled out. All three go into Phase A of the benchmark.
 
 ---
+
+## 5a. Google Cloud Speech-to-Text V2 (Chirp 3) — added 2026-11-01
+
+- **Streaming:** `StreamingRecognize`, ≤ 5 minutes per stream → rotate. 300 concurrent streams per
+  region. Requests ≤ 25 KB. **[Docs]**
+- **Languages:** `hi-IN` GA for streaming, sync, and batch; several language codes or `auto`
+  allowed; code-switching within one utterance not documented → measure in the ADR-0001 gate. **[Docs]**
+- **Features:** diarization in `BatchRecognize` only; word timestamps batch/sync only (may lower
+  accuracy); adaptation with up to 1,000 phrases. **[Docs]**
+- **Regions:** Chirp 3 GA in `us` and `eu` multi-regions; `asia-south1` not listed. **[Docs]**
+- **Data terms:** no training on customer audio unless the project opts into data logging — keep it
+  off and check it at gateway startup. **[Docs — confirm on the data-logging page]**
+- **Pricing:** ≈ $0.016/min standard, ≈ $0.003–0.004/min dynamic batch, 60 free minutes per month.
+  **[3rd-party]**
+- **Setup:** billing-enabled project, Speech-to-Text API enabled, `GOOGLE_CLOUD_PROJECT`, ADC
+  (`gcloud auth application-default login`) for the benchmark; a service account in production.
 
 ## 6. Actions before the benchmark
 

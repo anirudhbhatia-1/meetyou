@@ -87,9 +87,9 @@
                      ┌──────────┐ ┌─────────┐ ┌─────────┐ ┌───────────────────┐
                      │ STT      │ │ LLM     │ │ Google  │ │ Phase 2/3:        │
                      │ vendors  │ │ vendors │ │ OAuth   │ │ Calendar, Slack,  │
-                     │ (Sarvam/ │ │ (Gemini/│ │ (sign-  │ │ Notion, CRM,      │
-                     │ Deepgram/│ │ Claude/ │ │  in)    │ │ MCP clients,      │
-                     │ Gemini)  │ │ …)      │ │         │ │ payments, bot API │
+                     │ (Google  │ │ (Gemini/│ │ (sign-  │ │ Notion, CRM,      │
+                     │ Chirp 3/ │ │ Claude/ │ │  in)    │ │ MCP clients,      │
+                     │ Deepgram)│ │ …)      │ │         │ │ payments, bot API │
                      └──────────┘ └─────────┘ └─────────┘ └───────────────────┘
 ```
 
@@ -164,7 +164,7 @@ Cross-cutting: secrets manager · logging/metrics/tracing · error reporting · 
 |---|---|---|
 | **Content script** (Meet adapter) | Detect in-call state; read title and participant names; observe active speaker and mute state; post consent notice in chat; show "Start recording" chip | While a Meet tab is open |
 | **Service worker** | Control plane: recording state machine, auth/token refresh, obtain `tabCapture` stream ID, create/close offscreen document, badge updates, message routing | Ephemeral (Chrome stops it when idle) — **holds no critical state in memory** |
-| **Offscreen document** | Media plane: open tab and mic streams, playback routing, AudioWorklet resampling, optional Opus encoding, IndexedDB buffer, WebSocket to gateway | Exists only while recording |
+| **Offscreen document** | Media plane: open tab (audio + video) and mic streams, playback routing, AudioWorklet resampling, Opus encoding, IndexedDB buffers, WebSocket to gateway, video recorder and fragment uploader ([ADR-0011](adr/0011-video-screen-recording.md)) | While recording, and until the video upload finishes |
 | **Side panel** | Live transcript, notepad, summary, health indicator | User-opened |
 | **Extension pages** | Onboarding (mic permission), settings, library (alpha) | User-opened |
 
@@ -211,12 +211,27 @@ Mic stream (me, echoCancellation on) ────────► AudioWorklet(me
                        └──────── prune on ack ◄────────────┘
 ```
 
+**Video branch (ADR-0011).** The same tab stream's video track plus a WebAudio mix of both lanes
+feed a `MediaRecorder` (720p max, 15 fps, H.264/MP4 or VP9/WebM fallback, 10-second timeslice).
+Fragments go to IndexedDB `video_buffer` first, then a single uploader PUTs each fragment to Cloud
+Storage with a signed URL. The uploader runs at lowest priority: it pauses while the audio
+WebSocket reconnects or the audio backlog exceeds 5 s, switches to data saver (480p, 10 fps) when
+its own backlog exceeds 2 minutes, and keeps running after the meeting until done. The mixed audio
+in the video is for playback only; STT always uses the two separate lanes.
+```
+Tab stream ──video track──────────────┐
+Tab audio + mic ──WebAudio mix────────┴──► MediaRecorder ──10 s fragments──► IndexedDB video_buffer
+                                                                                 │
+                                    signed PUT (lowest priority) ◄── uploader ◄──┘
+```
+
 ### 4.5 Local storage
 | Store | Contents | Retention |
 |---|---|---|
 | `chrome.storage.local` | Settings cache, refresh token (see §13), onboarding flags | Until sign-out |
 | `chrome.storage.session` | Recording state machine, current session ID | Browser session |
 | IndexedDB `audio_buffer` | Unacknowledged audio frames per lane | Until acknowledged; recovered after crash |
+| IndexedDB `video_buffer` | Video fragments not yet uploaded (`unlimitedStorage`, up to ~1 h) | Until the PUT succeeds; resumed after crash |
 | IndexedDB `notes_drafts` | Notepad lines not yet synced | Until synced |
 
 ### 4.6 Meet adapter internals
@@ -234,7 +249,7 @@ DOM text read from Meet is **untrusted input**: length-limited, sanitized, never
 rendered as HTML.
 
 ### 4.7 Permissions (see PRD §18)
-`tabCapture`, `offscreen`, `sidePanel`, `storage`, `notifications`, `identity` (if used), host
+`tabCapture` (audio and video), `offscreen`, `sidePanel`, `storage`, `unlimitedStorage` (video buffer), `notifications`, `identity` (if used), host
 permissions for `https://meet.google.com/*` and our API domain; keyboard shortcuts via the
 `commands` manifest key. No `<all_urls>`. `externally_connectable` is not
 set, so web pages cannot message the extension.
@@ -330,7 +345,7 @@ in the gateway; PCM as fallback. Phase D showed ≤ 0.5-point accuracy differenc
 | Concern | Handling |
 |---|---|
 | Idle timeouts (e.g. Deepgram ~10 s) | Provider adapter sends keep-alives during silence and pause |
-| Max session length (e.g. Gemini Live 10 min) | Rotate sessions before the limit with a few seconds of **overlap**; de-duplicate words in the overlap by timestamp |
+| Max session length (Google `StreamingRecognize` 5 min — about 12 rotations per lane-hour) | Rotate sessions before the limit with a few seconds of **overlap**; de-duplicate words in the overlap by timestamp |
 | Provider disconnect | Reconnect with backoff; replay recent audio from the gateway's short ring buffer |
 | Provider outage | Mark health `degraded`; keep persisting audio; mark the session for batch transcription after the meeting; optionally fail over to a secondary provider |
 | Concurrency limits | Per-provider connection limiter; queue or fail over when exhausted |
@@ -388,12 +403,14 @@ EmbeddingProvider            // Phase 2
 
 ### 7.3 Provider registry and routing
 - Configuration selects providers per environment and, later, per workspace or language
-  (e.g. `streaming: sarvam`, `batch: gemini-transcribe`).
+  (Phase 1: `streaming: google-chirp3`, `batch: google-chirp3`, fallback `deepgram-nova3` —
+  [ADR-0001](adr/0001-stt-provider.md)).
 - Capability descriptors drive behaviour (rotation, keep-alive, whether batch diarization is needed),
   so swapping vendors does not change pipeline code.
 - Vendor data-use controls are applied **inside each adapter** and cannot be turned off by callers:
-  Deepgram `mip_opt_out=true` on every request, Gemini only on billing-enabled projects, Sarvam
-  account-level opt-out verified at startup by configuration check (see STT_PREFLIGHT.md).
+  Deepgram `mip_opt_out=true` on every request; Google Cloud STT with data logging off (checked at
+  startup); Gemini only on billing-enabled projects (see STT_PREFLIGHT.md). Sarvam was dropped
+  (2026-11-01).
 
 ---
 
@@ -453,7 +470,13 @@ session.ended
               ▼
          [8] compare_and_maybe_resummarize ──► [3] → [4] → notify ("notes updated")
 
-[9] retention_schedule ── set delete_after on audio assets once [2..4] succeeded
+[9] retention_schedule ── set delete_after on audio and video assets once [2..4] succeeded
+
+video.finalize (independent of the notes path; ADR-0011)
+    runs when session.ended + every fragment of every video part is stored (or after 24 h):
+    concatenate fragments per part → remux to MP4 (H.264 + AAC, faststart), fill gaps between
+    parts so the file follows the session clock → playback.mp4 + poster.jpg → delete fragments
+    → meetings.video.status = ready
 ```
 The fast path (1→2→3→4→5) targets the **≤ 60 s P95** summary budget. The batch path improves
 quality afterwards without delaying the first result.
@@ -511,7 +534,7 @@ regressions can be traced (O4).
 | Store | Holds | Notes |
 |---|---|---|
 | PostgreSQL | All structured data (PRD §13), job queue, outbox, full-text index; vectors in Phase 2 | System of record |
-| Object storage | Audio chunks, mixed playback renditions, exports | Server-side encryption; lifecycle rules as backstop for retention |
+| Object storage | Audio chunks, mixed playback renditions, video fragments and playback MP4, exports | Server-side encryption; lifecycle rules as backstop for retention |
 | Redis | Realtime session state, pub/sub between gateway instances | Rebuildable; no system-of-record data |
 
 ### 11.2 Identifiers
@@ -528,6 +551,9 @@ ULIDs for all entities and segments (sortable by time, safe to generate on any n
 ```
 ws/{workspaceId}/meetings/{meetingId}/audio/{lane}/{chunkStartMs}.opus
 ws/{workspaceId}/meetings/{meetingId}/audio/mixed.opus          (playback rendition, optional)
+ws/{workspaceId}/meetings/{meetingId}/video/{partId}/{index}.frag (temporary, until video.finalize)
+ws/{workspaceId}/meetings/{meetingId}/video/playback.mp4
+ws/{workspaceId}/meetings/{meetingId}/video/poster.jpg
 ws/{workspaceId}/exports/{exportId}.zip
 ```
 Keys contain only IDs — no names, titles, or emails.
@@ -541,7 +567,7 @@ Keys contain only IDs — no names, titles, or emails.
 ### 11.6 Retention and deletion
 | Mechanism | Purpose |
 |---|---|
-| `audio_assets.delete_after` + scheduler job | Enforce D-02 retention (7 days default) |
+| `audio_assets.delete_after` / `video_assets.delete_after` + scheduler job | Enforce D-02 retention (7 days default) for audio and video |
 | Object storage lifecycle rule (e.g. 31 days) | Backstop if the job fails |
 | Deletion job | Meeting/account deletion across DB rows, object storage, search index, vector index |
 | Backups | Point-in-time recovery with **≤ 30-day** retention, matching the deletion promise |
@@ -566,6 +592,7 @@ REST over HTTPS, JSON, versioned under `/v1`. Realtime uses the WebSocket protoc
 | Notes | `GET/PUT /v1/meetings/{id}/notes` |
 | Summaries | `GET /v1/meetings/{id}/summary` · `POST /v1/meetings/{id}/summary:regenerate` · `PATCH /v1/summary-items/{id}` · `POST /v1/feedback` |
 | Audio | `GET /v1/meetings/{id}/audio` → short-lived signed URL |
+| Video | `POST /v1/sessions/{id}/video/fragments:sign` (≤ 50 signed PUT URLs, own active session only) · `GET /v1/meetings/{id}/video` → signed playback URL + `startMs` for click-to-seek |
 | Consent | `GET /v1/meetings/{id}/consent-log` |
 | Search | `GET /v1/search?q=` |
 | Export & deletion | `POST /v1/exports` · `GET /v1/exports/{id}` · `POST /v1/account:delete` |
@@ -646,9 +673,11 @@ A participant can say (or name themselves) "ignore previous instructions and…"
 
 ### 15.1 Data flow to sub-processors
 ```
-Extension ──audio──► Gateway ──audio──► STT vendor (paid tier, training opt-out enforced in adapter)
-                         │
-                         └─► Object storage (encrypted, 7-day default retention)
+Extension ──audio──► Gateway ──audio──► STT vendor (Google Chirp 3 in us/eu multi-region, or
+                         │                Deepgram fallback; no training — enforced in adapter)
+                         └─► Object storage (encrypted, asia-south1, 7-day default retention)
+Extension ──video fragments (signed PUT)──► Object storage (asia-south1). Video never goes to STT
+                                            or LLM vendors.
 Workers ──transcript text──► LLM vendor (paid tier, no training)
 Workers ──(Phase 2) text chunks──► Embedding vendor (same rules)
 ```
@@ -656,7 +685,7 @@ Workers ──(Phase 2) text chunks──► Embedding vendor (same rules)
 ### 15.2 Rules enforced by architecture (not by convention)
 | Rule | Where enforced |
 |---|---|
-| Vendor training opt-outs | Inside provider adapters (§7.3); config check at startup refuses to run with free/unpaid keys in production |
+| Vendor training opt-outs | Inside provider adapters (§7.3). The startup config check refuses free/unpaid keys unless `APP_ENV` is `local` or `ci` (the free Gemini key is for development and testing with synthetic data only — ADR-0001 §7) |
 | Retention | Scheduler + lifecycle backstop (§11.6) |
 | Deletion propagation | Deletion job covers DB, object storage, search/vector indexes; vendor-side retention documented per vendor |
 | No content in telemetry | Logging library with an allow-list of fields; analytics events typed to IDs/counts/enums |
@@ -782,12 +811,13 @@ Up to **1,000 users** and **200 concurrent recordings** (PRD §11.4).
 | Resource | Per session |
 |---|---|
 | Client → gateway | ~50–64 kbps (Opus) or ~512 kbps (PCM) |
+| Client → object storage (video) | ~1 Mbps standard, ~0.45 Mbps data saver; may continue after the meeting |
 | STT streams | 2 (one per lane) |
 | Object storage writes | ~1 chunk / 10 s / lane |
 | DB writes | ~1 segment row per utterance, events |
 
-200 concurrent sessions → **400 concurrent STT streams** — check vendor concurrency limits on our
-plan (STT_PREFLIGHT.md action 7).
+200 concurrent sessions → **400 concurrent STT streams**. Google allows 300 concurrent streams per
+region by default — request a quota increase before beta (ADR-0001 §7).
 
 ### 18.3 Bottlenecks and responses
 | Bottleneck | Response |
@@ -930,8 +960,9 @@ implementations (only interfaces); only `providers/` imports vendor SDKs.
 ### 24.2 Phase 3 additions
 - **Bot adapter** via a meeting-bot API vendor (buy first): vendor webhooks deliver media and events
   that are translated into our normalized events.
-- **Video pipeline:** fragmented uploads → transcoding to adaptive streaming → signed playback;
-  clips service cutting media by segment timestamps.
+- **Video pipeline additions:** adaptive streaming (HLS) renditions and a clips service cutting
+  media by segment timestamps. Basic recording, fragment upload and MP4 playback are Phase 1
+  (ADR-0011).
 - **Automation engine:** triggers (meeting processed) + conditions + actions with run logs and replay.
 - **Enterprise:** roles, SSO/SCIM via an identity service, org policies evaluated in the policy
   module, audit log store, optional India-region data residency deployment.
@@ -955,8 +986,9 @@ contracts. Changing them requires an ADR and a migration plan.
 | Database | PostgreSQL (+ pgvector in Phase 2) | Proposed | Relational data, RLS, full-text search, queue, vectors in one system |
 | Job queue | Postgres-backed queue | Proposed | Fewer moving parts in Phase 1; revisit at scale |
 | Cache / pub-sub | Redis | Proposed | Gateway session state and fan-out |
-| Object storage | S3-compatible, SSE | Proposed | Standard, cheap, lifecycle rules |
-| STT | Decided by benchmark (D-03) | Open | Sarvam, Deepgram, Gemini candidates |
+| Object storage | Cloud Storage (`asia-south1`), SSE | Selected (ADR-0002) | Standard, cheap, lifecycle rules |
+| STT | Google Cloud STT V2 Chirp 3, Deepgram Nova-3 fallback | **Decided (gated)** ([ADR-0001](adr/0001-stt-provider.md)) | Google library requested; Deepgram measured best on the benchmark |
+| Video | Meet tab video via `MediaRecorder`, signed-URL fragment upload, ffmpeg remux worker | **Decided** ([ADR-0011](adr/0011-video-screen-recording.md)) | Screen replay in Phase 1 without hurting audio |
 | LLM | Decided by evaluation (D-04) | Open | Gemini Flash candidate; provider-swappable |
 | Hosting | Google Cloud, Mumbai (`asia-south1`): Cloud Run, Cloud SQL, Cloud Storage | **Selected** ([ADR-0002](adr/0002-backend-stack-and-hosting.md)) | India region; same cloud as Gemini billing; low ops |
 | Observability | OpenTelemetry-compatible stack | Proposed | Vendor-neutral |

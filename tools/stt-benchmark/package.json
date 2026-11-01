@@ -10,6 +10,7 @@
     "bench": "node src/cli/main.ts"
   },
   "dependencies": {
+    "@google-cloud/speech": "8.2.0",
     "sarvamai": "1.1.11",
     "ws": "^8.22.0",
     "zod": "^4.6.7"

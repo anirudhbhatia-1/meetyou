@@ -98,7 +98,7 @@ and breaking changes need an ADR (AGENTS.md §3, ARCHITECTURE §24.3).
 | S6 | Private beta | M3 | 1 | 10–30 external users; legal, security, performance ready |
 | S7 | Public launch | M4 | 1 | Chrome Web Store listing live |
 | S8 | Product Phase 2 | — | 2 | Desktop app, upload, calendar, memory, MCP, integrations, billing |
-| S9 | Product Phase 3 | — | 3 | Video, bot, automations, CRM, analytics, enterprise |
+| S9 | Product Phase 3 | — | 3 | Clips and adaptive video, bot, automations, CRM, analytics, enterprise |
 
 S2, S3, and S4 run **in parallel** after S1; S4 starts on mocks during S1.
 
@@ -134,34 +134,37 @@ S2, S3, and S4 run **in parallel** after S1; S4 starts on mocks during S1.
 **Exit criteria:** ADR-0001, ADR-0002, ADR-0004, ADR-0005 accepted · repository with green CI ·
 contracts v0 merged · tokens package merged.
 
-### Stage 0 status (2026-10-28, branch `feature/stage-0`)
+### Stage 0 status — complete (2026-11-01)
 
-All repository and document work for S0-01..S0-18 was prepared by Anirudh (Claude Code). Items marked
-🟡 need people, accounts, or real recordings.
+All Stage 0 work was done by Anirudh (Claude Code) on branch `anirudh`. Two product decisions on
+2026-11-01 changed the scope: **Google's speech library for transcription, Sarvam dropped**
+([ADR-0001](adr/0001-stt-provider.md)), and **video of the meeting screen is recorded too**
+([ADR-0011](adr/0011-video-screen-recording.md)). Benchmark data lives in `recording/bench-data/`
+(gitignored).
 
-> **Ownership change (2026-10-28):** Anirudh owns **all** Stage 0 tasks (S0-01..S0-18), including
-> those first assigned to Gaurav. Where the plan needs two people (double annotation, two raters),
-> see ANNOTATION_GUIDELINE §8 and STT_BENCHMARK_PLAN §10.
-
-| Task | Status | What exists / what is left |
+| Task | Status | Result / what moved |
 |---|---|---|
-| S0-01 | 🟡 Kit ready | [Consent form](benchmark/CONSENT_FORM.md), [topic cards](benchmark/TOPIC_CARDS.md) (20 + 2), [recording guide](benchmark/RECORDING_GUIDE.md) with OBS setup, [metadata sheet](benchmark/templates/clip-metadata.csv). **Left:** recruit participants, sign consent, record sessions (Anirudh) |
-| S0-02 | 🟡 Runbook ready | [Pre-flight runbook](benchmark/PREFLIGHT_RUNBOOK.md). **Left:** console actions — Sarvam opt-out + top-up, Deepgram account, billing-enabled Gemini project, keys (Anirudh) |
-| S0-03 | ✅ Done | [Annotation guideline](benchmark/ANNOTATION_GUIDELINE.md); canonical Hinglish list v1 (92 entries) in `tools/stt-benchmark/data/` |
-| S0-04 / S0-05 | 🟡 Blocked on S0-01 | Reference format + example + validation in the scorer. **Left:** annotate all 20 clips (Anirudh) + self-consistency check |
-| S0-06 | ✅ Built | `bench run-batch` for Sarvam (SDK jobs), Deepgram (pre-recorded), Gemini (Files + Interactions); CLI end-to-end tests. Synthetic smoke clip (macOS TTS, no real people) + config in `~/meetyou-benchmark-data/smoke` (outside git). **Left:** smoke run with real keys, then Phase A |
-| S0-07 | ✅ Built | `bench run-stream`: real-time 100 ms replay, keep-alive, Gemini 10-min rotation. **Left:** smoke run with real keys, then Phases B–C |
-| S0-08 | ✅ Built | Normalizer (Devanagari→Roman, canonical spellings, numbers) + scorer (WER/CER, code-switch, entities, DER, hallucination, echo, latency); 50 tests incl. CLI end-to-end |
-| S0-09 | 🟡 Blocked on data | Run configs for Phases A, B, E in `tools/stt-benchmark/examples/`; Opus prep in README. **Left:** run D–G and analyse |
-| S0-10 | 🟡 Tool ready | `bench blind-samples` creates provider-blind samples + key. **Left:** both people rate |
-| S0-11 | 🟡 Template ready | [ADR-0001](adr/0001-stt-provider.md) with gates, results tables, weighted score. **Left:** fill after benchmark |
-| S0-12 | 🟡 Nearly done | ADR-0002 checks 2 (pgvector 0.8.5 on PG 13+), 3, 6 done; check 5 estimated (production ≈ $160–260/month). **Left:** confirm check 5 in the pricing calculator |
-| S0-13 | 🟡 Partly done | Cloud Run WebSocket rules from docs; latency measured from India laptop. **Left:** Cloud Shell run in `asia-south1`, live 2-hour test (S1-11) |
-| S0-14 | ✅ Accepted | [ADR-0004](adr/0004-auth-and-token-model.md), [ADR-0005](adr/0005-job-queue-and-outbox.md) accepted 2026-10-29 (also [ADR-0003](adr/0003-audio-transport-format.md), Opus). Verification items run in Stage 1 |
-| S0-15 | ✅ Done | pnpm workspace, TypeScript 6 strict (erasable syntax only), ESLint, Prettier, EditorConfig, Vitest, `.vscode/extensions.json`, GitHub Actions CI, `pnpm check` |
-| S0-16 | ✅ Done | `shared/contracts`: events, WS protocol + binary frames, segments, REST DTOs, summary schema + JSON Schema; 11 tests |
-| S0-17 | ✅ Done | `shared/design-tokens`: light/dark tokens, generated `tokens.css`, bundled fonts, icon list; 34 tests incl. WCAG contrast for both themes |
-| S0-18 | ✅ Drafted | [Privacy policy](legal/PRIVACY_POLICY.md), [terms](legal/TERMS_OF_USE.md), [consent explainer](legal/CONSENT_EXPLAINER.md), [sub-processors](legal/SUBPROCESSORS.md) — legal review in S6-05 |
+| S0-01 | ✅ Replaced | No consented recordings were available, so the benchmark used the public **MUCS 2021 Hindi-English** set (20 clips, CC BY-SA 4.0). The consent and recording kit stays in `docs/benchmark/` for meeting recordings during **S1 dogfooding** |
+| S0-02 | ✅ Done | Deepgram (`mip_opt_out`) and Gemini (free tier — public data only) keys used; Sarvam used then dropped. **Google:** enable Speech-to-Text in the ADR-0002 project, data logging off, ADC login — needed for the ADR-0001 gate |
+| S0-03 | ✅ Done | Annotation guideline; canonical Hinglish list v1 (92 entries) |
+| S0-04 / S0-05 | ✅ Replaced | References come from the dataset (`bench import-kaldi`); own annotation moves to S1 dogfooding |
+| S0-06 | ✅ Done | Batch runner; Phase A run on 20 clips for Deepgram, Gemini, Sarvam |
+| S0-07 | ✅ Done | Streaming harness; Phase B run (Deepgram 20, Gemini 20, Sarvam 19). **Google Chirp 3 provider added** (`provider: "google"`, 5-min rotation) |
+| S0-08 | ✅ Done | Normalizer + scorer, plus spelling-insensitive WER; `summarize`, `score --out` |
+| S0-09 | ✅ Done (partial phases) | Phase D (Opus) done → ADR-0003. Phases E–G need entities, multi-person meetings and summaries — moved to S1 dogfooding |
+| S0-10 | ➡️ Moved | Blind readability rating runs on Chirp 3 output after the gate (tool ready: `bench blind-samples`) |
+| S0-11 | ✅ Accepted with a gate | [ADR-0001](adr/0001-stt-provider.md): Google Chirp 3 primary if it passes the §6.2 gate (run before S2-03), else Deepgram; D-03 closed |
+| S0-12 | ✅ Done | ADR-0002 checks 2, 3, 5 (estimate), 6. Confirm the estimate in the pricing calculator when provisioning (S1-10) |
+| S0-13 | ✅ Accepted, checks moved to S1-11 | [ADR-0002](adr/0002-backend-stack-and-hosting.md) accepted 2026-11-01; the Cloud Run 2-hour test and the `asia-south1` latency run need the staging project |
+| S0-14 | ✅ Accepted | ADR-0003, ADR-0004, ADR-0005 |
+| S0-15 | ✅ Done | Monorepo, CI, `pnpm check` |
+| S0-16 | ✅ Done | Contracts v0 + video additions (`video.part_started/stopped`, `recordVideo`, fragment signing and playback DTOs) |
+| S0-17 | ✅ Done | Design tokens, fonts, icons |
+| S0-18 | ✅ Drafted | Legal drafts updated for video and the new sub-processors — legal review in S6-05 |
+
+**Carried into Stage 1 (Anirudh):** the ADR-0001 gate (needs the Cloud project from S1-10), the
+ADR-0011 verification checks (S1-13), the S0-13 live checks (S1-11), and Phases E–G on dogfooding
+recordings.
 
 ---
 
@@ -185,9 +188,12 @@ answer ARCHITECTURE §26.2.
 | S1-09 | **Prompt chip prototype in Shadow DOM** (no styling polish) to test user-gesture entry points for capture and `sidePanel.open()` | Gaurav | S1-01 | Answers to §26.2 questions 1 and 7 written up |
 | S1-10 | **Staging infrastructure v0** (Terraform, `asia-south1`): Cloud Run services for gateway/API/workers, Cloud SQL, Cloud Storage bucket with lifecycle rule, Secret Manager, Redis | Gaurav | ADR-0002 | `terraform apply` creates staging from scratch |
 | S1-11 | **Measurements and long sessions:** CPU/memory, echo leakage on laptop speakers, 2-hour meeting through Cloud Run's 60-minute reconnect, backlog catch-up speed per provider, gateway cost per session | Anirudh | S1-05 | §26.2 questions 2, 3, 5, 6 written up; ADR-0003 decided |
+| S1-13 | **Video capture spike** ([ADR-0011](adr/0011-video-screen-recording.md) §5): `MediaRecorder` on the tab video + WebAudio mix in the offscreen document, 10 s fragments to IndexedDB `video_buffer`, MIME support, hidden-tab rendering, CPU/battery with video on/off, audio-first uploader on a 2 Mbps link | Anirudh | S1-02, S1-04 | ADR-0011 checks 1–4 recorded; audio loss 0 with video on |
+| S1-14 | **ADR-0001 gate:** run `runs.google.json` on the 20 MUCS clips in the staging project; update ADR-0001 with Chirp 3 results (fall back to Deepgram if it misses) | Anirudh | S1-10 | ADR-0001 §6.2 filled |
 | S1-12 | **DOM signal reliability and overlay performance:** active-speaker accuracy on 2/4/6-person calls; glass `backdrop-filter` cost inside Meet | Gaurav | S1-08, S1-09 | §26.2 questions 4 and 8 written up |
 
-**Exit criteria (PRD M1):** a 60-minute Meet call recorded with no audio loss · CPU/memory measured ·
+**Exit criteria (PRD M1):** a 60-minute Meet call recorded with no audio loss, with video on ·
+ADR-0001 gate run · CPU/memory measured ·
 user-gesture and permission questions answered · ADR-0003 accepted · findings recorded in
 ARCHITECTURE §26.2.
 
@@ -204,7 +210,7 @@ tenant-isolated segments, visible through the API.
 |---|---|---|---|---|
 | S2-01 | **Database schema and migrations** (PRD §13) with row-level security keyed on workspace, data-access layer that refuses unscoped queries, cross-tenant tests | Anirudh | ADR-0002 | Migrations apply on staging; cross-tenant tests fail as expected |
 | S2-02 | **Auth service** (ADR-0004): Google ID token exchange, access tokens, rotating refresh tokens with reuse detection, session-scoped stream tokens, auth middleware package | Anirudh | S2-01 | Token tests pass; middleware published for the API |
-| S2-03 | **Provider layer** (ARCHITECTURE §7): STT streaming/batch, LLM, transliterator interfaces, capability descriptors, registry, enforced opt-outs, adapters for the ADR-0001 providers | Anirudh | ADR-0001 | Contract tests against each adapter |
+| S2-03 | **Provider layer** (ARCHITECTURE §7): STT streaming/batch, LLM, transliterator interfaces, capability descriptors, registry, enforced opt-outs, free-key guard by environment (free Gemini key only in `local`/`ci`), adapters for the ADR-0001 providers (Google Chirp 3, Deepgram backup) | Anirudh | ADR-0001 | Contract tests against each adapter |
 | S2-04 | **Gateway, production version:** Redis session state, resume on any instance, per-lane STT sessions with keep-alive and rotation overlap, outage handling (degraded health, batch-later marking), glossary terms in session config | Anirudh | S1-05, S2-03 | Kill-an-instance test resumes with no loss |
 | S2-05 | **Transcript assembler:** session-clock mapping, Roman transliteration, canonical spelling normalization, ULID segment IDs, echo flags, `transcript.segment` push | Anirudh | S2-04, S0-03 | Segments stored with `text` + `raw_text`; echo test flags duplicates |
 | S2-06 | **Outbox, job queue, worker runtime, scheduler** (ADR-0005) with retries, backoff, dead-letter state | Anirudh | S2-01 | Crash-during-job test completes exactly once |
@@ -214,6 +220,7 @@ tenant-isolated segments, visible through the API.
 | S2-10 | **Data lifecycle jobs:** audio retention scheduler (`delete_after`), lifecycle backstop rule, meeting deletion with 10 s grace and `:restore`, account deletion, deletion audit | Gaurav | S2-06 | Retention and deletion tests pass, including "failed processing never deletes audio" |
 | S2-11 | **Observability:** OpenTelemetry setup, logging library with field allow-list, dashboards and alerts from ARCHITECTURE §20 | Gaurav | S2-08 | Dashboards live in staging; content-free logs verified |
 | S2-12 | **CI/CD to staging** with smoke test: synthetic audio fixture streamed through gateway → segments visible via API | Gaurav | S2-05, S2-09 | Every merge to `main` deploys and smoke-tests staging |
+| S2-14 | **Video upload and finalize:** `fragments:sign` endpoint (own active session, ≤ 50 URLs, 15-min expiry, content-type and size bound), bucket CORS for the extension origin, `video.finalize` job (concat, faststart MP4 remux, gap fill, poster), `video_assets.delete_after` in the retention job, `GET /meetings/{id}/video` | Anirudh | S2-06, S2-09, S1-13 | 60-min recording plays with transcript sync ±0.5 s; retention deletes video |
 | S2-13 | **Synthetic audio fixtures and recorded WebSocket sessions** for tests and UI mocks | Anirudh | S2-05 | Fixtures published in `shared/fixtures` (synthetic only) |
 
 **Exit criteria:** recording in staging produces live transcript and stored segments · resume and
@@ -269,6 +276,7 @@ all summary, search, glossary, export endpoints live in staging.
 | S4-13 | **Badge and notifications:** toolbar badge states from the state machine, Chrome notifications for notes ready and export ready, keyboard shortcuts | Gaurav | S1-06 | Badge mirrors every state; shortcuts work |
 | S4-14 | **Wire UI to real services** (replace mocks), including SSE processing progress | Gaurav | S2-12, S3-03 | Mocks removed from production build |
 | S4-15 | **Product analytics events** (typed IDs/counts/enums only; opt-out honoured) | Gaurav | S4-14 | Event schema reviewed; no content fields |
+| S4-17 | **Video UI** (DESIGN, ADR-0011): video toggle + quality in the pre-recording sheet, side-panel video state and "Uploading video — N%", meeting-view player above the transcript with click-to-seek from segments and citations, settings rows | Gaurav | S4-05, S4-09, S2-14 | Seek from any segment lands within ±0.5 s; states covered in design QA |
 | S4-16 | **Accessibility and design QA** (DESIGN §20, §24) across all screens, light and dark, 320–480 px side panel | Gaurav | S4-14 | Checklist passes |
 
 **Exit criteria:** every Phase 1 screen and state in DESIGN.md implemented and wired · design QA
@@ -368,8 +376,8 @@ beta data; ADRs listed must be accepted first.
 | ID | Task and approach | Owner | Refs |
 |---|---|---|---|
 | S9-01 | **ADR-0010 and bot adapter** via a meeting-bot API vendor (webhooks → normalized events) | Anirudh | FEATURES C7 |
-| S9-02 | **Video pipeline:** fragmented uploads, transcoding to adaptive streaming, signed playback; **clips service** | Anirudh | FEATURES K1, K2 |
-| S9-03 | **Video player and clip UI** | Gaurav | DESIGN §22 |
+| S9-02 | **Video additions:** adaptive streaming (HLS) renditions; **clips service** (basic recording and playback are Phase 1, S1-13 / S2-14) | Anirudh | FEATURES K2 |
+| S9-03 | **Clip UI** on the Phase 1 player | Gaurav | DESIGN §22 |
 | S9-04 | **Automation engine:** triggers, conditions, actions, run log, replay, preview on past meetings | Anirudh | FEATURES I5 |
 | S9-05 | **Automations UI** | Gaurav | DESIGN §22 |
 | S9-06 | **CRM / ATS / task-tool sync** with review-before-push | Gaurav | FEATURES I4 |

@@ -5,3 +5,7 @@ packages:
   # - extension
   # - backend/apps/*
   # - backend/packages/*
+
+# protobufjs (via @google-cloud/speech) has a postinstall that only checks versions; not needed.
+allowBuilds:
+  protobufjs: false

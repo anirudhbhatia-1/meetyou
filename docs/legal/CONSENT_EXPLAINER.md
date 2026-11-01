@@ -8,23 +8,33 @@
 
 ## Help page: "Recording other people"
 
-**Why this matters.** When you press Start, Minutes records your microphone and the meeting tab —
-which includes other people's voices. Laws about recording conversations differ by country and
+**Why this matters.** When you press Start, Minutes records your microphone and the meeting tab's
+audio — which includes other people's voices — and, unless you turn video off, the meeting tab's
+video: participants' cameras and anything anyone shares on screen. Laws about recording conversations differ by country and
 state. Some places allow recording when **one** participant (you) agrees; others require
 **everyone** to agree. Workplaces and clients may have their own rules.
 
 **What Minutes does to help**
 1. **Nothing records until you press Start.** Minutes never joins or records a call on its own.
 2. **A notice in Meet chat.** When you start, Minutes offers to post a short message so everyone
-   knows. You can edit it. Default:
-   > Hi all — I'm using Minutes to take notes on this call. Batayein agar aap comfortable nahi hain.
+   knows that **audio and screen** are being recorded. You can edit it. Default:
+   > Hi all — I'm using Minutes to record this call (audio and screen) and take notes. Batayein agar
+   > aap comfortable nahi hain.
+
+   If you turn video off for a meeting, the default says audio only.
 3. **A consent log** for every meeting: when the notice was posted and what it said.
 4. **Stop and delete.** If anyone objects, one action stops recording and deletes everything from
-   that call.
+   that call, including video.
+5. **Video is optional.** You can turn off video for one meeting before you start, or for all
+   meetings in Settings. Audio and video follow the same retention setting (7 days by default).
+   Video is only used for replay: it is not sent to transcription or AI providers, and Minutes does
+   not recognise faces or infer emotions.
 
 **What you should do**
 - Tell people at the start of the call, even if you also post the notice.
-- If someone says no, stop and delete.
+- If someone says no, stop and delete. If someone is fine with notes but not with video, stop and
+  delete, then start again with video off.
+- Say that the screen is recorded too, so people can avoid sharing things they don't want kept.
 - For calls with people in other countries or regulated industries, assume everyone must consent.
 - Don't record calls you're not allowed to record (for example, under a confidentiality agreement).
 

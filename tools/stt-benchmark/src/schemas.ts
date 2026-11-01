@@ -50,10 +50,20 @@ const GeminiOptions = z.object({
   keyterms: z.boolean().default(false),
 });
 
+/** Google Cloud Speech-to-Text V2 (Chirp 3). `location` "us"/"eu" are the GA regions for Chirp 3. */
+const GoogleOptions = z.object({
+  provider: z.literal('google'),
+  model: z.string().default('chirp_3'),
+  location: z.string().default('us'),
+  languageCodes: z.array(z.string()).default(['hi-IN']),
+  keyterms: z.boolean().default(false),
+});
+
 export const ProviderOptions = z.discriminatedUnion('provider', [
   DeepgramOptions,
   SarvamOptions,
   GeminiOptions,
+  GoogleOptions,
 ]);
 export type ProviderOptions = z.infer<typeof ProviderOptions>;
 

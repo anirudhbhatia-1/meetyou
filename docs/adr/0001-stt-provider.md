@@ -2,10 +2,10 @@
 
 | Field | Value |
 |---|---|
-| Status | **Pending benchmark** — results sections are filled in after Phases A–G |
+| Status | **Accepted with a gate** (Anirudh, 2026-11-01) — Google Chirp 3 is primary once it passes the §6.2 gate on our benchmark; otherwise Deepgram Nova-3 is primary |
 | Decision | D-03 (PRD §22) |
-| Inputs | [STT_BENCHMARK_PLAN.md](../STT_BENCHMARK_PLAN.md) · [STT_PREFLIGHT.md](../STT_PREFLIGHT.md) · `results/scores.csv` from `tools/stt-benchmark` |
-| Owner | Anirudh (all Stage 0 work, 2026-10-28) |
+| Inputs | [STT_BENCHMARK_PLAN.md](../STT_BENCHMARK_PLAN.md) · [STT_PREFLIGHT.md](../STT_PREFLIGHT.md) · `bench-data/mucs/results/scores*.csv` (gitignored) |
+| Owner | Anirudh |
 
 ---
 
@@ -13,84 +13,199 @@
 
 We need one or more STT providers for (a) live streaming transcription of both lanes and (b) an
 optional post-meeting batch pass, with strong Hindi–English code-switching and Roman display
-(D-01). Vendor claims are not enough; the decision is based on our own 20-clip Hinglish benchmark.
+(D-01).
+
+**What changed during Stage 0**
+
+- No consented meeting recordings were available, so the benchmark used the public **MUCS 2021
+  Hindi-English code-switching test set** (OpenSLR 104, CC BY-SA 4.0).
+  - 20 clips of about 4 minutes each, single speaker, lecture audio.
+  - References come from the dataset: Devanagari for Hindi words, Latin script for most English words.
+- **2026-11-01, product direction (Anirudh):**
+  - Use **Google's speech library** for transcription.
+  - **Drop Sarvam.**
+  - Record **video (the meeting screen)** too — see [ADR-0011](0011-video-screen-recording.md).
 
 ## 2. Options
 
-| Option | Streaming | Batch |
-|---|---|---|
-| Sarvam (Saaras v3-realtime / v4) | ✓ (`translit`, `codemix`) | ✓ (diarization) |
-| Deepgram Nova-3 (`multi`, `hi`) | ✓ | ✓ |
-| Gemini 3.5 Transcribe (Live / batch) | ✓ (10-min sessions) | ✓ (diarization ≤ 30 min) |
-| Baselines (ElevenLabs Scribe, OpenAI) | — | ✓ |
-| Hybrid | One provider live + another batch | — |
-
-## 3. Gates (all must pass — STT_BENCHMARK_PLAN §8.1)
-
-| Gate | Sarvam | Deepgram | Gemini |
+| Option | Streaming | Batch | Status |
 |---|---|---|---|
-| Data terms acceptable on the plan we would buy | | | |
-| Streaming Hindi–English code-switching works | | | |
-| ≥ 60-min sessions or reliable resumption | | | |
-| Word or segment timestamps | | | |
-| Diarization (streaming or batch) | | | |
+| **Google Cloud Speech-to-Text V2, Chirp 3** (`@google-cloud/speech`) | ✓ `StreamingRecognize`, 5-min streams | ✓ `BatchRecognize` with diarization, ≤ 8 h | **Chosen (gated)** — not yet benchmarked: needs a billing-enabled Cloud project |
+| Deepgram Nova-3 (`multi`, hints `hi,en`) | ✓ | ✓ | Measured — **fallback** |
+| Gemini 3.5 Transcribe (Live / Interactions) | ✓ (10-min sessions) | ✓ | Measured — rejected for STT |
+| Sarvam Saaras v3 (`translit`) | ✓ | ✓ | Measured — **dropped 2026-11-01** |
 
-## 4. Results (fill from `scores.csv`, normalized scores unless noted)
+## 3. Gates (STT_BENCHMARK_PLAN §8.1)
 
-### 4.1 Streaming (Phase B)
-| Run | Hinglish WER | Code-switch WER | WER hi | WER en | Entity acc. | DER | Interim P90 | Final P90 | Halluc./min | Cost/h |
-|---|---|---|---|---|---|---|---|---|---|---|
-| | | | | | | | | | | |
+| Gate | Google Chirp 3 | Deepgram | Gemini |
+|---|---|---|---|
+| Data terms acceptable on the plan we would buy | ✓ No training unless the project opts into data logging (keep it off) | ✓ `mip_opt_out=true` on every request | ✓ Paid tier only; ✗ free tier (training and human review) |
+| Streaming Hindi–English code-switching | [Verify] in the §6.2 gate | ✓ measured | ✓ measured (English loanwords come back in Devanagari) |
+| ≥ 60-min sessions or reliable resumption | Rotation every < 5 min (quota) | ✓ long sessions + keep-alive | Rotation every < 10 min |
+| Word or segment timestamps | Utterance end offsets when streaming; word timestamps only in batch (optional, may lower accuracy) | ✓ words | Batch only |
+| Diarization | Batch only | ✓ streaming and batch | Batch ≤ 30 min |
+| Region | `us` / `eu` multi-region only for Chirp 3 (no `asia-south1` listed) | US | Global |
+
+## 4. Results (MUCS 2021, 20 clips, `them` lane, 2026-10-29)
+
+WER (spelling-insensitive) counts a substitution as correct when both spellings share a phonetic
+key. This matters here: the references write English loanwords in Devanagari, so providers that
+output Latin English are unfairly penalised by plain WER. This is the fairest single number on
+this dataset.
+
+### 4.1 Streaming (Phase B, real-time 100 ms chunks)
+
+| Run | WER | WER (spelling-insensitive) | CER | WER hi | WER en | Code-switch WER | Interim P50 | Final P50 | Final P90 |
+|---|---|---|---|---|---|---|---|---|---|
+| deepgram-nova3-multi-stream | 22.6% | **14.2%** | 11.2% | 21.1% | 23.3% | 23.5% | 691 ms | **616 ms** | **2.8 s** |
+| gemini-live-stream | 32.6% | 15.9% | 18.3% | 14.6% | 78.9% | 41.1% | 333 ms | 4.8 s | 20.2 s |
+| sarvam-v3rt-translit-stream (19 clips) | 35.3% | 15.8% | 16.2% | 39.9% | 21.0% | 34.7% | 190 ms | 3.2 s | 9.8 s |
 
 ### 4.2 Batch (Phase A)
-| Run | WER | CER | Entity acc. | DER | Cost/h |
-|---|---|---|---|---|---|
-| | | | | | |
+
+| Run | WER | WER (spelling-insensitive) | CER | WER hi | WER en | Code-switch WER |
+|---|---|---|---|---|---|---|
+| deepgram-nova3-multi-batch | 20.0% | 11.5% | 9.4% | 19.4% | 17.7% | 20.6% |
+| deepgram-nova3-hi-batch | 21.2% | 12.4% | 9.6% | 19.8% | 21.4% | 23.6% |
+| gemini-transcribe-batch | 30.5% | 11.9% | 14.9% | 10.0% | 86.0% | 39.9% |
+| sarvam-v3-translit-batch | 31.3% | **10.4%** | 11.0% | 36.2% | 15.2% | 30.2% |
 
 ### 4.3 Long sessions (Phase C)
-| Run | Disconnects | Rotations | Latency drift | Notes |
+
+Not run as a separate phase. Every streaming clip ran about 4 minutes in real time. Gemini 10-min
+rotation was exercised in unit tests only. The 60-minute live test moves to S1-11 with the chosen
+provider.
+
+### 4.4 Input format (Phase D) — see [ADR-0003](0003-audio-transport-format.md)
+
+Opus 24 kbps vs PCM16 on Deepgram batch: ≤ 0.5 points difference on every metric → Opus accepted.
+
+### 4.5–4.7 Boosting, downstream summaries, readability (Phases E–G)
+
+**Not run.** The public dataset has no entity labels, no multi-person meetings, and no action items.
+These phases move to S1 dogfooding with consented recordings (kit in `docs/benchmark/`).
+
+## 5. Weighted score (STT_BENCHMARK_PLAN §8.2) — partial
+
+Only the accuracy and latency criteria could be scored. The others need data we do not have
+(entities, summaries, multi-speaker audio) or are vendor terms.
+
+| Criterion | Weight | Deepgram | Gemini | Sarvam |
 |---|---|---|---|---|
-
-### 4.4 Input format (Phase D) — PCM vs Opus 24/32 kbps
-| Run | WER PCM | WER Opus 32 | WER Opus 24 |
-|---|---|---|---|
-
-### 4.5 Vocabulary boosting (Phase E)
-| Run | Entity acc. off | Entity acc. on | Name acc. on |
-|---|---|---|---|
-
-### 4.6 Downstream summary quality (Phase F)
-| Transcript from | Action-item recall | Precision | Owner accuracy | Number/date errors |
-|---|---|---|---|---|
-
-### 4.7 Display readability (Phase G, blind)
-| Run | Readability (mean of 2 raters) | Naturalness |
-|---|---|---|
-
-## 5. Weighted score (STT_BENCHMARK_PLAN §8.2)
-
-| Criterion | Weight | Sarvam | Deepgram | Gemini |
-|---|---|---|---|---|
-| Hinglish WER incl. code-switch | 30% | | | |
-| Entity accuracy | 15% | | | |
-| Downstream summary quality | 15% | | | |
-| Cost per audio hour | 15% | | | |
-| Streaming latency and stability | 10% | | | |
-| Diarization | 10% | | | |
-| Operations scorecard | 5% | | | |
-| **Total** | | | | |
+| Hinglish WER incl. code-switch | 30% | **Best** (stream 14.2%, code-switch 23.5%) | Close on spelling-insensitive WER; poor in English (79%) | Best batch number; weak in Hindi script terms |
+| Streaming latency and stability | 10% | **Best** (final P90 2.8 s) | Final P90 20 s — not usable live | Final P90 9.8 s; one DNS failure mid-run |
+| Others (entities, summaries, cost, diarization, operations) | 60% | Not measured | Not measured | Not measured |
 
 ## 6. Decision
 
-_To be written: chosen streaming provider and model, batch provider and model, configuration
-(language mode, script mode, boosting), and what triggers a re-run (new model versions)._
+### 6.1 Providers
+
+| Role | Provider and configuration | Condition |
+|---|---|---|
+| **Live (both lanes)** | Google Cloud STT V2 `chirp_3`, `StreamingRecognize`, `languageCodes` `["hi-IN"]` or `["hi-IN","en-IN"]` (whichever wins the gate), interim results on, automatic punctuation, inline phrase set from meeting vocabulary | Passes §6.2 |
+| **Post-meeting pass** | Google `chirp_3` `BatchRecognize` with diarization, from the stored Opus lanes (Cloud Storage input) | Passes §6.2 on batch |
+| **Backup** (confirmed by Anirudh 2026-11-01; primary if the gate fails, failover during a Google outage) | Deepgram Nova-3, `language=multi`, `language_hint=hi,en`, `mip_opt_out=true` | Already measured |
+| Not used | Gemini for STT; Sarvam (dropped) | — |
+
+The gateway talks to providers only through the provider-adapter interface (ARCHITECTURE §6), so
+switching between Google and Deepgram is a configuration change, not a rewrite.
+
+### 6.2 Gate before S2-03 (provider layer)
+
+Run `bench run-stream --config tools/stt-benchmark/examples/runs.google.json` on the same 20 MUCS
+clips (≈ 160 audio-minutes ≈ $3).
+
+**Setup:**
+- A billing-enabled Cloud project (the ADR-0002 project).
+- Speech-to-Text API enabled.
+- Data logging **off**.
+- `GOOGLE_CLOUD_PROJECT` set, plus `gcloud auth application-default login`.
+
+| Metric | Must reach | Reference (Deepgram stream) |
+|---|---|---|
+| WER (spelling-insensitive) | ≤ 16% | 14.2% |
+| Code-switch WER | ≤ 28% | 23.5% |
+| WER en (English words) | ≤ 30% | 23.3% |
+| Final P90 latency | ≤ 3.5 s | 2.8 s |
+| Rotation every 5 min | No lost or duplicated words at the seams beyond 1% | — |
+
+If Chirp 3 misses a target, Deepgram becomes primary and this ADR is updated. No further approval
+is needed.
 
 ## 7. Consequences
 
-_To be written: D-01 follow-up (Roman vs mixed-script fallback), D-06 (PCM vs Opus), cost model
-update in PRD §20, gateway rotation/keep-alive requirements from §4.3._
+### Gateway (S2-03/S2-04)
+- Rotate Google streams before 5 minutes, using the harness pattern (open the next stream, replay
+  the last 2 s, de-duplicate overlapping finals). That is about 12 rotations per lane-hour.
+- **Quota:** 300 concurrent streams per region means about 150 live meetings (two lanes each). Ask
+  Google for an increase before beta.
+- Audio is decoded from Opus to 16 kHz PCM16 before sending (ADR-0003). Each request must stay under 25 KB.
+
+### Timestamps
+Live segments get utterance-level end offsets, not word times.
+- Click-to-seek works at segment level.
+- Word-level timing comes from the post-meeting batch pass.
+
+### Speakers
+- Live naming: lanes plus Meet active-speaker events (unchanged).
+- Labels inside the `them` lane: batch diarization after the meeting.
+
+### Script (D-01)
+`hi-IN` output is expected in Devanagari, including English loanwords (as with Gemini). The S2-05
+assembler already transliterates Devanagari to Roman and applies the canonical spelling list. Check
+the English-loanword quality (`मीटिंग` → `meeting`, not `miting`) in the gate, and add common
+loanwords to the canonical list.
+
+### Region and privacy
+- Chirp 3 runs in the `us` or `eu` multi-region, so audio leaves India for transcription. Storage
+  stays in `asia-south1`.
+- Add this to SUBPROCESSORS and the privacy policy.
+- At S2-03, check the locations API for `asia-south1` / `asia-southeast1` support.
+
+### Cost
+- Standard V2 recognition is about **$0.016 per audio-minute** [Verify on the pricing page]. Two
+  lanes cost about **$1.92 per meeting-hour** live.
+- Dynamic batch is about $0.003–0.004/min.
+- To bring the live cost down:
+  - Do not stream `me`-lane silence while muted (FR-CAP-11).
+  - Reuse the stored Opus for the batch pass.
+- Update PRD §20.
+
+### Gemini free key — development and testing only (Anirudh, 2026-11-01)
+Google's terms for unpaid services say: "Do not submit sensitive, confidential, or personal
+information to the Unpaid Services". Google may also train on that content, and human reviewers
+may read it. So the free key is used **only** in these places:
+
+| Allowed | Never |
+|---|---|
+| Local development and CI with synthetic (TTS) audio and synthetic transcripts (S2-13 fixtures) | Any real meeting — the developers' own meetings included |
+| Summary-prompt development and the S3-05 evaluation on synthetic or public data | Staging or production environments |
+| Benchmarks on public licensed datasets (MUCS) | Data from beta users or dogfooding |
+
+The provider layer enforces this: `GEMINI_FREE_TIER_ACCEPTED` is honoured only when
+`APP_ENV` is `local` or `ci`. Staging and production refuse to start with a free key
+(ARCHITECTURE §15.2). D-04 (the summary LLM for real meetings) still needs a paid tier.
 
 ## 8. Run log
 
-| Date | Phase | Runs | Clips | Who | Notes (model versions, anomalies) |
+| Date | Phase | Runs | Clips | Who | Notes |
 |---|---|---|---|---|---|
+| 2026-10-28 | Smoke | Deepgram, Gemini | 1 synthetic (TTS) | Anirudh | Pipeline check |
+| 2026-10-29 | A (batch) | Deepgram multi/hi, Gemini, Sarvam translit | 20 MUCS | Anirudh | Gemini key turned out to be free tier: stopped, then continued with `GEMINI_FREE_TIER_ACCEPTED` (public data only). Two clips had already gone to the free tier |
+| 2026-10-29 | B (stream) | Deepgram, Gemini Live, Sarvam translit | 20 / 20 / 19 | Anirudh | Sarvam run stopped on `ENOTFOUND api.sarvam.ai` (mx-018/019 partial, mx-020 missing); not re-run because Sarvam was dropped |
+| 2026-10-29 | D (Opus) | Deepgram multi batch, PCM vs Opus 24k | 8 | Anirudh | ≤ 0.5 pt difference |
+| 2026-11-01 | — | — | — | Anirudh | Decision: Google primary (gated), Sarvam dropped. Google provider added to `tools/stt-benchmark` (`provider: "google"`, streaming) |
+| | Gate §6.2 | google-chirp3-hi / hi-en stream | 20 | Anirudh | Pending Cloud project |
+
+## 9. Follow-ups
+
+- Google batch in the benchmark (needs a Cloud Storage bucket for `BatchRecognize` input).
+- Phases E–G with consented meeting recordings during S1 dogfooding.
+- Re-run the gate when Google or Deepgram ships a new model.
+
+## Sources
+
+- [Chirp 3 model](https://docs.cloud.google.com/speech-to-text/v2/docs/chirp_3-model) — streaming, `hi-IN` GA, `us`/`eu` regions, diarization in batch only, adaptation up to 1,000 phrases
+- [Speech-to-Text V2 quotas](https://docs.cloud.google.com/speech-to-text/v2/quotas) — streams ≤ 5 min, 300 concurrent per region, batch files ≤ 8 h
+- [Speech-to-Text pricing](https://cloud.google.com/speech-to-text/pricing) · [V2 launch blog (dynamic batch)](https://cloud.google.com/blog/products/ai-machine-learning/google-cloud-speech-to-text-v2-api)
+- [MUCS 2021, OpenSLR 104](https://www.openslr.org/104/) (CC BY-SA 4.0)

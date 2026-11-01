@@ -1,0 +1,26 @@
+{
+  "runs": [
+    {
+      "id": "google-chirp3-hi-stream",
+      "mode": "stream",
+      "lanes": ["them"],
+      "options": {
+        "provider": "google",
+        "model": "chirp_3",
+        "location": "us",
+        "languageCodes": ["hi-IN"]
+      }
+    },
+    {
+      "id": "google-chirp3-hi-en-stream",
+      "mode": "stream",
+      "lanes": ["them"],
+      "options": {
+        "provider": "google",
+        "model": "chirp_3",
+        "location": "us",
+        "languageCodes": ["hi-IN", "en-IN"]
+      }
+    }
+  ]
+}

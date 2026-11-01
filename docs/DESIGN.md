@@ -4,9 +4,9 @@
 |---|---|
 | Purpose | Single source of truth for every surface, screen, component, state, token, and string of the product UI — mapped to requirements, features, and architecture |
 | Status | Draft for implementation. Visual design is high fidelity; items marked **[SPEC]** are specified here but were not built in the prototype |
-| Last updated | 2026-10-28 |
+| Last updated | 2026-11-01 (video recording, ADR-0011) |
 | Design source | Handoff package `~/design_handoff_minutes_app/` — `Minutes App v2.dc.html` (clickable prototype), `support.js` (prototype runtime), `DESIGN.md` (handoff spec). This document supersedes the handoff spec for this repository |
-| Related | [PRD.md](PRD.md) · [FEATURES.md](FEATURES.md) · [ARCHITECTURE.md](ARCHITECTURE.md) · [AGENTS.md](../AGENTS.md) |
+| Related | [PRD.md](PRD.md) · [FEATURES.md](FEATURES.md) · [ARCHITECTURE.md](ARCHITECTURE.md) · [ADR-0011](adr/0011-video-screen-recording.md) (video) · [AGENTS.md](../AGENTS.md) |
 
 > **Rules for builders (human or agent).**
 > 1. The prototype HTML is a **reference, not production code**. Rebuild screens in the target stack
@@ -59,7 +59,7 @@
    carries a numbered citation chip (UI-01, FR-CIT-01). A legend sits at the top of every summary.
 3. **Trust over polish.** Unverified AI content is visibly marked, never dressed up as fact (F4).
 4. **Plain language.** Labels say what happens ("Post and start", "Delete meeting…"). Privacy settings
-   state their effect in one sentence ("Audio is deleted 7 days after each meeting.").
+   state their effect in one sentence ("Audio and video are deleted 7 days after each meeting.").
 5. **One accent.** Olive is the only action colour. Ember is reserved for the recording dot. Red is
    only for destructive actions.
 6. **Glass only on the floating layer** (Meet prompt, recording pill, sticky toolbar, menus, toasts,
@@ -133,11 +133,11 @@ Each journey follows PRD §8 and lists the screens involved.
 | Journey | Steps → screens |
 |---|---|
 | **J1 First-time setup** | Install → §7.1 Welcome → Continue with Google → §7.2 Microphone → §7.3 Preferences → §7.4 Consent acknowledgement → §7.5 Done → Home setup card shows 2 of 3 |
-| **J2 Recording a meeting** | Join Meet → §8.2 Meet prompt (≤ 5 s) → Start → side panel opens → §8.5 Consent step → Post and start → §8.6 Recording (transcript, notes, pause) |
-| **J3 Ending a meeting** | Stop / leave / close tab → §8.7 Processing (3 steps) → Ready → Chrome notification → Open notes |
-| **J4 Reviewing and verifying** | §12 Meeting detail → legend → anchored sections → hover chip (popover) → click (citation card) → Play from / Show in transcript → edit / reassign / regenerate |
+| **J2 Recording a meeting** | Join Meet → §8.2 Meet prompt (≤ 5 s) → Start → side panel opens → §8.5 Consent step (video toggle and quality) → Post and start → §8.6 Recording (transcript, notes, video, pause) |
+| **J3 Ending a meeting** | Stop / leave / close tab → §8.7 Processing (3 steps) → Ready ("Uploading video — N%" if video is still uploading) → Chrome notification → Open notes |
+| **J4 Reviewing and verifying** | §12 Meeting detail → legend → anchored sections → hover chip (popover) → click (citation card) → Play from (video when recorded, else audio) / Show in transcript → edit / reassign / regenerate |
 | **J5 Sharing** | Share → §13.1 sheet → Markdown/Plain, Include times → Copy or Download (nothing sent automatically) |
-| **J6 Managing data** | §15.3 Privacy & data → retention, export, sub-processors, delete meeting/account (alerts) |
+| **J6 Managing data** | §15.3 Privacy & data → recording retention (audio and video), export, sub-processors, delete meeting/account (alerts) |
 | **J7 Failure during a meeting** | §9 states: reconnecting, mic lost, lane silent, transcript delayed, error, crash recovery, session limit, second tab |
 
 ---
@@ -180,8 +180,9 @@ instead of `#9a9a93`; checkbox border uses `control-line` instead of `#a9a9a2` (
 **Status pills (meeting status only):** Recording `warn-bg`/`warn-ink` with ember dot ·
 Writing notes… `warn-bg`/`warn-ink` · Ready `olive-tint`/`olive-ink` · Updated `olive-wash`/`olive-ink`
 · Failed `#fbe7e2`/`danger` · Too short `hairline-2`/`ink-3`.
-**Audio availability** is shown separately as a small meta label ("Audio 5 days left" / "Audio
-deleted"), not as a status pill (§19, item 3).
+**Recording availability** (audio and video, one retention policy — ADR-0011 §3.5) is shown
+separately as a small meta label ("Recording 5 days left" / "Recording deleted"), not as a status
+pill (§19, item 3).
 
 ### 5.2 Typography
 
@@ -245,7 +246,8 @@ animations. Everything disabled under `prefers-reduced-motion: reduce`.
 ### 5.8 Icons
 Lucide, stroke 1.7–1.8, 16–18 px, `currentColor`: house, align-left, square-check, settings, search,
 x, chevron-left/right, refresh-cw, more-horizontal, shield, download, arrow-up, check, play, pause,
-mic, alert-triangle, wifi-off, pencil, star (Phase 2). Bundle as inline SVG.
+mic, alert-triangle, wifi-off, pencil, video, video-off, monitor (whole screen, P1), maximize,
+star (Phase 2). Bundle as inline SVG.
 
 ---
 
@@ -271,6 +273,7 @@ mic, alert-triangle, wifi-off, pencil, star (Phase 2). Bundle as inline SVG.
 | 6.16 | **Level meter** [SPEC] | 4 px bars, `olive` on `stroke-off`, labelled "You" / "Meet tab"; `aria-hidden` (state also given as text) |
 | 6.17 | **Skeleton row** [SPEC] | `hairline-2` bars, radius 6; no shimmer under reduced motion |
 | 6.18 | **Coach-mark tip** | Tutorial only: dark (`ink`/`paper`) or white over Meet; radius 12; numbered 22 px circle; `pointer-events: none` |
+| 6.19 | **Video player** [SPEC] (K1) | Card radius 16, 1 px `hairline`, no shadow; video area 16:9 on `ink`, `object-fit: contain`, poster image until play. Controls bar below the video (white, padding 10/14, gap 10): play/pause icon button · time "mm:ss / mm:ss" (12, tabular) · seek bar (4 px, `olive` on `stroke-off`, 24 px hit area) · speed popover 1× · 1.25× · 1.5× · 2× · fullscreen icon button. Keyboard when focused: Space play/pause, ←/→ 5 s. All icon buttons labelled ("Play video", "Pause video", "Full screen"). No autoplay |
 
 ---
 
@@ -281,10 +284,10 @@ bg, progress dots (4) at top. Target: under 60 seconds (FEATURES A3).
 
 ### 7.1 Welcome (A1)
 - H1 "Nothing joins your call."
-- Body: "Minutes listens from inside Chrome. It records two lanes — your microphone and the Meet tab
-  — and turns them into a transcript and notes."
-- Three rows (icon + title + line): *Me — your microphone* · *Them — the Meet tab* ·
-  *Never used for training*.
+- Body: "Minutes listens from inside Chrome. It records two audio lanes — your microphone and the
+  Meet tab — plus the Meet tab's video, and turns them into a transcript and notes."
+- Four rows (icon + title + line): *Me — your microphone* · *Them — the Meet tab* ·
+  *Screen — what the Meet tab shows; you can turn it off* · *Never used for training*.
 - Primary **Continue with Google** (Google mark per Google brand guidelines). Footnote "Only your name
   and email." (scopes `openid email profile` only — FR-ONB-02).
 - Errors: "Sign-in didn't finish. Try again." with retry.
@@ -302,7 +305,7 @@ bg, progress dots (4) at top. Target: under 60 seconds (FEATURES A3).
 |---|---|---|
 | What people speak | Segmented Auto · English · Hindi · Hinglish | Auto |
 | Write my notes in | Segmented English · हिन्दी · Hinglish | English |
-| Keep meeting audio | Segmented Delete after notes · 7 days · 30 days | **7 days** (D-02) |
+| Recording retention (audio and video) | Segmented Delete after notes · 7 days · 30 days | **7 days** (D-02, ADR-0011) |
 | Tell people in Meet chat | Segmented One click · Automatic · Off | **One click** (FR-CON-01) |
 
 ### 7.4 Consent acknowledgement (FR-ONB-06)
@@ -337,6 +340,9 @@ the service worker (persisted in `chrome.storage.session`) and every surface sub
   Meet's own controls or participant panel; if Meet's right-hand panel is open, shift left of it.
 - Brand tile 26 px + "Take notes for this call?" (14/600).
 - Body: "Nothing joins the call. Recording starts only when you press Start." (13, `#3a3b35`).
+- Pre-recording reminder (12, `muted`): "Audio and the Meet tab's video will be recorded." When video
+  is off for this meeting (setting off or retention "Delete after notes"): "Audio will be recorded."
+  (FR-CAP-14, ADR-0011 §3.5).
 - **Start** (primary, flex 1, 40 px) · **Not now** (secondary on glass). "Not now" hides it for this
   call; the toolbar icon still starts recording.
 - Appears ≤ 5 s after joining, never in the lobby or on the Meet home page. Hidden when the setting
@@ -344,12 +350,15 @@ the service worker (persisted in `chrome.storage.session`) and every surface sub
 - Keyboard: focusable, `Esc` = Not now. Announced via `aria-live="polite"` once.
 
 ### 8.3 Toolbar badge
-Idle: no badge. Recording: ember dot badge, tooltip "Minutes — taking notes {mm:ss}". Paused: grey
+Idle: no badge. Recording: ember dot badge, tooltip "Minutes — taking notes {mm:ss}" ("Minutes —
+recording audio and screen {mm:ss}" when video is on). Paused: grey
 "II". Reconnecting: amber "!". Error: red "!". Click opens the side panel on the Meet tab.
 
 ### 8.4 Recording pill (over Meet)
-- Glass pill top-left: 9 px ember dot (pulsing) + "Taking notes" + `mm:ss`. Paused: white dot, no
-  pulse, "Paused". Reconnecting: amber dot, "Reconnecting — audio saved".
+- Glass pill top-left: 9 px ember dot (pulsing) + "Taking notes" + `mm:ss`. When video is on, a
+  14 px `video` icon follows the timer (`aria-label` "Recording audio and screen"). Paused: white dot,
+  no pulse, "Paused" (audio and video both paused). Reconnecting: amber dot, "Reconnecting — audio
+  saved".
 - **Draggable** to any corner; position remembered per user. Collapsible to just the dot.
 - Click → focuses the side panel.
 - Production does **not** restyle Meet's own tiles (the prototype's active-speaker ring on tiles is
@@ -363,14 +372,40 @@ Recording / Paused / Reconnecting / Finishing up / Done) + timer · actions (§8
 (… → *Stop and delete this recording…*, *Consent log* after the call).
 
 **Ready (idle):** H3 "Ready when you are" · "Your mic and the Meet tab are recorded as two separate
-lanes, so you're always labelled correctly." · **Start taking notes** (primary 44 px).
+lanes, so you're always labelled correctly." · recording options (below) · **Start taking notes**
+(primary 44 px).
+
+**Recording options [SPEC] (FR-CAP-14, ADR-0011 §3.1)** — a small inset card (`paper-2`, radius 12,
+padding 12/14) shown in Ready and in the Consent step, so the choice is visible before anything
+records. Values start from Settings (§15.1) and apply to **this meeting only**.
+- **Record video** switch (46×28) · helper "Records what the Meet tab shows — the video grid and
+  anything people present." Default from `recordVideo` (on).
+- **Video quality** segmented **Standard · Data saver** (shown only when video is on) · helper
+  "Data saver uses less upload — good for slow or mobile connections."
+- **What to record** [P1] (FR-CAP-15) segmented **Meet tab · Whole screen** (shown only when video is
+  on). Whole screen helper: "Use this when you present your own screen. Chrome asks which screen to
+  share. Everything on it is recorded, including notifications." Chrome's screen picker opens after
+  Start.
+- When retention is "Delete after notes", the switch shows off and disabled, with the helper "Video
+  is off because recordings are deleted as soon as your notes are ready. Video is only kept for
+  replay." + link **Change in Settings**. The saved `recordVideo` value is kept, so video comes back
+  on when retention changes.
+- Started from the Meet prompt with consent mode Automatic or Off (no Consent step): the saved
+  settings apply, and the prompt's reminder line (§8.2) has already said what is recorded.
 
 **Consent step (C3, FR-CON-01..02):** H3 "Let everyone know?" · "We'll post this in Meet chat. You can
-edit it first." · textarea (min-height 110, radius 12, `paper-2`, `control-line` border), prefilled:
-> Hi all — I'm using Minutes to take notes on this call. Batayein agar aap comfortable nahi hain.
+edit it first." · textarea (min-height 110, radius 12, `paper-2`, `control-line` border), prefilled
+with the default (`DEFAULT_USER_SETTINGS.consentMessage` in `shared/contracts`):
+> Hi all — I'm using Minutes to record this call (audio and screen) and take notes. Batayein agar aap
+> comfortable nahi hain.
 
-**Post and start** (primary) · **Skip** (secondary) · footnote "You're responsible for getting
-consent where the law requires it."
+When video is off for this meeting and the message is the unedited default, the textarea shows the
+audio-only variant: "Hi all — I'm using Minutes to record this call (audio) and take notes. Batayein
+agar aap comfortable nahi hain." (§19, item 20). Toggling **Record video** in this step swaps the
+variant while the text is unedited.
+
+Recording options card (above) · **Post and start** (primary) · **Skip** (secondary) · footnote
+"You're responsible for getting consent where the law requires it."
 - On success: toast "Posted in Meet chat"; consent log entry written.
 - On DOM posting failure: banner "Couldn't post — copy this message" + **Copy** button; recording
   continues; log records "Note posted: No (failed)".
@@ -379,17 +414,24 @@ consent where the law requires it."
 - **Header actions:** **Pause/Resume** (secondary) · **Stop** (primary).
 - **Lane health row [SPEC] (C1, FR-LIV-07):** two level meters "You" and "Meet tab" + connection text
   "Good connection" / "Slow" (amber) / "Offline" (red).
+- **Video status [SPEC] (K1, FR-CAP-12..13):** one line under the lane health row (12, `muted`):
+  `video` icon + "Recording screen" (whole screen, P1: `monitor` icon + "Recording your whole
+  screen"). Data saver adds " · Data saver"; when it switched on automatically: " · Data saver (slow
+  connection)" and a one-time toast "Switched to data saver to keep audio smooth." Video off:
+  `video-off` icon + "Video off". While the audio WebSocket reconnects, video keeps recording to this
+  computer and its upload waits; no extra banner (§9 Reconnecting covers it). Upload progress is not
+  shown during the call.
 - **Tabs** (segmented, full width): Transcript · My notes · {count}.
 - **Transcript list:**
   - Line: speaker (12/600; "You" in `olive`, others `ink`) + time (`muted`, tabular) + text 14/1.5.
   - **Interim** text (from `transcript.interim`) shows in `muted` italic and is replaced in place by
     the final segment (`transcript.segment`) in `ink` (FR-LIV-02).
   - **Script consistency:** if the provider's interim text arrives in Devanagari while finals are
-    Roman (e.g. Sarvam `translit` mode — STT_PREFLIGHT §2.2), transliterate interim text to Roman
-    on the client before display, so lines never flip script.
+    shown in Roman (e.g. Chirp 3 `hi-IN` output, transliterated by the assembler — ADR-0001 §7),
+    transliterate interim text to Roman on the client before display, so lines never flip script.
   - Unknown remote speakers show as "Speaker 1, 2…" until named (D5).
   - Empty: "Listening… the transcript appears as people speak."
-  - Paused marker pill: "Paused — nothing is being recorded".
+  - Paused marker pill: "Paused — nothing is being recorded" (applies to audio and video).
   - When the user scrolls up: glass pill "↓ Jump to live" bottom-centre (FR-LIV-04) [SPEC].
 - **My notes list:** time (11, tabular, 38 px column) + tag (11/600 `olive`, e.g. DECISION) + text 14 +
   delete (28 px round ×, `aria-label="Delete note"`). Empty: "No notes yet. Type a few words below
@@ -416,6 +458,14 @@ consent where the law requires it."
 - **Ready:** 44 px `olive-tint` check · H3 "Your notes are ready" · "{mm:ss} recorded · {n} notes ·
   {m} action items" · **Open notes** (primary) → Meeting detail in the library tab. Chrome
   notification "Notes ready: {title}".
+- **Uploading video [SPEC] (FR-CAP-13, ADR-0011 §3.3):** notes never wait for video. If fragments are
+  still on this computer when the call ends, Processing and Ready show an extra row below their
+  content: `video` icon + "Uploading video — {N}%" (13, `ink-3`, tabular) + 160×4 progress bar
+  (`olive` on `hairline-2`, 400 ms width transition) + helper (12, `muted`) "You can close this panel.
+  Keep Chrome open until it finishes." Then "Preparing video…" (server finalize), then the row
+  disappears. While uploading, the header label stays "Done". If the upload cannot finish (Chrome
+  closed, still offline), the fragments stay on this computer and the upload continues the next time
+  the extension runs [Verify in the S1 capture spike]; the meeting view shows the same state (§12.5).
 - **Too short** (< 2 min or < 50 words — FR-PROC-05): "Too short for a summary — here's the
   transcript." · **Open transcript**.
 - **Failed:** "We couldn't write notes for this meeting." · **Try again** · "The transcript is saved."
@@ -434,11 +484,13 @@ All states use colour **and** text (UI-02). Amber = degraded, red = stopped.
 | **Meet tab silent ≥ 15 s** (while mic has signal) | — | — | Banner: "No sound from the Meet tab. Is the call muted?" | FR-CAP-10 |
 | **Transcript delayed** (STT degraded) | amber + "Recording — transcript delayed" | unchanged | "We're still recording. The transcript will appear after the call." | NFR-REL-05 |
 | **Consent post failed** | — | — | §8.5 failure banner | FR-CON-01 |
+| **Video stopped** (encoder error, Meet tab video lost) [SPEC] | unchanged | `video` icon removed | Banner (warning): "Screen recording stopped. Audio is still being recorded." Video status line shows "Video off" | FR-CAP-12, ADR-0011 |
+| **Whole screen sharing ended** (P1, user pressed Chrome's "Stop sharing") [SPEC] | unchanged | `video` icon removed | Toast "Screen recording stopped. Audio is still being recorded." | FR-CAP-15 |
 | **Error** | red + "Recording stopped" | red pill | "Something went wrong and recording stopped at {mm:ss}. Your audio so far is safe." **Start again** · **Get help** | NFR-REL |
 | **Crash recovery** (next launch) | — | — | Library top banner: "A recording from {time} didn't finish. Recover it?" **Recover meeting** · **Discard** | FR-CAP-08 |
 | **Session limit** | — | — | At 3:45:00 toast "Recording will stop in 15 minutes (4-hour limit)." | FR-REC-08 |
 | **Second Meet tab** | — | — | Alert "You're already recording another call" · Cancel · **Stop that one and start here** | FR-REC-07 |
-| **Stop and delete** | — | — | Alert "Stop and delete?" / "Recording stops and everything from this call is deleted. Use this if someone doesn't want to be recorded." · Cancel · **Stop and delete** | FR-CON-04 |
+| **Stop and delete** | — | — | Alert "Stop and delete?" / "Recording stops and everything from this call is deleted, including video. Use this if someone doesn't want to be recorded." · Cancel · **Stop and delete**. Video fragments still on this computer are deleted too | FR-CON-04 |
 | **Signed out / token expired** | — | — | Panel: "Sign in again to keep your notes" · **Sign in** (recording keeps buffering locally) | ARCHITECTURE §13 |
 | **Mic denied at start** | — | — | "Recording the Meet tab only. Turn on your mic to include your voice." · link | FR-ONB-03 |
 
@@ -476,8 +528,9 @@ Layout: column, gap 36, max width 1080.
 2. Filter chips (single-select): All · General · Client call · Standup · Interview · 1:1.
 3. Table card: header row (12 uppercase `muted`, .04em) Meeting · When · Length · Status; columns
    `minmax(0,1fr) 130px 90px 120px`, gap 16, padding 12/20. Row: title 15/500 + "{people} ·
-   {template}" 13 `muted`; When 14 `ink-3`; Length tabular; Status pill; audio meta label under
-   status when relevant. Rows are buttons. Newest first; paginate/infinite scroll at 50.
+   {template}" 13 `muted`, with a 14 px `video` icon (`aria-label` "Has video") when the meeting has
+   video; When 14 `ink-3`; Length tabular; Status pill; recording meta label under status when
+   relevant. Rows are buttons. Newest first; paginate/infinite scroll at 50.
 4. Empty search: "No meetings match "{query}"." + **Clear search**.
 5. Search covers titles, people, templates, notes, summaries, and transcripts via Postgres FTS
    (ARCHITECTURE §11.5); Hinglish spelling normalized; script-insensitive search is P2 (ML-07).
@@ -502,7 +555,8 @@ banner **"New version ready · Keep · Go back"** — the previous version stays
 notes" after Keep. Output language changes in Settings apply on the next regenerate.
 
 ### 12.3 Header and tabs
-- Meta: "{When} · {Length} · {People} and you" + audio label ("Audio 5 days left" / "Audio deleted").
+- Meta: "{When} · {Length} · {People} and you" + recording label ("Recording 5 days left" /
+  "Recording deleted"; covers audio and video).
 - H1 title (46). Double-click or More → Rename = inline input (same type, bottom border 1.5 px
   `olive-line`); Enter/blur saves (toast "Renamed"), `Esc` cancels. `aria-label="Meeting name"`.
 - **Processing** status: replaces content with a centred card — pulsing olive dot, "Writing your
@@ -533,7 +587,25 @@ notes" after Keep. Output language changes in Settings apply on the next regener
 8. **Feedback** [SPEC] (FR-SUM-09): "Were these notes useful?" **Yes** / **No** (secondary, 32 px);
    No opens an optional comment field. Per-action-item Yes/No on hover.
 
-### 12.5 Transcript tab (D6)
+### 12.5 Transcript tab (D6, K1)
+- **Video player [SPEC] (K1, FR-CAP-12, ADR-0011 §3.4)** — when the meeting has video
+  (`Meeting.video` not null), the player (§6.19) sits **above the transcript**, full width of the
+  left column, gap 16 to the first row. It is sticky (top 76) with a max height of 320 px so it stays
+  visible while the transcript scrolls; below 1280 px window width it scrolls with the page instead.
+  States follow `Meeting.video.status`:
+  - `uploading`: `paper-2` card at 16:9, `video` icon + "Video is still uploading from the computer
+    that recorded it — {N}%" (when known) · "Your notes and transcript are ready."
+  - `processing`: same card, "Preparing video…" (pulsing olive dot; static under reduced motion).
+  - `ready`: the player, poster first.
+  - `failed`: no player; one line (13, `muted`) "Video couldn't be saved. Audio and notes are fine."
+  - `expired`: no player; "Recording was deleted after {n} days (your retention setting)."
+  - No video: no player and no placeholder; line clicks play audio as before.
+- **Click-to-seek:** clicking a transcript line (or its time) seeks the player to the segment start
+  and plays: position = `segment.startMs − VideoPlaybackResponse.startMs` (session clock —
+  ARCHITECTURE §5.5). Target accuracy ±0.5 s (FR-CAP-12). While playing, the current segment gets
+  the `olive-hl` highlight and the list follows it unless the user has scrolled away ("↓ Follow
+  video" glass pill, same as Jump to live). Paused stretches of the meeting play as a still frame
+  with silence (ADR-0011 §3.4).
 - Rows: grid `56px 1fr`, gap 12, padding 10/12, radius 10. Time (12 `muted`, tabular) · speaker
   (12/600; You = `olive`) · text 15/1.55. Lines cited by the selected citation: `olive-hl` (200 ms).
 - **Speaker rename** [SPEC] (D5, FR-SPK-05): speaker label is a button → popover "Who is Speaker 3?"
@@ -542,7 +614,8 @@ notes" after Keep. Output language changes in Settings apply on the next regener
 - **Search in transcript** [SPEC]: 36 px field at top; matches highlighted `match-hl`; "3 of 12" + ↑↓.
 - **Echo-flagged lines** (ARCHITECTURE §8.1): hidden by default; "Show 2 possible echo lines" toggle
   reveals them in `muted` with a small "possible echo" label.
-- Click a line → plays audio from that point (if retained) and highlights it while playing.
+- Click a line → plays from that point (video when available, otherwise audio, if retained) and
+  highlights it while playing.
 - Read-only in Phase 1; editing is Phase 2 (D6).
 
 ### 12.6 Right rail (sticky top 76)
@@ -552,10 +625,18 @@ notes" after Keep. Output language changes in Settings apply on the next regener
   filled chip + "Where this came from · {time range}" · one block per cited segment (speaker 12/600 +
   serif 19 quote in curly quotes) · **▶ Play from {mm:ss}** (toggles to **❚❚ Pause**, 3 px progress
   bar) · **Show in transcript** (ghost; switches tab and highlights).
-- Footer: "Audio available for {n} more days" / "Audio was deleted after notes were written." If
-  deleted, Play is disabled with the footer text as its description (no error toast).
+- **With video [SPEC] (K1):** when the meeting's video is `ready`, the card shows the player (§6.19,
+  16:9, full card width, no speed control) above the quote blocks, and **▶ Play from {mm:ss}** plays
+  the video from the first cited segment's start (same mapping as §12.5). **Show in transcript**
+  switches to the Transcript tab and the main player continues from the same position. While video is
+  `uploading` or `processing`, Play uses audio and the card shows "Video is on its way." (12,
+  `muted`).
+- Footer: "Audio and video available for {n} more days" (audio only: "Audio available for {n} more
+  days") / "Audio was deleted after notes were written." / "Recording was deleted after {n} days."
+  If deleted, Play is disabled with the footer text as its description (no error toast).
 - Chip numbers are per-summary display indices; each maps to one or more segment IDs from the
-  summary payload (ARCHITECTURE §10). Audio uses a short-lived signed URL (SEC-04).
+  summary payload (ARCHITECTURE §10). Audio and video use short-lived signed URLs (SEC-04;
+`GET /v1/meetings/{id}/video`, HTTP range requests).
 
 **Action items card:** serif 21 "Action items"; rows = checkbox + task 14 + "{owner} · {due}" 12
 `muted`. Owner and due are tappable [SPEC] → popover pickers (owners = participants + Unassigned,
@@ -600,8 +681,8 @@ named from the slugified title) · **Copy** (primary; clipboard, closes, toast "
   · Download" (link valid 24 h). JSON + Markdown archive.
 
 ### 13.3 Delete meeting (FR-SET-02)
-More → **Delete meeting…** → alert "Delete this meeting?" / "Its audio, transcript, notes and action
-items will be removed. You can undo for a few seconds." · Cancel · **Delete** → back to Meetings, row
+More → **Delete meeting…** → alert "Delete this meeting?" / "Its audio, video, transcript, notes and
+action items will be removed. You can undo for a few seconds." · Cancel · **Delete** → back to Meetings, row
 removed, toast "Meeting deleted" + **Undo** (5 s). The server holds a short grace period before the
 deletion job runs (§19, item 5).
 
@@ -641,6 +722,8 @@ on failure-recovery.
 | Tell people in Meet chat | Segmented One click · Automatic · Off. **Off asks for confirmation** ("Are you sure? People won't be told notes are being taken.") | One click (FR-CON-01) |
 | Consent message | Editable default text (English + Hinglish), "Reset to default" | Default text §8.5 |
 | Pause my mic when I'm muted in Meet | Side comments stay off the record. | On (FR-CAP-11) |
+| Record video [SPEC] | Switch. "Also records what the Meet tab shows — the video grid and anything people present. You can turn it off for a single meeting before you start." When retention is "Delete after notes": shown off and disabled, helper "Video is off because recordings are deleted as soon as your notes are ready. Video is only kept for replay." (the saved value is kept for when retention changes) | On (`recordVideo`, FR-CAP-12, FR-CAP-14) |
+| Video quality [SPEC] | Segmented Standard · Data saver. "Standard: about 470 MB of upload per hour. Data saver: about 200 MB, for slow or mobile connections. We switch to data saver on our own if the upload falls behind, so audio is never affected." Hidden when Record video is off | Standard (`videoQuality`, FR-CAP-13) |
 
 ### 15.2 Language (ML-01, ML-03, ML-05, F7)
 - **What people speak:** Auto · English · Hindi · Hinglish (Auto).
@@ -649,16 +732,21 @@ on failure-recovery.
 - **Show Hindi as** [SPEC, P1]: Roman (default, D-01) · Devanagari.
 
 ### 15.3 Privacy & data (L1–L3)
-- **Keep meeting audio:** Delete after notes · **7 days** · 30 days, with an `olive` effect sentence:
-  - 7/30: "Audio is deleted {n} days after each meeting. Notes and transcripts stay until you delete
-    them."
-  - Delete after notes: "Audio is deleted as soon as your notes are ready. You won't be able to replay
-    quotes."
-  Updates the sidebar privacy card and citation footers.
+- **Recording retention (audio and video):** Delete after notes · **7 days** · 30 days
+  (`retentionPolicy`, D-02, ADR-0011 §3.5), with an `olive` effect sentence:
+  - 7/30: "Audio and video are deleted {n} days after each meeting. Notes and transcripts stay until
+    you delete them."
+  - Delete after notes: "Audio is deleted as soon as your notes are ready, and video isn't recorded.
+    You won't be able to replay quotes."
+  - Choosing Delete after notes while Record video is on shows the effect sentence only (no alert);
+    §15.1 Record video becomes disabled with its explanation.
+  Updates the sidebar privacy card, citation footers, and the recording meta labels.
 - **Download all my data** · ".json + .md" · download icon (§13.2).
-- **Who processes my data** · "{n} providers · none train on it" · expands: Speech to text — {vendor
-  once D-03 closes} · Writing summaries — {vendor once D-04 closes} · Hosting & storage — Google Cloud,
-  Mumbai (ADR-0002); each "Never trains" in `olive` (FR-SET-06).
+- **Who processes my data** · "{n} providers · none train on it" · expands: Speech to text — Google
+  Cloud Speech-to-Text, US/EU (ADR-0001; Deepgram if the §6.2 gate fails; list the one in use) ·
+  Writing summaries — {vendor once D-04 closes} · Hosting & storage (including video) — Google Cloud,
+  Mumbai (ADR-0002); each "Never trains" in `olive` (FR-SET-06). Video is never sent to the speech or
+  summary providers (ADR-0011 §3.5).
 - **Product analytics** switch [SPEC]: "Share anonymous usage counts (never meeting content)" — On,
   can be turned off (PRD §19.6).
 - **Delete my account and all data…** (danger) → alert "Delete your account?" / "Every meeting, note
@@ -707,12 +795,14 @@ The Meet overlay always uses the light glass (Meet's UI is dark).
 | Onboarding sign-in | users, workspaces | `POST /v1/auth/google` | Tokens per ARCHITECTURE §13 |
 | Onboarding preferences, consent ack | user_settings | `PATCH /v1/settings` | — |
 | Meet prompt | — | — | Content script detector → service worker |
-| Start recording | meetings, sessions | `POST /v1/sessions` | Stream token → WSS `hello`/`ready` |
+| Start recording | meetings, sessions | `POST /v1/sessions` (with `recordVideo` from the recording options) | Stream token → WSS `hello`/`ready` |
 | Consent step | consent_logs | (written by gateway/API on `event`) | Content script `chatNotice` result |
 | Live transcript | transcript_segments | — | WSS `transcript.interim`, `transcript.segment`, `speaker.update` |
 | Lane health | — | — | Local AudioWorklet levels + WSS `health` |
 | My notes / composer | notes | `PUT /v1/meetings/{id}/notes` (debounced 2 s) | IndexedDB `notes_drafts` |
 | Pause / Resume / Stop | sessions | `POST /v1/sessions/{id}/end` on Stop | WSS `control` |
+| Video status, "Uploading video — N%" | meetings.video | `POST /v1/sessions/{id}/video/fragments:sign` + signed PUT per fragment (ADR-0011 §3.3) | IndexedDB `video_buffer`; events `video.part_started` / `video.part_stopped` |
+| Video player, click-to-seek | meetings.video | `GET /v1/meetings/{id}/video` (signed URL, `startMs`, `durationMs`) | — |
 | Processing steps | meetings (status, processing_step) | SSE `GET /v1/meetings/{id}/events` (fallback: poll `GET /v1/meetings/{id}`) | — |
 | Notification "Notes ready" | — | — | Service worker `notifications` |
 | Home recent / Meetings list | meetings | `GET /v1/meetings?cursor=&template=` | — |
@@ -752,6 +842,8 @@ interface SessionState {
   startedAt?: number; elapsedMs: number; pausedIntervals: Array<[number, number]>;
   lanes: { me: LaneHealth; them: LaneHealth }; connection: 'good' | 'slow' | 'offline';
   processingStep?: 0 | 1 | 2 | 3;            // §8.7
+  video: { on: boolean; source: 'tab' | 'screen'; quality: 'standard' | 'data_saver';
+           autoDataSaver: boolean; uploadPct?: number };   // §8.5–§8.7, ADR-0011
   consent: { mode: 'one_click' | 'automatic' | 'off'; posted?: boolean; failed?: boolean };
   error?: { code: string; retryable: boolean };
 }
@@ -810,6 +902,8 @@ architecture before implementation.
 | 16 | "Live side panel" sidebar item | Preview page | Tutorial only; production shows "Recording · mm:ss" while recording | — |
 | 17 | Toast placement in side panel | Library only | Separate placement (§6.7) | — |
 | 18 | Export-all | Immediate JSON download | Async export job with notification (FR-SET-04) | — |
+| 19 | Video recording | Not in the prototype (was Phase 3) | Phase 1 per ADR-0011: recording options (§8.5), video status and upload (§8.6–§8.7), player and click-to-seek (§6.19, §12.5–§12.6), settings (§15.1, §15.3). Retention label renamed "Recording retention (audio and video)"; audio label → "Recording {n} days left" | ✅ Done: PRD FR-CAP-12..15, §3.3 non-goals, §18 `unlimitedStorage`; FEATURES K1 |
+| 20 | Consent text when video is off | — | Audio-only variant of the default message (§8.5) when video is off and the text is unedited | ✅ Done 2026-11-01: `CONSENT_MESSAGE_AUDIO_ONLY` in `shared/contracts` next to `DEFAULT_USER_SETTINGS.consentMessage` |
 
 ---
 
@@ -831,6 +925,8 @@ architecture before implementation.
 - **Language:** set `lang` on content (`en`, `hi`, or `hi-Latn` for Roman Hinglish) so screen readers
   pronounce text sensibly.
 - **Scripts:** Devanagari and mixed-script lines render without clipping (UI-06).
+- **Video player:** labelled controls, keyboard operable (§6.19), no autoplay. The transcript next to
+  the player is the text alternative for the recording.
 
 ---
 
@@ -842,17 +938,20 @@ Sentence case everywhere. All strings in an i18n resource file from day one; Hin
 | Context | Strings |
 |---|---|
 | Meet prompt | "Take notes for this call?" · "Nothing joins the call. Recording starts only when you press Start." · Start · Not now |
+| Meet prompt reminder | "Audio and the Meet tab's video will be recorded." · "Audio will be recorded." |
 | Panel ready | "Ready when you are" · "Your mic and the Meet tab are recorded as two separate lanes, so you're always labelled correctly." · Start taking notes |
+| Recording options | Record video · "Records what the Meet tab shows — the video grid and anything people present." · Video quality · Standard · Data saver · "Data saver uses less upload — good for slow or mobile connections." · What to record · Meet tab · Whole screen (P1) · "Video is off because recordings are deleted as soon as your notes are ready. Video is only kept for replay." · Change in Settings |
 | Consent | "Let everyone know?" · "We'll post this in Meet chat. You can edit it first." · Post and start · Skip · "You're responsible for getting consent where the law requires it." |
-| Consent default | "Hi all — I'm using Minutes to take notes on this call. Batayein agar aap comfortable nahi hain." |
+| Consent default | "Hi all — I'm using Minutes to record this call (audio and screen) and take notes. Batayein agar aap comfortable nahi hain." · video off: "Hi all — I'm using Minutes to record this call (audio) and take notes. Batayein agar aap comfortable nahi hain." |
 | Recording | "Taking notes" · "Paused — nothing is being recorded" · "Listening… the transcript appears as people speak." · "Type a note and press Enter" |
+| Video | "Recording screen" · "Recording your whole screen" · "Video off" · "Data saver (slow connection)" · "Uploading video — {N}%" · "You can close this panel. Keep Chrome open until it finishes." · "Preparing video…" · "Video is still uploading from the computer that recorded it" · "Video couldn't be saved. Audio and notes are fine." · "Screen recording stopped. Audio is still being recorded." |
 | Processing / ready | "Writing your notes…" · "Finishing the transcript" · "Finding decisions and to-dos" · "Linking every point to what was said" · "Your notes are ready" · Open notes |
 | Legend | "You wrote this" · "Added from the conversation" · "Click to see who said it" |
-| Citation | "Where this came from · {time}" · "Play from {time}" · "Show in transcript" · "Audio available for {n} more days" · "Audio was deleted after notes were written." |
+| Citation | "Where this came from · {time}" · "Play from {time}" · "Show in transcript" · "Audio and video available for {n} more days" · "Audio available for {n} more days" · "Audio was deleted after notes were written." · "Recording was deleted after {n} days." · "Video is on its way." |
 | Unverified | "Not found in the transcript" |
 | Share | "Share notes" · "Nothing is sent automatically. Copy it and paste into Slack, WhatsApp or email." · Include times · Download file · Copy |
-| Privacy card | "Private by default" · "No bot joins your calls. Audio is deleted after 7 days." (follows setting) |
-| Toasts | "Marked done" · "Meeting deleted" · "Renamed" · "Rewritten as {T} notes" · "Copied as Markdown" / "Copied as plain text" · "Downloaded" · "Posted in Meet chat" · "Paused — nothing is being recorded" · "Recording resumed" · "Notes ready: {title}" · "Back online — catching up" |
+| Privacy card | "Private by default" · "No bot joins your calls. Audio and video are deleted after 7 days." (follows setting) |
+| Toasts | "Switched to data saver to keep audio smooth." · "Marked done" · "Meeting deleted" · "Renamed" · "Rewritten as {T} notes" · "Copied as Markdown" / "Copied as plain text" · "Downloaded" · "Posted in Meet chat" · "Paused — nothing is being recorded" · "Recording resumed" · "Notes ready: {title}" · "Back online — catching up" |
 | Destructive | "Delete this meeting?" · "Delete your account?" · "Stop and delete?" (bodies in §9, §13, §15) |
 
 ---
@@ -879,7 +978,7 @@ Same shell and components; add sidebar items only when a feature ships.
 | I2 MCP server | Settings → Developer → "Connect AI assistants" (clients list, revoke) |
 | I3–I5 API, CRM, automations | Settings → Integrations; Automations list with run log; "Review before push" diff |
 | J1–J2 Analytics | Detail tab "Insights" (talk share by speaking time, questions — no emotion scores); Trackers page |
-| K1–K2 Video & clips | Player above transcript; select range → "Make clip" |
+| K2 Clips (Phase 3) | Select a range in the video player (§12.5) → "Make clip"; adaptive streaming (HLS) arrives with clips. K1 video recording and the player are **Phase 1** (ADR-0011, §8.5–§8.7, §12.5) |
 | M Teams & admin | Workspace switcher; admin pages: members, roles, policies, audit log, SSO |
 | N Plans & billing | Settings → Plan & usage (hours used bar, INR pricing, UPI) |
 
@@ -914,7 +1013,8 @@ Same shell and components; add sidebar items only when a feature ships.
 | G1 Copy and export | Built | §13 |
 | H1 / H2 Library and search | Built | §11 |
 | H4 Action-item tracker | Built (pulled forward) | §14 |
-| L1–L3 Retention, deletion, export, sub-processors | Built | §15.3 |
+| K1 Video recording, storage, playback | SPEC (not in the prototype) | §6.19, §8.5–§8.7, §9, §12.5–§12.6, §15.1, §15.3 |
+| L1–L3 Retention, deletion, export, sub-processors | Built (retention label updated for video: SPEC) | §15.3 |
 | O1 Notifications | Toast built; Chrome notification SPEC | §6.7, §8.7 |
 | Phase 2/3 features | SPEC (light) | §22 |
 

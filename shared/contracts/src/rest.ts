@@ -28,6 +28,8 @@ export const MeetingStatus = z.enum([
 export const ProcessingStep = z.enum(['finalizing', 'summarizing', 'validating', 'done']);
 export const TemplateId = z.enum(['general', 'standup', 'client_call', 'interview', 'one_on_one']);
 
+export const VideoStatus = z.enum(['uploading', 'processing', 'ready', 'failed', 'expired']);
+
 export const Meeting = z.object({
   id: z.string().min(1),
   platform: Platform,
@@ -38,7 +40,15 @@ export const Meeting = z.object({
   processingStep: ProcessingStep.nullable(),
   template: TemplateId,
   participantNames: z.array(z.string()),
-  audioExpiresAt: IsoDateTime.nullable(),
+  /** When the retention policy deletes the recordings (audio and video). */
+  recordingExpiresAt: IsoDateTime.nullable(),
+  /** Null when video was not recorded for this meeting (ADR-0011). */
+  video: z
+    .object({
+      status: VideoStatus,
+      durationMs: z.number().int().nonnegative().nullable(),
+    })
+    .nullable(),
 });
 export type Meeting = z.infer<typeof Meeting>;
 
@@ -79,7 +89,11 @@ export const UserSettings = z.object({
   transcriptLanguageMode: z.enum(['auto', 'english', 'hindi', 'hinglish']),
   summaryLanguage: z.enum(['english', 'hindi', 'hinglish']),
   hindiScript: z.enum(['roman', 'devanagari']),
+  /** Applies to audio and video (D-02, ADR-0011). */
   retentionPolicy: z.enum(['immediate', '7d', '30d']),
+  /** Record the meeting screen with the audio (ADR-0011). Ignored when retention is immediate. */
+  recordVideo: z.boolean(),
+  videoQuality: z.enum(['standard', 'data_saver']),
   consentMode: z.enum(['one_click', 'automatic', 'off']),
   consentMessage: z.string().max(1000),
   consentAcknowledgedAt: IsoDateTime.nullable(),
@@ -90,15 +104,21 @@ export const UserSettings = z.object({
 });
 export type UserSettings = z.infer<typeof UserSettings>;
 
-/** Defaults from decisions D-01, D-02, PRD FR-CON-01, FR-CAP-11. */
+/** Default consent notice when video is off and the user has not edited the text (DESIGN §8.5). */
+export const CONSENT_MESSAGE_AUDIO_ONLY =
+  "Hi all — I'm using Minutes to take notes on this call. Batayein agar aap comfortable nahi hain.";
+
+/** Defaults from decisions D-01, D-02, PRD FR-CON-01, FR-CAP-11, ADR-0011. */
 export const DEFAULT_USER_SETTINGS: Omit<UserSettings, 'consentAcknowledgedAt'> = {
   transcriptLanguageMode: 'auto',
   summaryLanguage: 'english',
   hindiScript: 'roman',
   retentionPolicy: '7d',
+  recordVideo: true,
+  videoQuality: 'standard',
   consentMode: 'one_click',
   consentMessage:
-    "Hi all — I'm using Minutes to take notes on this call. Batayein agar aap comfortable nahi hain.",
+    "Hi all — I'm using Minutes to record this call (audio and screen) and take notes. Batayein agar aap comfortable nahi hain.",
   followMeetMute: true,
   offerPrompt: true,
   defaultTemplate: 'general',
@@ -110,6 +130,7 @@ export const StartSessionRequest = z.object({
   platform: Platform,
   meetingCode: z.string().min(1).max(100),
   title: z.string().max(200).optional(),
+  recordVideo: z.boolean(),
   clientInfo: z.object({
     extensionVersion: z.string().min(1),
     browser: z.string().min(1),
@@ -122,4 +143,40 @@ export const StartSessionResponse = z.object({
   streamToken: z.string().min(1),
   expiresAt: IsoDateTime,
   audioFormat: AudioFormat,
+  /** Null when the server does not accept video for this session (setting off, immediate retention). */
+  video: z
+    .object({
+      fragmentMs: z.literal(10_000),
+      maxFragmentBytes: z.number().int().positive(),
+      maxWidth: z.number().int().positive(),
+      maxHeight: z.number().int().positive(),
+      fps: z.number().int().positive(),
+    })
+    .nullable(),
+});
+
+// POST /v1/sessions/{sessionId}/video/fragments:sign (ADR-0011 §3.3)
+export const SignVideoFragmentsRequest = z.object({
+  partId: z.string().regex(/^vp_[0-9A-HJKMNP-TV-Z]{26}$/),
+  indices: z.array(z.number().int().nonnegative()).min(1).max(50),
+  contentType: z.enum(['video/mp4', 'video/webm']),
+});
+export const SignVideoFragmentsResponse = z.object({
+  fragments: z.array(
+    z.object({
+      index: z.number().int().nonnegative(),
+      url: z.url({ protocol: /^https$/ }),
+      expiresAt: IsoDateTime,
+    }),
+  ),
+});
+
+// GET /v1/meetings/{meetingId}/video
+export const VideoPlaybackResponse = z.object({
+  url: z.url({ protocol: /^https$/ }),
+  posterUrl: z.url({ protocol: /^https$/ }).nullable(),
+  expiresAt: IsoDateTime,
+  /** Session time at playback position 0, for transcript click-to-seek. */
+  startMs: z.number().int().nonnegative(),
+  durationMs: z.number().int().nonnegative(),
 });

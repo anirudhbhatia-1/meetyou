@@ -11,9 +11,10 @@ tasks owned by your developer unless they say otherwise.
 single source of truth for scope, architecture, and working style. If a rule here conflicts with an
 agent's default behavior, this file wins.
 
-> **Project status: Stage 0 (foundations).** The pnpm workspace, `shared/contracts`,
-> `shared/design-tokens`, and `tools/stt-benchmark` exist. Product code (`extension/`, `backend/`)
-> starts in Stage 1 — create it only for IMPLEMENTATION_PLAN tasks your developer has started.
+> **Project status: Stage 0 complete (2026-11-01); Stage 1 next.** The pnpm workspace,
+> `shared/contracts`, `shared/design-tokens`, and `tools/stt-benchmark` exist. Product code
+> (`extension/`, `backend/`) starts in Stage 1 — create it only for IMPLEMENTATION_PLAN tasks your
+> developer has started.
 
 ---
 
@@ -39,9 +40,10 @@ reference, not code to ship). This section is the short version.
 
 ### Phase 1 — Google Meet Chrome extension (current target)
 - Chrome Manifest V3 extension, **no meeting bot**.
-- **Audio only.** Two separate lanes:
+- **Audio in two separate lanes**, plus **video of the meeting screen** (ADR-0011):
   - `me` — the user's microphone
   - `them` — the Meet tab audio (remote participants)
+  - video — the Meet tab's video track with a playback mix of both lanes; never sent to STT/LLM
 - Live transcript in a side panel.
 - Live notepad: the user's own notes act as **anchors** for the AI summary.
 - Post-meeting summary, decisions, and action items, each **citing transcript segments**.
@@ -54,11 +56,11 @@ Desktop app (macOS first) for Zoom/Teams native apps; cross-meeting search and c
 and pre-meeting briefs; sharing to Slack/Notion/email; MCP server.
 
 ### Phase 3
-Video recording and clips; optional cloud bot; CRM sync and workflow automations; talk-time
+Clips and adaptive video streaming; optional cloud bot; CRM sync and workflow automations; talk-time
 analytics; team workspaces, SSO, admin controls.
 
 ### Explicitly out of scope (do not build without a decision recorded in `docs/`)
-- Video capture in Phase 1
+- Clips, highlight reels, or adaptive-streaming video in Phase 1 (screen video itself is in, ADR-0011)
 - Cloud meeting bots in Phase 1
 - Caption-scraping as the *only* transcript source
 - Voiceprint / biometric speaker identification
@@ -75,7 +77,7 @@ analytics; team workspaces, SSO, admin controls.
    adapter modules. The core pipeline must never import or know about a specific platform.
 2. **Adapters emit normalized events.** Use the shared event schema (section 4). Adding a new
    platform must mean writing a new adapter, not changing the core.
-3. **Providers behind interfaces.** Speech-to-text and LLM vendors (Deepgram, Sarvam, Gemini,
+3. **Providers behind interfaces.** Speech-to-text and LLM vendors (Google Cloud STT, Deepgram, Gemini,
    Claude, etc.) are called only from provider modules that implement a common interface. No vendor
    SDK calls anywhere else.
 4. **No secrets in the extension.** The extension never contains API keys. It gets short-lived
@@ -107,6 +109,8 @@ speaker.active       { sessionId, participantId, at }          // e.g. from Meet
 mic.mute_changed     { sessionId, muted, at }                  // me-lane gating (FR-CAP-11)
 caption.observed     { sessionId, participantId?, text, at }   // optional naming/timing signal
 consent.notice       { sessionId, mode, outcome, text?, at }   // consent log (FR-CON-03)
+video.part_started   { sessionId, partId, source, mimeType, width, height, fps, at }  // ADR-0011
+video.part_stopped   { sessionId, partId, fragments, reason, at }
 session.ended        { sessionId, reason, endedAt }
 ```
 Audio travels as binary frames (`lane u8 | seq u32 | captureMs u32 | payload`, little-endian), not as
@@ -200,7 +204,7 @@ Work like a careful senior engineer pairing with the developer.
 
 ### Decided
 - Google Meet first, via a Chrome MV3 extension; other platforms later via new adapters.
-- Phase 1 is audio only, captured as two lanes (`me`, `them`).
+- Phase 1 captures audio as two lanes (`me`, `them`) plus screen video (ADR-0011, 2026-11-01).
 - STT and LLM providers are swappable behind interfaces.
 - Live streaming transcription, with an optional batch re-transcription pass after the meeting.
 - **D-01 (2026-10-28):** Hindi/Hinglish transcripts display in **Roman script** by default. Always
@@ -209,8 +213,8 @@ Work like a careful senior engineer pairing with the developer.
   back to mixed script (Devanagari + Latin English words) for Phase 1.
 - **D-02 (2026-10-28):** Audio retention defaults to **7 days**; users can choose "delete
   immediately" or 30 days. "Delete immediately" means after the transcript and summary are
-  successfully generated, never before. Retention applies to audio only; transcripts, notes, and
-  summaries stay until the user deletes them.
+  successfully generated, never before. Retention applies to recordings (audio and, since
+  2026-11-01, video); transcripts, notes, and summaries stay until the user deletes them.
 
 - **2026-10-29 — ADRs accepted** (verification items run in Stage 1):
   [ADR-0003](docs/adr/0003-audio-transport-format.md) Opus 24 kbps transport and storage (D-06);
@@ -218,14 +222,22 @@ Work like a careful senior engineer pairing with the developer.
   own JWT access / rotating refresh / single-use stream tokens;
   [ADR-0005](docs/adr/0005-job-queue-and-outbox.md) graphile-worker with transactional job creation.
 
+- **2026-11-01 — Stage 0 closed:**
+  - [ADR-0001](docs/adr/0001-stt-provider.md) **STT (D-03):** Google Cloud Speech-to-Text V2
+    **Chirp 3** primary (Google library `@google-cloud/speech`), gated on the benchmark (§6.2, run in
+    S1-14); **Deepgram Nova-3** fallback; **Sarvam dropped**; Gemini not used for STT. Free Gemini
+    keys only for public/synthetic benchmark data, never user meetings.
+  - **Deepgram Nova-3 is the STT backup.** The **free Gemini key is for development and testing
+    only**: synthetic audio/transcripts, public benchmark data, local and CI. Never real meetings
+    (the developers' own included); staging and production refuse free keys.
+  - [ADR-0002](docs/adr/0002-backend-stack-and-hosting.md) **accepted** — Google Cloud Mumbai
+    (Cloud Run, Cloud SQL, Cloud Storage); live checks in S1-11.
+  - [ADR-0011](docs/adr/0011-video-screen-recording.md) **video:** Meet tab video recorded with
+    audio (setting on by default), fragment upload at lowest priority, MP4 playback with
+    click-to-seek, same retention as audio.
+
 ### Open (do not assume an answer)
-- STT provider — to be chosen by benchmarking Sarvam, Deepgram Nova-3 multilingual, and Gemini
-  Transcribe on our own Hinglish recordings.
-- LLM for summaries (Gemini Flash is a candidate).
-- Backend hosting: **Option B selected** in
-  [ADR-0002](docs/adr/0002-backend-stack-and-hosting.md) — TypeScript/Node on Google Cloud Mumbai
-  (Cloud Run, Cloud SQL, Cloud Storage). Verification checks (ADR §9) still pending: do not
-  provision infrastructure until the ADR is Accepted.
+- LLM for summaries (D-04, ADR-0007). Gemini Flash is a candidate — paid tier only for user data.
 
 ---
 
@@ -248,8 +260,9 @@ Full provider research: [docs/STT_PREFLIGHT.md](docs/STT_PREFLIGHT.md).
   limit, no weights). Mid-stream updates use a `Configure` message with a `keyterms` array. Send
   `KeepAlive` every 3–5 s during silence or the connection closes after ~10 s. Add
   `mip_opt_out=true` to every request.
-- Gemini free tier: Google may train on the data and humans may review it. Use free keys **only
-  with fully synthetic audio** — never real voices or personal information, even with consent.
+- Gemini free tier: Google may train on the data and humans may review it, and its terms forbid
+  personal information. Use the free key **only for development and testing** with synthetic audio
+  or public licensed datasets — never real meetings, even with consent (ADR-0001 §7).
 - Gemini live transcription (`gemini-3.5-transcribe-live`): 10-minute session limit, no
   diarization, no word timestamps. Needs overlapping reconnects for long meetings.
 - Sarvam trains on API content by default: turn off training in account settings before sending

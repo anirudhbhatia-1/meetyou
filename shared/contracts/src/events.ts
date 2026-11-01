@@ -66,6 +66,34 @@ export const ConsentNotice = z.object({
   at: SessionMs,
 });
 
+/**
+ * One MediaRecorder run of the meeting video (ADR-0011). A restart (crash, reload, pause/resume)
+ * starts a new part; `at` is the session clock time of the part's first frame.
+ */
+const videoPartId = z.string().regex(/^vp_[0-9A-HJKMNP-TV-Z]{26}$/, 'Expected vp_<ULID>');
+
+export const VideoPartStarted = z.object({
+  type: z.literal('video.part_started'),
+  sessionId,
+  partId: videoPartId,
+  source: z.enum(['tab', 'screen']),
+  mimeType: z.enum(['video/mp4', 'video/webm']),
+  width: z.number().int().positive().max(1920),
+  height: z.number().int().positive().max(1080),
+  fps: z.number().int().positive().max(30),
+  at: SessionMs,
+});
+
+export const VideoPartStopped = z.object({
+  type: z.literal('video.part_stopped'),
+  sessionId,
+  partId: videoPartId,
+  /** Number of 10-second fragments the part produced (indices 0..fragments-1). */
+  fragments: z.number().int().nonnegative(),
+  reason: z.enum(['stopped', 'paused', 'quality_changed', 'error']),
+  at: SessionMs,
+});
+
 export const SessionEnded = z.object({
   type: z.literal('session.ended'),
   sessionId,
@@ -81,6 +109,8 @@ export const CaptureEvent = z.discriminatedUnion('type', [
   MicMuteChanged,
   CaptionObserved,
   ConsentNotice,
+  VideoPartStarted,
+  VideoPartStopped,
   SessionEnded,
 ]);
 export type CaptureEvent = z.infer<typeof CaptureEvent>;

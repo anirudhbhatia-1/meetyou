@@ -6,7 +6,8 @@
 **Provider:** [Company legal name], [address] · **Last updated:** [date]
 
 ## 1. The service
-Minutes records meetings you choose to record, transcribes them, and produces notes. It is provided
+Minutes records meetings you choose to record — audio and, unless you turn it off, the video of the
+meeting tab (what is on screen) — transcribes the audio, and produces notes. It is provided
 "as is" during alpha and beta; features may change.
 
 ## 2. Your account
@@ -14,15 +15,20 @@ You must be 18 or older. Keep your account secure; you are responsible for activ
 
 ## 3. Recording and consent — your responsibility
 - Only record meetings you are allowed to record.
-- **Tell participants** that notes are being taken and **obtain consent where the law requires it**
-  (some places require everyone's consent). The consent notice feature helps but does not replace
+- **Tell participants** that notes are being taken — and, when video is on, that the screen
+  (including their video and anything they share) is recorded — and **obtain consent where the law
+  requires it** (some places require everyone's consent). The consent notice feature helps but does not replace
   your legal obligations.
 - Stop and delete a recording if a participant objects.
+- If you choose to record your whole screen, you are responsible for what it shows, including other
+  apps, notifications, and other people's information.
 - Do not use Minutes to record people secretly, to harass anyone, or to break any law.
 
 ## 4. Your content
-You own your recordings, transcripts, and notes. You give us permission to process them only to
-provide the service to you. We do not use your content to train AI models.
+You own your recordings (audio and video), transcripts, and notes. You give us permission to process
+them only to provide the service to you. We do not use your content to train AI models, we do not
+run face recognition on video, and we do not infer emotions from audio or video. Recordings are
+deleted according to your retention setting (7 days by default).
 
 ## 5. Acceptable use
 No reverse engineering, abuse of the service, attempts to access other users' data, or automated

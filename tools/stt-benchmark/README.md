@@ -23,15 +23,17 @@ $BENCH_DATA_DIR/
 
 ## Keys and data-use guards
 
-Set these in your shell (never in a file in the repo):
+Set these in the gitignored `recording/.env.bench` (`source .env.bench`); never in a tracked file:
 
 | Variable | Purpose |
 |---|---|
-| `SARVAM_API_KEY` | Sarvam key |
-| `SARVAM_TRAINING_OPT_OUT_CONFIRMED=true` | Required: you turned off training in Sarvam's account settings (STT_PREFLIGHT §2.4) |
+| `GOOGLE_CLOUD_PROJECT` | Cloud project with Speech-to-Text API enabled and billing on (ADR-0001 primary). Credentials come from `gcloud auth application-default login`; data logging stays off |
+| `SARVAM_API_KEY` | Sarvam key (dropped from the product 2026-11-01; kept only to reproduce old runs) |
+| `SARVAM_TRAINING_OPT_OUT_CONFIRMED=true` | Required for Sarvam: you turned off training in Sarvam's account settings (STT_PREFLIGHT §2.4) |
 | `DEEPGRAM_API_KEY` | Deepgram key (`mip_opt_out=true` is always sent) |
 | `GEMINI_API_KEY` | Gemini key from a **billing-enabled** Cloud project |
-| `GEMINI_BILLING_ENABLED=true` | Required: confirms the key is not free tier (STT_PREFLIGHT §4.3) |
+| `GEMINI_BILLING_ENABLED=true` | Confirms the key is not free tier (STT_PREFLIGHT §4.3) |
+| `GEMINI_FREE_TIER_ACCEPTED=true` | Alternative to the above: free tier, for public/synthetic benchmark data only |
 
 The tool refuses to send audio when a guard variable is missing.
 
@@ -51,9 +53,10 @@ ffmpeg -i audio/hx-001.them.wav -c:a libopus -b:a 24k /tmp/x.opus && ffmpeg -i /
 ## Commands
 
 ```bash
-export BENCH_DATA_DIR=~/meetyou-benchmark-data
+export BENCH_DATA_DIR="$PWD/bench-data/mucs"   # gitignored, inside the repo
 pnpm --filter @meetyou/stt-benchmark bench run-batch  --config tools/stt-benchmark/examples/runs.phase-a.json
 pnpm --filter @meetyou/stt-benchmark bench run-stream --config tools/stt-benchmark/examples/runs.phase-b.json
+pnpm --filter @meetyou/stt-benchmark bench run-stream --config tools/stt-benchmark/examples/runs.google.json   # ADR-0001 gate
 pnpm --filter @meetyou/stt-benchmark bench score      --config tools/stt-benchmark/examples/runs.phase-a.json
 pnpm --filter @meetyou/stt-benchmark bench blind-samples --config tools/stt-benchmark/examples/runs.phase-b.json
 pnpm --filter @meetyou/stt-benchmark bench measure-latency

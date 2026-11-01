@@ -119,7 +119,7 @@ conversations, without a bot in the call and without paying US-level prices.*
 | B3 | Be ready for business customers later: multi-tenant data, consent logs, security basics from day one. |
 
 ### 3.3 Non-goals (Phase 1)
-- Video recording, screen recording, or clips.
+- Clips and highlight reels (video of the meeting screen **is** in Phase 1 since 2026-11-01 — [ADR-0011](adr/0011-video-screen-recording.md)).
 - Cloud meeting bots.
 - Zoom, Teams, Webex, Slack Huddles, or in-person recording.
 - CRM, ATS, or project-management integrations.
@@ -156,7 +156,7 @@ See section 24 for the full out-of-scope list.
 
 ### 4.5 Anti-personas (not designing for in Phase 1)
 - Large enterprises needing SSO, admin controls, and procurement reviews.
-- Users who need video replay.
+- Users who need edited video, clips, or highlight reels (Phase 3).
 - Regulated clinical or legal workflows (HIPAA-style requirements).
 
 ---
@@ -208,7 +208,7 @@ was said.
 | Area | Included |
 |---|---|
 | Platform | Google Meet in desktop Chrome |
-| Capture | Two-lane audio (`me` mic, `them` tab), no bot, no video |
+| Capture | Two-lane audio (`me` mic, `them` tab) plus video of the Meet tab (the meeting screen), no bot ([ADR-0011](adr/0011-video-screen-recording.md)) |
 | Live | Live transcript, live notepad with anchors, recording indicator |
 | Post-meeting | Summary, decisions, action items, open questions, all with citations; templates; output language choice |
 | Library | List of past meetings, open, search, delete (with undo), export; lightweight action-items list across meetings (open/done) |
@@ -225,7 +225,7 @@ was said.
 - More Indian languages (decided by demand and benchmark).
 
 ### Phase 3 — Business features
-- Video recording, playback, clips.
+- Clips, highlight reels, adaptive-streaming video playback (basic video recording and playback moved to Phase 1).
 - Optional cloud bot (own or via a bot API) for users who want it.
 - CRM/ATS/project-tool integrations and workflow automations.
 - Conversation analytics.
@@ -316,7 +316,7 @@ was said.
 | FR-REC-07 | Allow only one active recording at a time. | P0 | Starting in a second Meet tab asks the user to stop the first. |
 | FR-REC-08 | Maximum session length guard (e.g. 4 hours). | P1 | User warned at 3h45m; session closes cleanly at limit. |
 
-### 9.4 Audio capture (`CAP`)
+### 9.4 Audio and video capture (`CAP`)
 | ID | Requirement | Priority | Acceptance criteria |
 |---|---|---|---|
 | FR-CAP-01 | Capture Meet tab audio as the `them` lane via `chrome.tabCapture` (stream ID in the service worker, capture in an offscreen document). | P0 | Remote participants' speech present in `them` lane. |
@@ -330,12 +330,16 @@ was said.
 | FR-CAP-09 | If retention is enabled, also record each lane as compressed audio (Opus) for storage. | P0 | ~15 MB per lane-hour or less; uploaded in chunks. |
 | FR-CAP-10 | Detect silent or failed lanes (e.g. mic muted at OS level, all-zero buffers). | P1 | User notified within 15 s if a lane produces no signal while the other does. |
 | FR-CAP-11 | Respect Meet's own mute: when the user is muted in Meet, `me` lane may still capture side comments. Provide a setting "Follow Meet mute" (default on). | P1 | With setting on, `me` lane pauses when Meet mic is muted. **[Verify]** reliable mute-state detection from the Meet DOM. |
+| FR-CAP-12 | Record the Meet tab video (the meeting screen: grid and anyone's shared screen) together with a playback mix of both lanes, when the "Record video" setting is on (default on) — [ADR-0011](adr/0011-video-screen-recording.md). | P0 | 720p max at 15 fps; a 60-min recording plays back with transcript in sync within ±0.5 s. |
+| FR-CAP-13 | Video never competes with audio: fragments are buffered locally and uploaded at lowest priority, paused while the audio stream reconnects, and finished after the meeting if needed. Data-saver quality (480p) switches on automatically when the backlog exceeds 2 minutes. | P0 | Audio loss stays 0 on a 2 Mbps link with video on; side panel shows video upload progress. |
+| FR-CAP-14 | Per-meeting video toggle before recording starts; pause/resume applies to audio and video together. Video is off when retention is "Delete immediately". | P0 | — |
+| FR-CAP-15 | "Record my whole screen" option (screen picker) for users who present their own screen. | P1 | Picker shown only when chosen; the Meet tab video is the default. |
 
 ### 9.5 Consent (`CON`)
 | ID | Requirement | Priority | Acceptance criteria |
 |---|---|---|---|
 | FR-CON-01 | When recording starts, offer to post a consent notice in Meet chat. | P0 | Modes: *one-click send* (default), *automatic*, *off* (off requires an extra confirmation). |
-| FR-CON-02 | Notice text is editable, with a sensible default in English and Hinglish. | P1 | Default e.g. "This meeting is being transcribed by [product] for notes." |
+| FR-CON-02 | Notice text is editable, with a sensible default in English and Hinglish. When video is on, the default says audio **and screen** are recorded. | P1 | Default e.g. "Hi all — I'm using Minutes to record this call (audio and screen) and take notes." |
 | FR-CON-03 | Write a consent log entry per session: time, mode, whether notice was sent, text sent. | P0 | Visible to the user on the meeting page; exportable. |
 | FR-CON-04 | Provide a quick "Stop and delete this recording" action for when a participant objects. | P0 | Stops capture and deletes all session data (audio, transcript, notes) after confirmation. |
 
@@ -423,8 +427,8 @@ was said.
 ### 9.14 Settings and data management (`SET`)
 | ID | Requirement | Priority | Acceptance criteria |
 |---|---|---|---|
-| FR-SET-01 | Audio retention: delete immediately / 7 days / 30 days. **Default: 7 days** (D-02). "Delete immediately" runs only after the transcript and summary are successfully generated. Applies to audio only. | P0 | Enforced by a scheduled job; verified by tests, including that a failed processing job never triggers immediate deletion. |
-| FR-SET-02 | Delete a single meeting (audio, transcript, notes, summary). | P0 | Hidden immediately; restorable during a 10-second grace period (Undo); after the grace period, removed from primary storage, and from backups within 30 days. |
+| FR-SET-01 | Recording retention (audio and video): delete immediately / 7 days / 30 days. **Default: 7 days** (D-02). "Delete immediately" runs only after the transcript and summary are successfully generated, and turns video recording off. Transcripts, notes, and summaries are kept until the user deletes them. | P0 | Enforced by a scheduled job; verified by tests, including that a failed processing job never triggers immediate deletion. |
+| FR-SET-02 | Delete a single meeting (audio, video, transcript, notes, summary). | P0 | Hidden immediately; restorable during a 10-second grace period (Undo); after the grace period, removed from primary storage, and from backups within 30 days. |
 | FR-SET-03 | Delete account and all data. | P0 | Same timelines as FR-SET-02; confirmation email/notice. |
 | FR-SET-04 | Export all data (JSON + Markdown archive). | P1 | Delivered as a download within 24 h. |
 | FR-SET-05 | Language, template, consent-notice, and "follow Meet mute" settings. | P0 | — |
@@ -541,8 +545,8 @@ was said.
                                        ▼
 ┌──────────────────────────────────── Backend ─────────────────────────────────────┐
 │  API gateway / auth  ──  Session & streaming relay  ──  STT provider interface   │
-│                                   │                       (Deepgram / Sarvam /   │
-│                                   │                        Gemini / …)           │
+│                                   │                       (Google Chirp 3 /      │
+│                                   │                        Deepgram fallback)    │
 │                                   ▼                                              │
 │                        Transcript assembler (segments, lanes, speakers)          │
 │                                   │                                              │
@@ -704,7 +708,8 @@ All tables include `id`, `workspace_id`, `created_at`, `updated_at` unless noted
 ### 15.2 Candidate providers (capabilities to verify)
 | Provider | Why shortlisted | Things to verify |
 |---|---|---|
-| Sarvam AI | Indian-language and code-mixed focus | Streaming quality, diarization, script options, pricing at scale |
+| ~~Sarvam AI~~ | Indian-language and code-mixed focus | **Dropped 2026-11-01** (benchmarked; see ADR-0001) |
+| Google Cloud Speech-to-Text V2 (Chirp 3) | **Chosen primary (gated), 2026-11-01** — Google library, same cloud as the backend | Hinglish WER and loanword script in the ADR-0001 gate; 5-min stream rotation; us/eu region |
 | Deepgram Nova-3 (multilingual) | Fast streaming, Hindi code-switching claimed | Hinglish WER, `keyterm` support in multilingual mode |
 | Google Gemini Transcribe / Transcribe Live | Low reported cost, strong multilingual model | Session limits (reported ~10 min), timestamps, diarization, data terms |
 | Others (Gladia, ElevenLabs Scribe, OpenAI transcribe) | Comparison baselines | As above |
@@ -758,6 +763,7 @@ Full plan: [STT_BENCHMARK_PLAN.md](STT_BENCHMARK_PLAN.md). Summary:
 | Data | Where | Retention |
 |---|---|---|
 | Audio (per lane) | Encrypted object storage; transient local buffer | 7 days by default (user can choose immediate or 30 days); local buffer deleted after successful upload |
+| Video (Meet tab / screen, with mixed audio) | Encrypted object storage (Mumbai); transient local buffer | Same retention as audio; never sent to STT or LLM providers; no face recognition |
 | Transcript segments | Database | Until user deletes |
 | Notes, summaries | Database | Until user deletes |
 | Participant display names | Database | Until user deletes |
@@ -821,6 +827,7 @@ Store review. **[Verify]** final list during M1.
 | Host permission `https://meet.google.com/*` | Content script for call detection, metadata, active speaker, chat notice |
 | Host permission for our API domain | Backend communication |
 | `notifications` | "Notes ready" and "Your export is ready" alerts when the user has left the side panel (O1, DESIGN §8.7) |
+| `unlimitedStorage` | Local buffer for meeting video (up to ~1 hour, ~470 MB) until it is uploaded, so Chrome does not evict it (ADR-0011) |
 
 Keyboard shortcuts (`Alt+Shift+R`, `Alt+Shift+P`) use the manifest `commands` key, which is not a
 permission.
@@ -871,10 +878,11 @@ Cost per meeting-hour (STT + LLM + storage + infra), by provider and language.
 ### 20.1 Unit cost estimate per meeting-hour [Hypothesis — replace with benchmark data]
 | Item | Estimate |
 |---|---|
-| Streaming STT, two lanes | ~USD 0.30–1.20 depending on provider (lanes may be billed separately; `me` lane is often mostly silence — measure) |
+| Streaming STT, two lanes | Google Chirp 3 ≈ USD 0.016/min per lane [Verify] → **≈ USD 1.92** if both lanes stream the whole hour; lower with `me`-lane silence/mute gating (measure). This is above the ≤ USD 1.00 target — ADR-0001 §7 |
 | Optional batch re-transcription | ~USD 0.30–0.60 |
 | LLM summary (~15k input tokens) | A few cents on a low-cost model |
 | Audio storage (~30 MB, 30 days) | Negligible |
+| Video (≈ 470 MB at standard quality, 7 days) | Storage ≈ USD 0.003; each full replay ≈ USD 0.06 egress (ADR-0011) |
 | Relay/compute | To be measured |
 | **Target all-in** | **≤ USD 1.00 per meeting-hour in Phase 1; reduce over time** |
 
@@ -912,15 +920,16 @@ Phase 2 planning starts after M3 data is available.
 |---|---|---|---|---|
 | D-01 | Hindi/Hinglish transcript script | **Decided 2026-10-28:** Roman display by default; store provider original; Devanagari setting later; mixed-script fallback if transliteration benchmarks poorly | Team | ✅ Closed |
 | D-02 | Default audio retention | **Decided 2026-10-28:** 7 days default; user can pick immediate (after successful processing) or 30 days; audio only | Team | ✅ Closed |
-| D-03 | STT provider | Decided by benchmark (15.3) | Team | M0 |
+| D-03 | STT provider | **Decided 2026-11-01** ([ADR-0001](adr/0001-stt-provider.md)): Google Cloud STT V2 Chirp 3 primary once it passes the benchmark gate; Deepgram Nova-3 fallback; Sarvam dropped | Team | ✅ Closed (gate pending) |
 | D-04 | LLM provider for summaries | Decided by evaluation (14.6) | Team | M2 |
 | D-05 | Consent notice default mode | One-click (proposed) / automatic / off | Team | M1 |
 | D-06 | Stream raw PCM or compressed audio to the relay | **Decided 2026-10-29:** Opus 24 kbps ([ADR-0003](adr/0003-audio-transport-format.md)) | Team | ✅ Closed |
 | D-07 | Library surface in beta | Extension page / web app | Team | M2 |
-| D-08 | Backend stack and hosting region | **Option B selected 2026-10-28** ([ADR-0002](adr/0002-backend-stack-and-hosting.md)): TypeScript/Node on Google Cloud Mumbai (Cloud Run, Cloud SQL, Cloud Storage); final after ADR §9 checks | Team | M1 |
+| D-08 | Backend stack and hosting region | **Option B selected 2026-10-28** ([ADR-0002](adr/0002-backend-stack-and-hosting.md)): TypeScript/Node on Google Cloud Mumbai (Cloud Run, Cloud SQL, Cloud Storage); **Accepted 2026-11-01**, live checks in S1-11 | Team | ✅ Closed |
 | D-09 | Product name and branding | — | Team | M3 |
 | D-10 | Whether `me` lane should follow Meet mute by default | On (proposed) / off | Team | M1 |
 | D-11 | Hinglish aliases for note markers | e.g. `faisla:` (decision), `kaam:` (action), `sawaal:` (question), `zaroori:` (important) / English markers only | Team | M2 |
+| D-12 | Record video in Phase 1 | **Decided 2026-11-01** ([ADR-0011](adr/0011-video-screen-recording.md)): Meet tab video with audio, default on, same retention | Team | ✅ Closed |
 
 ---
 
@@ -944,7 +953,7 @@ Phase 2 planning starts after M3 data is available.
 ## 24. Out of scope
 
 Not in Phase 1 (some planned later — see section 7):
-- Video and screen recording, clips, highlight reels
+- Clips, highlight reels, adaptive-streaming video (video recording of the Meet tab is in Phase 1 — ADR-0011)
 - Cloud meeting bots
 - Platforms other than Google Meet in Chrome
 - Calendar integration, auto-join, pre-meeting briefs

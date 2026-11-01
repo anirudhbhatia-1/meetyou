@@ -5,8 +5,8 @@ Agents and developers must follow accepted ADRs; changing one requires a new ADR
 
 | ADR | Title | Status |
 |---|---|---|
-| [0001](0001-stt-provider.md) | STT provider(s) for streaming and batch | Pending benchmark — results template ready |
-| [0002](0002-backend-stack-and-hosting.md) | Backend stack and hosting | Option B selected (Google Cloud Mumbai); Accepted after §9 checks |
+| [0001](0001-stt-provider.md) | STT provider(s) for streaming and batch | Accepted with a gate 2026-11-01 — Google Chirp 3 primary, Deepgram fallback, Sarvam dropped |
+| [0002](0002-backend-stack-and-hosting.md) | Backend stack and hosting | Accepted 2026-11-01 — Google Cloud Mumbai; checks 1 and 4 in S1-11 |
 | [0003](0003-audio-transport-format.md) | Audio transport format (Opus vs PCM) | Accepted 2026-10-29 |
 | [0004](0004-auth-and-token-model.md) | Auth and token model for the extension | Accepted 2026-10-29 |
 | [0005](0005-job-queue-and-outbox.md) | Job queue and outbox implementation | Accepted 2026-10-29 |
@@ -15,6 +15,7 @@ Agents and developers must follow accepted ADRs; changing one requires a new ADR
 | 0008 | Desktop app approach | Not started (Phase 2) |
 | 0009 | Retrieval design | Not started (Phase 2) |
 | 0010 | Meeting bot: buy vs build | Not started (Phase 3) |
+| [0011](0011-video-screen-recording.md) | Video (meeting screen) recording in Phase 1 | Accepted 2026-11-01 — verification in S1 |
 
 **Statuses:** Not started → Proposed → Accepted → (Superseded by NNNN / Rejected)
 
