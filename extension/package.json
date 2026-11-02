@@ -1,0 +1,11 @@
+{
+  "name": "@meetyou/extension",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "pnpm exec tsc -p tsconfig.build.json && node scripts/copy-static.mjs",
+    "typecheck": "pnpm exec tsc -p tsconfig.json",
+    "test": "vitest run"
+  }
+}
