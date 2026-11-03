@@ -6,10 +6,10 @@ pointer to where the full detail lives — the linked document stays the source 
 
 | Field | Value |
 |---|---|
-| Last updated | 2026-11-02 (S1-01 extension skeleton complete and manually verified) |
-| Updated by | Gaurav (Codex) |
+| Last updated | 2026-11-03 (S1-03..S1-06 and S1-13 code in; local gateway with Deepgram; Chrome checks pending) |
+| Updated by | Anirudh (Claude Code) |
 | Repository | [anirudhbhatia-1/meetyou](https://github.com/anirudhbhatia-1/meetyou) — branches `main`, `anirudh` |
-| Current stage | **Stage 1** in progress — S1-01 extension skeleton is complete; S1-07, S1-09, and S1-10 are next Gaurav tasks (§7) |
+| Current stage | **Stage 1** in progress — S1-01, S1-02 done; Anirudh's S1-03..S1-06 and S1-13 code in, Chrome checks pending; Gaurav: S1-07 (branch), S1-09, S1-10 (§7) |
 
 ---
 
@@ -191,6 +191,107 @@ Stage 0 is complete (status table: IMPLEMENTATION_PLAN.md → "Stage 0 status").
 ## 9. Session log
 
 Newest first. One entry per working session (either person).
+
+### 2026-11-03 (later) — Anirudh (Claude Code): S1-03..S1-06, S1-13, local gateway
+**Decisions (Anirudh):** add **esbuild** to the extension (bundles each entry point, so extension
+code can import `@meetyou/contracts` and zod); build the S1-05 gateway **locally first** with `ws`
+(disk storage until S1-10 staging); use **Deepgram** for live STT during dev/testing.
+
+**Done (code + tests)**
+- Build: `extension/scripts/build.mjs` (esbuild) replaces `tsc` emit; `tsconfig.build.json` and
+  `copy-static.mjs` removed. `MINUTES_GATEWAY_URL` at build time turns streaming on.
+- S1-06 state machine (`background/capture-state.ts`): full ARCHITECTURE §4.3 states incl.
+  paused/reconnecting/processing; persisted in `chrome.storage.session`; badge REC/❚❚/…; the
+  recorded tab gets a `recording.state` message; a restarted worker checks the offscreen document
+  (`capture.status`) and marks `capture_lost` if the recording is gone. `toggle-pause` shortcut.
+- S1-03: 16 kHz capture `AudioContext` (Chrome resamples) + `pcm-framer` AudioWorklet: downmix,
+  PCM16, 100 ms frames, per-frame level; both lanes share the context clock for `captureMs`.
+  Playback stays in a separate device-rate context. **Opus not done** — PCM16 is the ADR-0003
+  fallback; encoder (WebCodecs) and gateway decode are left for S1-11.
+- S1-04: IndexedDB `audio_buffer` write-first, per-lane seq, `StreamClient` (hello/resumeFrom,
+  ready.durableUpTo replay, ack pruning, backoff reconnect, ping, end-after-all-sent). Token as
+  the `token.<value>` subprotocol (ARCHITECTURE §5.1 updated).
+- S1-05: `backend/apps/gateway` — dev session/token endpoints (local/ci only), 10 s chunks on disk
+  in the §11.4 layout with fsync + manifest commit, ack after durable write, duplicate/gap
+  handling, Deepgram per lane (benchmark params, `mip_opt_out`), timeline map across pauses,
+  `transcript.interim` / `transcript.segment` (validated `Segment`). README in the package.
+- S1-13: tab video in the same `getUserMedia` call (720p/15 fps), playback mix of both lanes,
+  `MediaRecorder` MP4→WebM fallback, 10 s fragments to IndexedDB `video_buffer`, new part per
+  pause. Side panel: video toggle, download last video, delete local video.
+- Shared: `newUlid()` in `shared/contracts`.
+- Verified here: `pnpm check` passes (158 tests: extension 36, gateway 10, contracts 15, tokens 34,
+  benchmark 63). Real extension `StreamClient` against the real gateway over Node's WebSocket:
+  250 frames per lane all durable and acked, buffer empty — this caught and fixed a bug where
+  `end` was sent before the last frames. Deepgram smoke test (2 s silence) connects and closes.
+
+**Not verified yet (needs Chrome / people)**
+- In Chrome: worklet frames and meters, video file plays, pause/resume, service-worker restart
+  mid-recording (S1-06 done-when), live transcript in the panel with the gateway, network drop
+  (stop the gateway for 30 s, restart it: no frame lost).
+- S1-11 measurements (CPU/memory, echo, 2-hour session, latency) and ADR-0011 checks 2–4.
+- S1-14 needs a GCP project with billing + Speech API + ADC login (Anirudh's action).
+- S1-05 "in staging" needs S1-10.
+
+**Chrome test findings (same day, Anirudh)**
+- Recording kept going after leaving the call: Meet keeps the call URL on its "You left the
+  meeting" screen, and nothing consumed the adapter's state yet. The service worker now stops on
+  the S1-07 `meet.state-changed` message (`ended`, `home`, `not_meet`) from the recorded tab, and
+  on any change of meeting code in that tab's URL. **Leaving a call stops recording only once
+  S1-07 is merged.**
+- Pause did not delete earlier video: each pause closes a video part and resume starts a new one,
+  both kept in `video_buffer`; the panel's old download offered only the newest part. The panel
+  now lists every part of the last recording ("Show last video").
+
+**For Gaurav (S1-07 branch):** rebase on this. The build is now esbuild, so
+`scripts/bundle-content.mjs`, the dynamic import in `meet-content-script.ts` and the
+`web_accessible_resources` entry are no longer needed — the content script can import the
+adapter modules directly and esbuild bundles it as a classic script. Also: no participant names
+or titles in console logs (AGENTS §7).
+
+### 2026-11-03 — Anirudh (Claude Code): S1-01 review, S1-02 two-lane capture
+**Review of S1-01 (merged, PR #1)** — fixed on `anirudh`:
+- Service worker promises used `void`, so failures became unhandled rejections; they now log the
+  error (name and message only). The unused `offscreen.ensure` string message is replaced by typed
+  messages.
+- Offscreen page loaded its script without `type="module"`, which breaks once it imports modules.
+- `chrome.d.ts` `sendResponse` took no argument (same one-line fix as the S1-07 branch, so it merges
+  cleanly).
+
+**Review notes for Gaurav** (not changed, to avoid conflicts with `feature/S1-07-meet-adapter-v0`):
+- User-facing name is "MeetYou" in the manifest and pages; DESIGN.md uses the working name
+  "Minutes" from one constant, and the consent message in `shared/contracts` says "Minutes".
+- No bundler: plain `tsc` output cannot import `@meetyou/contracts`/zod in the browser, and
+  manifest content scripts cannot be ES modules. The S1-07 branch strips imports with regexes and
+  exposes adapter modules via `web_accessible_resources` to meet.google.com. Proposal: add esbuild
+  (one dev dependency) to bundle each entry point; needs both developers' OK (AGENTS §6.7).
+- S1-07 branch logs the meeting title and participant names to the console; AGENTS §7 forbids
+  names in logs (log IDs and counts only).
+- `copy-static.mjs` removes `dist/public`, which never exists; stale files in `dist/` survive
+  rebuilds.
+
+**S1-02 (done; acceptance verified in Chrome by Anirudh)**
+- Start/stop from a side-panel developer control (`sidepanel/capture-controls.ts`, own DOM
+  section) or the `toggle-recording` shortcut. Service worker: Meet-tab check →
+  offscreen document → `tabCapture.getMediaStreamId({ targetTabId })` → `capture.start` reply.
+- Offscreen (`offscreen/capture.ts`): tab audio via `chromeMediaSource: 'tab'` played back through
+  an `AudioContext` (FR-CAP-02); mic with `echoCancellation: true`, never played back; lanes stay
+  separate (FR-CAP-04). A denied or missing mic records the tab only (FR-ONB-03); mic loss keeps
+  recording. Per-lane RMS meters every 250 ms.
+- Minimal capture state in `chrome.storage.session` (`background/capture-state.ts`); S1-06 grows it
+  into the full ARCHITECTURE §4.3 machine. Stops on tab close, leaving Meet, or tab track end.
+- Tests: messages, state transitions, levels, constraints. `pnpm check` passes (127 tests); build
+  passes.
+- **Chrome finding (2026-11-03):** with `openPanelOnActionClick: true`, Start in the side panel
+  failed with `capture_not_allowed`: a browser-opened panel does not count as invoking the
+  extension, so `tabCapture` is not granted. Now the panel opens from `action.onClicked` via
+  `sidePanel.open` (flag reset to `false`), which grants capture for that tab. Affects S1-09.
+- **Verified in Chrome:** after the fix, Start from the side panel records; both meters move
+  (`me` from the laptop mic, `them` from a second device in the call) and Meet stays audible.
+  Not yet checked: mic-denied path, shortcut start, stop on tab close.
+- Note: audio of the user's **own** shared tab is not in `them` (it plays from the shared tab, not
+  the Meet tab). Not covered by the PRD yet; FR-CAP-15 covers only video.
+- Video track is S1-13 (the stream ID can be used once, so it joins the same
+  `getUserMedia` call).
 
 ### 2026-11-02 — Gaurav (Codex): S1-01 extension skeleton
 **Done**

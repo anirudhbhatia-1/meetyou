@@ -14,7 +14,7 @@ declare namespace chrome {
         callback: (
           message: unknown,
           sender: unknown,
-          sendResponse: () => void,
+          sendResponse: (response?: unknown) => void,
         ) => boolean | undefined,
       ): void;
     };

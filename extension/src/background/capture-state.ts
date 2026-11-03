@@ -1,0 +1,256 @@
+import { lightColors } from '@meetyou/design-tokens';
+
+import {
+  isLaneFlags,
+  type CaptureFailure,
+  type LaneFlags,
+  type StreamLink,
+  type VideoStatus,
+} from '../messages.ts';
+
+/**
+ * Recording state machine (ARCHITECTURE §4.3), persisted in `chrome.storage.session` so a
+ * restarted service worker recovers it (§4.2).
+ *
+ * idle ─start─► starting ─started─► recording ⇄ paused
+ *                  │                  │  ▲
+ *                  │ failed           │  └─ link online ── reconnecting ◄─ link lost
+ *                  ▼                  │ stop / tab closed / call ended
+ *                error              stopping ─stopped─► processing (streamed) ─processed─► ready
+ *                                                    └► idle (nothing streamed)
+ *
+ * TODO(S2): `processing → ready` is driven by the backend pipeline; nothing sends `processed` yet.
+ */
+export type CaptureStatus =
+  | 'idle'
+  | 'starting'
+  | 'recording'
+  | 'paused'
+  | 'reconnecting'
+  | 'stopping'
+  | 'processing'
+  | 'ready'
+  | 'error';
+
+export type CaptureError =
+  | CaptureFailure
+  | 'not_meet_tab'
+  | 'no_active_tab'
+  | 'capture_not_allowed'
+  | 'offscreen_failed'
+  | 'capture_lost';
+
+export interface CaptureState {
+  status: CaptureStatus;
+  tabId: number | null;
+  /** Meeting code of the recorded tab at start; a different or missing code means the call ended. */
+  meetingCode: string | null;
+  sessionId: string | null;
+  /** Wall-clock start (epoch ms) for the UI timer; the session clock itself lives offscreen. */
+  startedAt: number | null;
+  lanes: LaneFlags | null;
+  micError: string | null;
+  link: StreamLink;
+  video: VideoStatus;
+  error: CaptureError | null;
+}
+
+export type CaptureEvent =
+  | { type: 'start_requested'; tabId: number; meetingCode: string | null; at: number }
+  | {
+      type: 'started';
+      sessionId: string;
+      lanes: LaneFlags;
+      micError: string | null;
+      link: StreamLink;
+      video: VideoStatus;
+    }
+  | { type: 'paused' }
+  | { type: 'resumed' }
+  | { type: 'link_changed'; link: StreamLink }
+  | { type: 'video_changed'; video: VideoStatus }
+  | { type: 'mic_lost' }
+  | { type: 'stop_requested' }
+  | { type: 'stopped' }
+  | { type: 'processed' }
+  | { type: 'dismissed' }
+  | { type: 'failed'; error: CaptureError };
+
+export const CAPTURE_STATE_KEY = 'capture';
+
+export const IDLE_CAPTURE: CaptureState = {
+  status: 'idle',
+  tabId: null,
+  meetingCode: null,
+  sessionId: null,
+  startedAt: null,
+  lanes: null,
+  micError: null,
+  link: 'off',
+  video: 'off',
+  error: null,
+};
+
+/** Statuses during which the offscreen document holds live capture. */
+export const CAPTURING: ReadonlySet<CaptureStatus> = new Set([
+  'starting',
+  'recording',
+  'paused',
+  'reconnecting',
+  'stopping',
+]);
+
+/** A new recording may start from these; processing of an earlier one continues in the backend. */
+export function canStart(state: CaptureState): boolean {
+  return (
+    state.status === 'idle' ||
+    state.status === 'processing' ||
+    state.status === 'ready' ||
+    state.status === 'error'
+  );
+}
+
+/** Live statuses that a stop request ends. */
+export function canStop(state: CaptureState): boolean {
+  return (
+    state.status === 'starting' ||
+    state.status === 'recording' ||
+    state.status === 'paused' ||
+    state.status === 'reconnecting'
+  );
+}
+
+function linkStatus(link: StreamLink): 'recording' | 'reconnecting' {
+  return link === 'reconnecting' ? 'reconnecting' : 'recording';
+}
+
+/** Returns the next state; events that do not apply to the current status leave it unchanged. */
+export function nextCaptureState(state: CaptureState, event: CaptureEvent): CaptureState {
+  switch (event.type) {
+    case 'start_requested':
+      if (!canStart(state)) return state;
+      return {
+        ...IDLE_CAPTURE,
+        status: 'starting',
+        tabId: event.tabId,
+        meetingCode: event.meetingCode,
+        startedAt: event.at,
+      };
+    case 'started':
+      if (state.status !== 'starting') return state;
+      return {
+        ...state,
+        status: linkStatus(event.link),
+        sessionId: event.sessionId,
+        lanes: event.lanes,
+        micError: event.micError,
+        link: event.link,
+        video: event.video,
+      };
+    case 'paused':
+      if (state.status !== 'recording' && state.status !== 'reconnecting') return state;
+      return { ...state, status: 'paused' };
+    case 'resumed':
+      if (state.status !== 'paused') return state;
+      return { ...state, status: linkStatus(state.link) };
+    case 'link_changed':
+      if (state.status === 'recording' || state.status === 'reconnecting') {
+        return { ...state, link: event.link, status: linkStatus(event.link) };
+      }
+      if (state.status === 'paused' || state.status === 'stopping') {
+        return { ...state, link: event.link };
+      }
+      return state;
+    case 'video_changed':
+      if (!CAPTURING.has(state.status)) return state;
+      return { ...state, video: event.video };
+    case 'mic_lost':
+      if (!CAPTURING.has(state.status) || state.lanes === null) return state;
+      return { ...state, lanes: { ...state.lanes, me: false }, micError: 'TrackEnded' };
+    case 'stop_requested':
+      if (!canStop(state)) return state;
+      return { ...state, status: 'stopping' };
+    case 'stopped':
+      if (state.status !== 'stopping') return state;
+      if (state.link === 'off' || state.sessionId === null) return IDLE_CAPTURE;
+      return {
+        ...state,
+        status: 'processing',
+        tabId: null,
+        meetingCode: null,
+        link: 'off',
+        video: 'off',
+      };
+    case 'processed':
+      if (state.status !== 'processing') return state;
+      return { ...state, status: 'ready' };
+    case 'dismissed':
+      if (state.status !== 'ready' && state.status !== 'error') return state;
+      return IDLE_CAPTURE;
+    case 'failed':
+      return { ...IDLE_CAPTURE, status: 'error', error: event.error };
+  }
+}
+
+const STATUSES = new Set<string>([
+  'idle',
+  'starting',
+  'recording',
+  'paused',
+  'reconnecting',
+  'stopping',
+  'processing',
+  'ready',
+  'error',
+]);
+const ERRORS = new Set<string>([
+  'tab_capture_failed',
+  'audio_context_failed',
+  'not_meet_tab',
+  'no_active_tab',
+  'capture_not_allowed',
+  'offscreen_failed',
+  'capture_lost',
+]);
+const LINKS = new Set<string>(['off', 'connecting', 'online', 'reconnecting']);
+const VIDEO = new Set<string>(['off', 'recording', 'unsupported', 'failed']);
+
+/** Reads a stored state; anything malformed falls back to idle rather than trusting it. */
+export function parseCaptureState(raw: unknown): CaptureState {
+  if (typeof raw !== 'object' || raw === null) return IDLE_CAPTURE;
+  const r = raw as Record<string, unknown>;
+  if (typeof r.status !== 'string' || !STATUSES.has(r.status)) return IDLE_CAPTURE;
+  return {
+    status: r.status as CaptureStatus,
+    tabId: typeof r.tabId === 'number' ? r.tabId : null,
+    meetingCode: typeof r.meetingCode === 'string' ? r.meetingCode : null,
+    sessionId: typeof r.sessionId === 'string' ? r.sessionId : null,
+    startedAt: typeof r.startedAt === 'number' ? r.startedAt : null,
+    lanes: isLaneFlags(r.lanes) ? { me: r.lanes.me, them: r.lanes.them } : null,
+    micError: typeof r.micError === 'string' ? r.micError : null,
+    link: typeof r.link === 'string' && LINKS.has(r.link) ? (r.link as StreamLink) : 'off',
+    video: typeof r.video === 'string' && VIDEO.has(r.video) ? (r.video as VideoStatus) : 'off',
+    error: typeof r.error === 'string' && ERRORS.has(r.error) ? (r.error as CaptureError) : null,
+  };
+}
+
+export interface Badge {
+  text: string;
+  color: string;
+}
+
+/** Toolbar badge per status (ARCHITECTURE §16.1 "badge REC"), coloured from the design tokens. */
+export function badgeFor(state: CaptureState): Badge {
+  switch (state.status) {
+    case 'recording':
+      return { text: 'REC', color: lightColors.ember };
+    case 'paused':
+      return { text: '❚❚', color: lightColors.muted };
+    case 'reconnecting':
+      return { text: '…', color: lightColors.amberDot };
+    case 'error':
+      return { text: '!', color: lightColors.danger };
+    default:
+      return { text: '', color: lightColors.muted };
+  }
+}

@@ -4,8 +4,16 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "build": "pnpm exec tsc -p tsconfig.build.json && node scripts/copy-static.mjs",
+    "build": "node scripts/build.mjs",
     "typecheck": "pnpm exec tsc -p tsconfig.json",
     "test": "vitest run"
+  },
+  "devDependencies": {
+    "esbuild": "0.28.2"
+  },
+  "dependencies": {
+    "@meetyou/contracts": "workspace:*",
+    "@meetyou/design-tokens": "workspace:*",
+    "zod": "^4.6.7"
   }
 }

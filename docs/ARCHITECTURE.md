@@ -263,7 +263,10 @@ set, so web pages cannot message the extension.
 2. API creates `meeting` + `session` rows and returns
    `{ sessionId, meetingId, streamUrl, streamToken, expiresAt, audioFormat }`.
    `streamToken` is a short-lived token **scoped to this one session**.
-3. Offscreen document connects to `streamUrl` with the token.
+3. Offscreen document connects to `streamUrl` with the token. Browsers cannot set WebSocket
+   headers, so the token travels as a second subprotocol (`Sec-WebSocket-Protocol: minutes.v1,
+   token.<streamToken>`) and the gateway selects `minutes.v1`; it never appears in URLs or logs
+   (implemented in S1-04/S1-05).
 
 ### 5.2 Message types
 **Client → gateway**

@@ -11,10 +11,10 @@ tasks owned by your developer unless they say otherwise.
 single source of truth for scope, architecture, and working style. If a rule here conflicts with an
 agent's default behavior, this file wins.
 
-> **Project status: Stage 0 complete (2026-11-01); Stage 1 next.** The pnpm workspace,
-> `shared/contracts`, `shared/design-tokens`, and `tools/stt-benchmark` exist. Product code
-> (`extension/`, `backend/`) starts in Stage 1 — create it only for IMPLEMENTATION_PLAN tasks your
-> developer has started.
+> **Project status: Stage 0 complete (2026-11-01); Stage 1 in progress.** The pnpm workspace,
+> `shared/contracts`, `shared/design-tokens`, and `tools/stt-benchmark` exist; `extension/` (S1-01..)
+> and `backend/apps/gateway` (S1-05, local dev) have started. Create other product code only for
+> IMPLEMENTATION_PLAN tasks your developer has started.
 
 ---
 
@@ -131,8 +131,8 @@ an event. **Source of truth:** `shared/contracts` (zod schemas + tests); this bl
 shared/contracts       ✅ zod schemas: capture events, WS protocol, REST DTOs, summary output
 shared/design-tokens   ✅ colour/type/radius tokens, tokens.css, bundled fonts, contrast tests
 tools/stt-benchmark    ✅ STT benchmark: runner, streaming harness, normalizer, scorer
-extension/             (Stage 1) Chrome MV3: service worker, offscreen document, side panel, Meet adapter
-backend/               (Stage 2) API, gateway, workers, providers, db
+extension/             (Stage 1) Chrome MV3: service worker, offscreen document, side panel, Meet adapter (esbuild)
+backend/apps/gateway   (S1-05) realtime gateway, local dev; API, workers, providers, db follow in Stage 2
 docs/                  PRD, features, architecture, design, plan, research, ADRs, benchmark kit, legal drafts
 ```
 
