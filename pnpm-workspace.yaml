@@ -1,8 +1,8 @@
 packages:
   - shared/*
   - tools/*
+  - extension
   # Added when their stages start (IMPLEMENTATION_PLAN.md):
-  # - extension
   # - backend/apps/*
   # - backend/packages/*
 

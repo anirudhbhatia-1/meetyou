@@ -6,10 +6,10 @@ pointer to where the full detail lives — the linked document stays the source 
 
 | Field | Value |
 |---|---|
-| Last updated | 2026-11-01 (Stage 0 complete; video + Google STT decisions) |
-| Updated by | Anirudh (Claude Code) |
+| Last updated | 2026-11-02 (S1-01 extension skeleton complete and manually verified) |
+| Updated by | Gaurav (Codex) |
 | Repository | [anirudhbhatia-1/meetyou](https://github.com/anirudhbhatia-1/meetyou) — branches `main`, `anirudh` |
-| Current stage | **Stage 0** in progress — repo tooling, contracts, tokens, benchmark tools, ADR drafts done on `feature/stage-0`; people-dependent tasks open (§7) |
+| Current stage | **Stage 1** in progress — S1-01 extension skeleton is complete; S1-07, S1-09, and S1-10 are next Gaurav tasks (§7) |
 
 ---
 
@@ -191,6 +191,38 @@ Stage 0 is complete (status table: IMPLEMENTATION_PLAN.md → "Stage 0 status").
 ## 9. Session log
 
 Newest first. One entry per working session (either person).
+
+### 2026-11-02 — Gaurav (Codex): S1-01 extension skeleton
+**Done**
+- Added the `extension/` pnpm workspace and an MV3 build path that produces an unpacked package in
+  `extension/dist` without adding dependencies.
+- Added the MV3 manifest, service worker, offscreen-document lifecycle bootstrap, Meet-only
+  side-panel registration, Meet content-script injection, onboarding microphone-permission page,
+  settings route, and side-panel shell.
+- Manifest uses the approved M1 permissions: `identity`, `notifications`, `offscreen`,
+  `sidePanel`, `storage`, `tabCapture`, and `unlimitedStorage`; it has only the
+  `https://meet.google.com/*` host permission. The backend API host is intentionally deferred
+  until S1-10 establishes the staging domain.
+- Added a Meet URL unit test. `pnpm check`, extension build, and manifest validation passed.
+- The onboarding microphone action now shows an in-page request state and the browser error name if
+  Chrome does not show or grants no permission prompt; rebuild completed with extension tests and
+  typecheck passing.
+- Fixed extension-page script loading: onboarding and side-panel scripts emit ES module syntax, so
+  their HTML now loads them with `type="module"`. Before this fix, the onboarding click handler did
+  not attach. Full `pnpm check` and a rebuilt package passed.
+- Fixed nested extension-page asset paths (`index.html` files now reference sibling `index.js` and
+  `styles.css` files). The prior duplicated folder paths prevented page scripts from loading.
+  Rebuilt output paths were explicitly validated and the full workspace check passed.
+- Fixed Meet-only side-panel state: the service worker now configures every existing tab on startup
+  and updates the active tab's panel state on tab switches. A non-Meet tab is explicitly disabled
+  instead of retaining the manifest default panel. It also initializes this state whenever the
+  worker starts, so reloads do not depend on lifecycle event timing. Full `pnpm check` and generated
+  worker validation passed; manual re-test after extension reload remains.
+
+**Verified acceptance**
+- Chrome manual verification passed: the unpacked extension loads; the visible onboarding page
+  requests and receives microphone permission; the side panel opens on a Google Meet tab and
+  renders the S1-01 shell; switching to a non-Meet tab hides it and it cannot be reopened there.
 
 ### 2026-11-01 — Anirudh (Claude Code): Stage 0 complete
 **Decisions (Anirudh):** use Google's speech library for transcription and drop Sarvam; record the

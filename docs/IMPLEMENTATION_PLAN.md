@@ -177,7 +177,7 @@ answer ARCHITECTURE §26.2.
 ### Tasks
 | ID | Task and approach | Owner | Depends on | Done when |
 |---|---|---|---|---|
-| S1-01 | **Extension skeleton:** MV3 manifest with PRD §18 permissions, build tooling, service worker entry, offscreen document creation, tab-specific side panel registration, content script injection on `meet.google.com` | Gaurav | S0-15 | Unpacked extension loads; side panel opens on the Meet tab only |
+| S1-01 | ✅ **Extension skeleton:** MV3 manifest with PRD §18 permissions, build tooling, service worker entry, offscreen document creation, tab-specific side panel registration, content script injection on `meet.google.com` (2026-11-02) | Gaurav | S0-15 | Unpacked extension loads; side panel opens on the Meet tab only |
 | S1-02 | **Two-lane capture:** stream ID in the service worker → offscreen `getUserMedia` (tab + mic with echo cancellation) → playback routing to speakers | Anirudh | S1-01 | Both lanes captured; user still hears Meet |
 | S1-03 | **Audio worklets:** downmix, resample to 16 kHz PCM16, 100 ms framing, per-lane level output; optional Opus encoder | Anirudh | S1-02 | Frames verified in tests; CPU measured |
 | S1-04 | **Local buffer and stream client:** IndexedDB write-first, sequence numbers per lane, ack-based pruning, reconnect with `hello.resumeFrom` replay | Anirudh | S1-03, S0-16 | Network-drop test loses no frames |

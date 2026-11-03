@@ -1,0 +1,32 @@
+:root {
+  color: #242422;
+  background: #fafaf7;
+  font-family: system-ui, sans-serif;
+}
+
+body {
+  margin: 0;
+}
+
+main {
+  max-width: 34rem;
+  padding: 2rem;
+}
+
+.eyebrow {
+  color: #6a6a63;
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+}
+
+h1 {
+  font-size: 1.75rem;
+  line-height: 1.15;
+}
+
+.status {
+  color: #6a6a63;
+  font-size: 0.875rem;
+  margin-top: 2rem;
+}
