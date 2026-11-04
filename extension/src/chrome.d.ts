@@ -34,7 +34,12 @@ declare namespace chrome {
       addListener(callback: (activeInfo: ActiveInfo) => void): void;
     };
     function get(tabId: number): Promise<Tab>;
-    function query(queryInfo: { url?: string[] }): Promise<readonly Tab[]>;
+    function query(queryInfo: {
+      active?: boolean;
+      currentWindow?: boolean;
+      url?: string[];
+    }): Promise<readonly Tab[]>;
+    function sendMessage(tabId: number, message: unknown): Promise<unknown>;
     function create(createProperties: { url: string }): Promise<Tab>;
   }
   namespace sidePanel {

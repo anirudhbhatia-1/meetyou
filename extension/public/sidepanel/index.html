@@ -8,9 +8,38 @@
   </head>
   <body>
     <main>
-      <p class="eyebrow">MEETYOU</p>
-      <h1>Ready when your meeting is.</h1>
-      <p>Join a Google Meet to start recording. MeetYou never adds a bot to the call.</p>
+      <div class="header-row">
+        <p class="eyebrow">MEETYOU</p>
+        <span id="state-badge" class="badge badge-waiting">WAITING</span>
+      </div>
+      <h1 id="call-state-title">Ready when your meeting is.</h1>
+      <p id="call-state-desc">
+        Join a Google Meet to start recording. MeetYou never adds a bot to the call.
+      </p>
+
+      <section class="card">
+        <div class="field">
+          <span class="label">Meeting Title</span>
+          <span id="meeting-title-val" class="value">—</span>
+        </div>
+        <div class="field">
+          <span class="label">Meeting Code</span>
+          <span id="meeting-code-val" class="value">—</span>
+        </div>
+        <div class="field">
+          <span class="label">Participants</span>
+          <span id="participants-val" class="value">None detected</span>
+        </div>
+        <div class="field">
+          <span class="label">Selector Health</span>
+          <span id="selector-health-val" class="value health-healthy">—</span>
+        </div>
+        <div class="field">
+          <span class="label">Matched Selector</span>
+          <span id="matched-selector-val" class="value-code">—</span>
+        </div>
+      </section>
+
       <p class="status" id="connection-status">Extension shell is ready.</p>
     </main>
     <script type="module" src="index.js"></script>

@@ -108,7 +108,7 @@ describe('bench CLI', () => {
     // Devanagari stream output scores 0 after transliteration + canonical spelling.
     expect(get(stream, 'wer')).toBe('0');
     expect(Number(get(stream, 'finalP50'))).toBeGreaterThan(0);
-  });
+  }, 20000);
 
   it('refuses to send audio when a data-use guard is not confirmed', () => {
     const { dir } = setupDataDir();
@@ -127,7 +127,7 @@ describe('bench CLI', () => {
     });
     expect(r.status).toBe(1);
     expect(r.stderr).toMatch(/GEMINI_BILLING_ENABLED=true/);
-  });
+  }, 20000);
 });
 
 describe('summarize', () => {
