@@ -11,7 +11,9 @@
  */
 
 import {
+  CALL_ENDED_BUTTON_TEXT,
   CALL_ENDED_SELECTORS,
+  findButtonByText,
   IN_CALL_SELECTORS,
   LOBBY_SELECTORS,
   queryWithFallbacks,
@@ -101,6 +103,17 @@ export function detectCallState(
       state: 'ended',
       meetingCode,
       matchedSelector: returnHomeMatch.matchedSelector,
+      timestamp,
+    };
+  }
+
+  // Same screen recognised by button text when its buttons have no aria-label.
+  const endedButton = findButtonByText(container, CALL_ENDED_BUTTON_TEXT);
+  if (endedButton !== null && meetingCode !== null) {
+    return {
+      state: 'ended',
+      meetingCode,
+      matchedSelector: `text:${endedButton.textContent?.trim().toLowerCase() ?? ''}`,
       timestamp,
     };
   }

@@ -3,6 +3,7 @@ import {
   parseMeetCallState,
   parseMeetStateReply,
   senderTabId,
+  type MeetCallState,
   parseCaptureStartResult,
   parseCaptureStatusReply,
   type OffscreenMessage,
@@ -13,6 +14,7 @@ import {
   canStop,
   CAPTURE_STATE_KEY,
   CAPTURING,
+  hasLeftCall,
   nextCaptureState,
   parseCaptureState,
   type CaptureEvent,
@@ -23,8 +25,13 @@ import { isMeetUrl, meetingCodeOf } from './meet-tab.ts';
 const OFFSCREEN_DOCUMENT_PATH = 'offscreen/index.html';
 /** Developer toggle until the settings page exists (S4); ADR-0011 default is on. */
 const RECORD_VIDEO_KEY = 'dev.recordVideo';
-/** An `ended` call state must still hold this long later before recording stops. */
-const ENDED_CONFIRM_MS = 3000;
+/**
+ * After the tab leaves the call, its state is re-read after these delays and must still be out of
+ * the call every time before recording stops: a confirmed `ended` stops sooner, an unclear state
+ * (usually `lobby` on the left-meeting screen) needs longer so a re-render cannot end a meeting.
+ */
+const ENDED_CONFIRM_MS = [3000];
+const LEFT_CONFIRM_MS = [5000, 10_000];
 let creatingOffscreenDocument: Promise<void> | undefined;
 
 /** Chrome extension errors carry no meeting content, so the message is safe to log. */
@@ -218,6 +225,8 @@ async function startRecording(tabId: number | undefined): Promise<void> {
     link: result.link,
     video: result.video,
   });
+  // Usually recording starts inside the call; the adapter only reports state changes, so ask.
+  if ((await readCallState(tabId)) === 'in_call') await applyCaptureEvent({ type: 'call_joined' });
 }
 
 async function stopRecording(): Promise<void> {
@@ -295,25 +304,50 @@ async function stopIfCapturing(tabId: number): Promise<void> {
   }
 }
 
-/**
- * Stopping loses the rest of a meeting if the adapter is wrong, so `ended` is re-read from the
- * tab after a short wait and must still hold (DOM selectors can flicker while Meet re-renders).
- */
-async function stopIfCallEnded(tabId: number): Promise<void> {
-  const state = await loadCaptureState();
-  if (state.tabId !== tabId || !canStop(state)) return;
-  await new Promise((resolve) => setTimeout(resolve, ENDED_CONFIRM_MS));
-  let reply: unknown;
+async function readCallState(tabId: number): Promise<MeetCallState | null> {
   try {
-    reply = await chrome.tabs.sendMessage(tabId, { type: 'meet.get-state' });
+    return parseMeetStateReply(await chrome.tabs.sendMessage(tabId, { type: 'meet.get-state' }));
   } catch (error: unknown) {
     // No content script answered; the tab URL and tab-close checks still apply.
     logError('meet.get-state failed', error);
+    return null;
+  }
+}
+
+/** Marks the recording as in the call when the recorded tab reports `in_call`. */
+async function noteCallJoined(tabId: number): Promise<void> {
+  const state = await loadCaptureState();
+  if (state.tabId !== tabId || state.callJoined || !CAPTURING.has(state.status)) return;
+  await applyCaptureEvent({ type: 'call_joined' });
+  console.info('call: joined (recorded tab in call)');
+}
+
+/**
+ * Stopping loses the rest of a meeting if the adapter is wrong, so the left-call state is re-read
+ * from the tab and must still hold at every check (selectors can flicker while Meet re-renders).
+ */
+async function stopIfCallLeft(tabId: number, reported: MeetCallState): Promise<void> {
+  const state = await loadCaptureState();
+  if (state.tabId !== tabId || !canStop(state)) return;
+  // States and decisions only, no meeting content (AGENTS §7); read in the worker's console.
+  if (!hasLeftCall(state, reported)) {
+    console.info(`call: ${reported} ignored (not joined since recording started)`);
     return;
   }
-  if (parseMeetStateReply(reply) === 'ended') {
-    enqueueCapture(() => stopIfCapturing(tabId));
+  const delays = reported === 'ended' ? ENDED_CONFIRM_MS : LEFT_CONFIRM_MS;
+  console.info(`call: ${reported}; confirming at ${delays.join('/')} ms before stopping`);
+  let waited = 0;
+  for (const at of delays) {
+    await new Promise((resolve) => setTimeout(resolve, at - waited));
+    waited = at;
+    const now = await readCallState(tabId);
+    if (now === null || now === 'in_call') {
+      console.info(`call: still ${now ?? 'unknown'} at ${at} ms; keep recording`);
+      return;
+    }
   }
+  console.info('call: left; stopping recording');
+  enqueueCapture(() => stopIfCapturing(tabId));
 }
 
 /**
@@ -415,9 +449,12 @@ chrome.runtime.onMessage.addListener((message, sender) => {
   const callState = parseMeetCallState(message);
   const fromTab = senderTabId(sender);
   if (callState !== null && fromTab !== null) {
-    // Leaving for Meet home or another site is caught by the URL check in tabs.onUpdated.
-    if (callState === 'ended') {
-      stopIfCallEnded(fromTab).catch((error: unknown) => logError('ended check failed', error));
+    if (callState === 'in_call') {
+      enqueueCapture(() => noteCallJoined(fromTab));
+    } else {
+      stopIfCallLeft(fromTab, callState).catch((error: unknown) =>
+        logError('left-call check failed', error),
+      );
     }
     return false;
   }

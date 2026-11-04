@@ -106,6 +106,22 @@ export const CALL_ENDED_SELECTORS = {
 } as const satisfies Record<string, SelectorDescriptor>;
 
 /**
+ * Visible text of the post-call buttons. On the "You left the meeting" screen these buttons may
+ * carry no aria-label, so the selectors above miss them (seen 2026-11-04). English UI only;
+ * other languages are S1-12.
+ */
+export const CALL_ENDED_BUTTON_TEXT = ['rejoin', 'return to home screen'] as const;
+
+/** First button-like element whose whole visible text equals one of `texts` (case-insensitive). */
+export function findButtonByText(container: ParentNode, texts: readonly string[]): Element | null {
+  for (const element of container.querySelectorAll('button, [role="button"]')) {
+    const text = element.textContent?.replace(/\s+/g, ' ').trim().toLowerCase();
+    if (text !== undefined && texts.includes(text)) return element;
+  }
+  return null;
+}
+
+/**
  * Meeting Metadata Indicators (Title & Code)
  */
 export const METADATA_SELECTORS = {

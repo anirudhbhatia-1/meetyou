@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import {
   badgeFor,
+  hasLeftCall,
   canStart,
   IDLE_CAPTURE,
   nextCaptureState,
@@ -169,5 +170,31 @@ describe('badgeFor', () => {
     expect(badgeFor(recording()).text).toBe('REC');
     expect(badgeFor(nextCaptureState(recording(), { type: 'paused' })).text).toBe('❚❚');
     expect(badgeFor(IDLE_CAPTURE).text).toBe('');
+  });
+});
+
+describe('hasLeftCall', () => {
+  it('stops only after the call was joined and the tab reports anything else', () => {
+    const rec = recording();
+    expect(hasLeftCall(rec, 'lobby')).toBe(false); // started before joining
+    const joined = nextCaptureState(rec, { type: 'call_joined' });
+    expect(joined.callJoined).toBe(true);
+    expect(hasLeftCall(joined, 'in_call')).toBe(false);
+    for (const s of ['lobby', 'ended', 'home', 'not_meet'] as const) {
+      expect(hasLeftCall(joined, s)).toBe(true);
+    }
+  });
+
+  it('forgets the joined call when a new recording starts', () => {
+    const joined = nextCaptureState(recording(), { type: 'call_joined' });
+    const failed = nextCaptureState(joined, { type: 'failed', error: 'capture_lost' });
+    const again = nextCaptureState(failed, {
+      type: 'start_requested',
+      tabId: 1,
+      meetingCode: 'abc-defg-hij',
+      at: 0,
+    });
+    expect(again.callJoined).toBe(false);
+    expect(nextCaptureState(IDLE_CAPTURE, { type: 'call_joined' })).toBe(IDLE_CAPTURE);
   });
 });

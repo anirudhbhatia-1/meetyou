@@ -4,6 +4,7 @@ import {
   isLaneFlags,
   type CaptureFailure,
   type LaneFlags,
+  type MeetCallState,
   type StreamLink,
   type VideoStatus,
 } from '../messages.ts';
@@ -45,6 +46,8 @@ export interface CaptureState {
   tabId: number | null;
   /** Meeting code of the recorded tab at start; a different or missing code means the call ended. */
   meetingCode: string | null;
+  /** The Meet adapter has reported the recorded tab in the call since this recording started. */
+  callJoined: boolean;
   sessionId: string | null;
   /** Wall-clock start (epoch ms) for the UI timer; the session clock itself lives offscreen. */
   startedAt: number | null;
@@ -70,6 +73,7 @@ export type CaptureEvent =
   | { type: 'link_changed'; link: StreamLink }
   | { type: 'video_changed'; video: VideoStatus }
   | { type: 'mic_lost' }
+  | { type: 'call_joined' }
   | { type: 'stop_requested' }
   | { type: 'stopped' }
   | { type: 'processed' }
@@ -82,6 +86,7 @@ export const IDLE_CAPTURE: CaptureState = {
   status: 'idle',
   tabId: null,
   meetingCode: null,
+  callJoined: false,
   sessionId: null,
   startedAt: null,
   lanes: null,
@@ -164,6 +169,9 @@ export function nextCaptureState(state: CaptureState, event: CaptureEvent): Capt
     case 'video_changed':
       if (!CAPTURING.has(state.status)) return state;
       return { ...state, video: event.video };
+    case 'call_joined':
+      if (!CAPTURING.has(state.status) || state.callJoined) return state;
+      return { ...state, callJoined: true };
     case 'mic_lost':
       if (!CAPTURING.has(state.status) || state.lanes === null) return state;
       return { ...state, lanes: { ...state.lanes, me: false }, micError: 'TrackEnded' };
@@ -224,6 +232,7 @@ export function parseCaptureState(raw: unknown): CaptureState {
     status: r.status as CaptureStatus,
     tabId: typeof r.tabId === 'number' ? r.tabId : null,
     meetingCode: typeof r.meetingCode === 'string' ? r.meetingCode : null,
+    callJoined: r.callJoined === true,
     sessionId: typeof r.sessionId === 'string' ? r.sessionId : null,
     startedAt: typeof r.startedAt === 'number' ? r.startedAt : null,
     lanes: isLaneFlags(r.lanes) ? { me: r.lanes.me, them: r.lanes.them } : null,
@@ -253,4 +262,13 @@ export function badgeFor(state: CaptureState): Badge {
     default:
       return { text: '', color: lightColors.muted };
   }
+}
+
+/**
+ * The recorded call is over when the tab, after being in the call, reports any other state.
+ * Meet's "You left the meeting" screen is often not recognised as `ended` (its buttons may carry
+ * no aria-label) and falls back to `lobby`, so `ended` alone is not enough (seen 2026-11-04).
+ */
+export function hasLeftCall(state: CaptureState, callState: MeetCallState): boolean {
+  return state.callJoined && callState !== 'in_call';
 }

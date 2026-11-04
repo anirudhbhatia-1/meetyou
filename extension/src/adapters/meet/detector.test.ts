@@ -34,12 +34,16 @@ describe('extractMeetingCode', () => {
 });
 
 describe('detectCallState', () => {
-  function createMockContainer(selectorsPresent: string[] = []): ParentNode {
+  function createMockContainer(
+    selectorsPresent: string[] = [],
+    buttonTexts: string[] = [],
+  ): ParentNode {
     return {
       querySelector: (selector: string) => {
         const found = selectorsPresent.some((s) => selector.includes(s) || s.includes(selector));
         return found ? ({} as Element) : null;
       },
+      querySelectorAll: () => buttonTexts.map((textContent) => ({ textContent }) as Element),
     } as unknown as ParentNode;
   }
 
@@ -106,6 +110,18 @@ describe('detectCallState', () => {
     expect(result.state).toBe('lobby');
   });
 
+  it('detects ended from the post-call button text when the buttons have no aria-label', () => {
+    const container = createMockContainer([], ['  Rejoin ', 'Return to home screen']);
+    const result = detectCallState(container, 'https://meet.google.com/hpi-yboa-kbn');
+    expect(result.state).toBe('ended');
+    expect(result.matchedSelector).toBe('text:rejoin');
+  });
+
+  it('does not take a Join button text for the post-call screen', () => {
+    const container = createMockContainer([], ['Join now']);
+    expect(detectCallState(container, 'https://meet.google.com/abc-defg-hij').state).toBe('lobby');
+  });
+
   it('stays in_call when an ended-screen fallback also matches on the call page', () => {
     const container = createMockContainer(['button[aria-label*="Leave call" i]', 'a[href="/"]']);
     const result = detectCallState(container, 'https://meet.google.com/abc-defg-hij');
@@ -117,6 +133,7 @@ describe('observeCallState', () => {
   it('triggers immediate initial evaluation', () => {
     const container = {
       querySelector: () => null,
+      querySelectorAll: () => [],
     } as unknown as Node & ParentNode;
 
     const onChange = vi.fn();

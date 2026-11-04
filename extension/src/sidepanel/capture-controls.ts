@@ -4,9 +4,16 @@ import {
   type CaptureError,
   type CaptureState,
 } from '../background/capture-state.ts';
-import { parseSidePanelMessage, type BackgroundMessage, type Lane } from '../messages.ts';
+import {
+  parseMeetCallState,
+  parseSidePanelMessage,
+  senderTabId,
+  type BackgroundMessage,
+  type Lane,
+} from '../messages.ts';
 import { idbDone, idbRequest, openMinutesDb, VIDEO_STORE } from '../offscreen/idb.ts';
 import type { VideoFragmentRow } from '../offscreen/video-recorder.ts';
+import { parseParticipants, speakerLabel, type ParticipantName } from './speaker-label.ts';
 import { latestSessionParts } from './video-parts.ts';
 
 /**
@@ -183,8 +190,30 @@ function formatMs(ms: number): string {
   return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
 }
 
-function showTranscript(final: boolean, lane: Lane, text: string, startMs: number): void {
-  const line = `${formatMs(startMs)} ${lane === 'me' ? 'Me' : 'Them'}: ${text}`;
+let participants: ParticipantName[] = [];
+/** This panel's Meet tab; names come only from its content script. */
+let panelTabId: number | null = null;
+const PARTICIPANTS_REFRESH_MS = 15_000;
+
+/** The adapter re-reads names only on call-state changes, so the panel also asks periodically. */
+async function refreshParticipants(): Promise<void> {
+  if (panelTabId === null) {
+    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+    panelTabId = tab?.id ?? null;
+  }
+  if (panelTabId === null) return;
+  const reply = await chrome.tabs.sendMessage(panelTabId, { type: 'meet.get-state' });
+  participants = parseParticipants(reply) ?? participants;
+}
+
+function showTranscript(
+  final: boolean,
+  lane: Lane,
+  text: string,
+  startMs: number,
+  speaker: string | null,
+): void {
+  const line = `${formatMs(startMs)} ${speakerLabel(lane, speaker, participants)}: ${text}`;
   if (!final) {
     interim[lane].textContent = line;
     return;
@@ -273,16 +302,29 @@ chrome.storage.onChanged.addListener((changes, areaName) => {
   }
 });
 
-chrome.runtime.onMessage.addListener((message) => {
+chrome.runtime.onMessage.addListener((message, sender) => {
+  if (parseMeetCallState(message) !== null) {
+    const fromTab = senderTabId(sender);
+    const names = parseParticipants(message);
+    if (names !== null && fromTab !== null && fromTab === panelTabId) participants = names;
+    return false;
+  }
   const parsed = parseSidePanelMessage(message);
   if (parsed?.type === 'capture.levels') {
     me.meter.value = parsed.me ?? METER_MIN_DBFS;
     them.meter.value = parsed.them;
   } else if (parsed?.type === 'transcript') {
-    showTranscript(parsed.final, parsed.lane, parsed.text, parsed.startMs);
+    showTranscript(parsed.final, parsed.lane, parsed.text, parsed.startMs, parsed.speaker);
   }
   return false;
 });
+
+const refresh = (): void => {
+  // No reply means the Meet adapter is not loaded in this tab yet; labels fall back to Me/Them.
+  refreshParticipants().catch(() => undefined);
+};
+refresh();
+setInterval(refresh, PARTICIPANTS_REFRESH_MS);
 
 render(current);
 Promise.all([

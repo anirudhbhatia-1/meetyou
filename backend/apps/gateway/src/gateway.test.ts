@@ -12,7 +12,8 @@ import { LaneChunker } from './lane-chunker.ts';
 import { createGateway, SUBPROTOCOL, tokenFromProtocols, type Gateway } from './server.ts';
 import { checkLane } from './session-check.ts';
 import { EchoDetector, echoTokens, wordSimilarity } from './echo.ts';
-import { parseDeepgramMessage } from './stt/deepgram.ts';
+import { deepgramStreamUrl, parseDeepgramMessage } from './stt/deepgram.ts';
+import { clusterId, splitBySpeaker } from './speakers.ts';
 import type { SttInput, SttProvider, SttResult } from './stt/types.ts';
 import { StreamTimeline } from './timeline.ts';
 import { DevTokenIssuer } from './tokens.ts';
@@ -406,5 +407,56 @@ describe('EchoDetector', () => {
   it('scores word overlap', () => {
     expect(wordSimilarity(echoTokens('a b c d'), echoTokens('a b c d'))).toBe(1);
     expect(wordSimilarity(echoTokens('a b'), echoTokens('c d'))).toBe(0);
+  });
+});
+
+describe('splitBySpeaker', () => {
+  const w = (text: string, startMs: number, speaker?: number) => ({
+    text,
+    startMs,
+    endMs: startMs + 200,
+    ...(speaker !== undefined ? { speaker } : {}),
+  });
+
+  it('splits a final into one run per consecutive speaker', () => {
+    const runs = splitBySpeaker({
+      final: true,
+      text: 'haan theek hai kal milte',
+      startMs: 0,
+      endMs: 1000,
+      words: [
+        w('haan', 0, 0),
+        w('theek', 200, 0),
+        w('hai', 400, 0),
+        w('kal', 600, 1),
+        w('milte', 800, 1),
+      ],
+    });
+    expect(runs.map((r) => [r.speaker, r.text, r.startMs, r.endMs])).toEqual([
+      [0, 'haan theek hai', 0, 600],
+      [1, 'kal milte', 600, 1000],
+    ]);
+    expect(runs.map((r) => clusterId(r.speaker))).toEqual(['spk_1', 'spk_2']);
+  });
+
+  it('keeps the provider text when there is one speaker or no labels', () => {
+    const one = splitBySpeaker({
+      final: true,
+      text: 'Haan, theek hai.',
+      startMs: 0,
+      endMs: 400,
+      words: [w('Haan,', 0, 2), w('theek', 200, 2)],
+    });
+    expect(one).toHaveLength(1);
+    expect(one[0]?.text).toBe('Haan, theek hai.');
+    expect(clusterId(one[0]?.speaker)).toBe('spk_3');
+    expect(
+      clusterId(splitBySpeaker({ final: true, text: 'ok', startMs: 0, endMs: 1 })[0]?.speaker),
+    ).toBeUndefined();
+  });
+
+  it('asks Deepgram for streaming diarization only when requested', () => {
+    expect(deepgramStreamUrl('pcm16', true)).toContain('diarize_model=latest');
+    expect(deepgramStreamUrl('pcm16')).not.toContain('diarize');
   });
 });

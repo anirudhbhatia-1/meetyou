@@ -21,6 +21,7 @@ import { EchoDetector } from './echo.ts';
 import { LaneChunker, type PendingChunk } from './lane-chunker.ts';
 import { errorCode, log } from './log.ts';
 import { oggOpusFile, OggOpusWriter } from './ogg.ts';
+import { clusterId, splitBySpeaker, type SpeakerRun } from './speakers.ts';
 import type { SttProvider, SttResult, SttStream } from './stt/types.ts';
 import { StreamTimeline } from './timeline.ts';
 import { UsageMeter } from './usage.ts';
@@ -371,13 +372,17 @@ export class StreamSession {
 
     const timeline = stt.timeline;
     stt.opening = provider
-      .open(packets === null ? 'pcm16' : 'ogg_opus', {
-        onResult: (result) => this.#onSttResult(lane, timeline, result),
-        onClosed: (reason) => {
-          log('stt.closed', { sessionId: this.sessionId, lane, reason });
-          if (stt.timeline === timeline) stt.stream = null;
+      .open(
+        packets === null ? 'pcm16' : 'ogg_opus',
+        {
+          onResult: (result) => this.#onSttResult(lane, timeline, result),
+          onClosed: (reason) => {
+            log('stt.closed', { sessionId: this.sessionId, lane, reason });
+            if (stt.timeline === timeline) stt.stream = null;
+          },
         },
-      })
+        { diarize: lane === 'them' },
+      )
       .then((stream) => {
         stt.stream = stream;
         for (const queued of stt.queued) {
@@ -400,32 +405,48 @@ export class StreamSession {
   }
 
   #onSttResult(lane: Lane, timeline: StreamTimeline, result: SttResult): void {
-    const startMs = timeline.toSessionMs(result.startMs);
-    const endMs = Math.max(startMs, timeline.toSessionMs(result.endMs));
     if (!result.final) {
       const socket = this.#socket;
       if (socket !== null) {
+        const startMs = timeline.toSessionMs(result.startMs);
         this.#send(socket, { type: 'transcript.interim', lane, text: result.text, startMs });
       }
       return;
     }
-    const echo = this.#echo.check(lane, startMs, endMs, result.text);
+    // One segment per diarized speaker run (FR-SPK-02); `me` is never diarized.
+    for (const run of splitBySpeaker(result)) {
+      this.#finalSegment(lane, timeline, run, result.language);
+    }
+  }
+
+  #finalSegment(
+    lane: Lane,
+    timeline: StreamTimeline,
+    run: SpeakerRun,
+    language: string | undefined,
+  ): void {
+    const startMs = timeline.toSessionMs(run.startMs);
+    const endMs = Math.max(startMs, timeline.toSessionMs(run.endMs));
+    const echo = this.#echo.check(lane, startMs, endMs, run.text);
     this.#meter.segment(lane, echo);
     const socket = this.#socket;
     if (socket === null) return;
+    const speakerClusterId = lane === 'them' ? clusterId(run.speaker) : undefined;
     const segment = Segment.safeParse({
       id: `seg_${newUlid()}`,
       workspaceId: this.workspaceId,
       meetingId: this.sessionId,
       lane,
+      // TODO(S3-04): cluster IDs restart with each provider stream; batch resolution unifies them.
+      ...(speakerClusterId !== undefined ? { speakerClusterId } : {}),
       startMs,
       endMs,
       // TODO(S3): transliterate to Roman display text (D-01, ARCHITECTURE §8.1 step 2).
-      text: result.text,
-      rawText: result.text,
-      language: languageTag(result.language),
+      text: run.text,
+      rawText: run.text,
+      language: languageTag(language),
       source: 'live',
-      words: result.words?.map((w) => ({
+      words: run.words.map((w) => ({
         text: w.text,
         startMs: timeline.toSessionMs(w.startMs),
         endMs: timeline.toSessionMs(w.endMs),

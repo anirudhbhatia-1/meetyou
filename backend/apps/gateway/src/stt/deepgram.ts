@@ -18,7 +18,7 @@ const CLOSE_IDLE_MS = 10_000;
  * listen-streaming, multilingual code-switching). `mip_opt_out=true` is always sent
  * (STT_PREFLIGHT §3.5). KeepAlive every 3 s of silence keeps the ~10 s idle timeout away.
  */
-export function deepgramStreamUrl(input: SttInput): string {
+export function deepgramStreamUrl(input: SttInput, diarize = false): string {
   const p = new URLSearchParams({
     model: 'nova-3',
     language: 'multi',
@@ -37,6 +37,9 @@ export function deepgramStreamUrl(input: SttInput): string {
   }
   p.append('language_hint', 'hi');
   p.append('language_hint', 'en');
+  // FR-SPK-02: streaming diarization (`diarize` is deprecated; v2 is batch only). Speaker indices
+  // are per stream. [Verify] whether diarization changes the per-minute price.
+  if (diarize) p.set('diarize_model', 'latest');
   return `wss://api.deepgram.com/v1/listen?${p}`;
 }
 
@@ -47,6 +50,7 @@ const DgWord = z.object({
   end: z.number(),
   confidence: z.number().optional(),
   language: z.string().optional(),
+  speaker: z.number().int().nonnegative().optional(),
 });
 
 const DgResults = z.object({
@@ -99,6 +103,7 @@ export function parseDeepgramMessage(raw: string): SttResult | null {
       startMs: Math.round(w.start * 1000),
       endMs: Math.round(w.end * 1000),
       ...(w.confidence !== undefined ? { confidence: w.confidence } : {}),
+      ...(w.speaker !== undefined ? { speaker: w.speaker } : {}),
     })),
   };
 }
@@ -107,8 +112,12 @@ export function deepgramProvider(apiKey: string): SttProvider {
   return {
     name: 'deepgram',
     usdPerMinute: DEEPGRAM_USD_PER_MINUTE,
-    async open(input: SttInput, handlers: SttStreamHandlers): Promise<SttStream> {
-      const ws = new WebSocket(deepgramStreamUrl(input), {
+    async open(
+      input: SttInput,
+      handlers: SttStreamHandlers,
+      options: { diarize?: boolean } = {},
+    ): Promise<SttStream> {
+      const ws = new WebSocket(deepgramStreamUrl(input, options.diarize === true), {
         headers: { Authorization: `Token ${apiKey}` },
       });
       await new Promise<void>((resolve, reject) => {

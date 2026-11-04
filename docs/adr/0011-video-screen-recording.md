@@ -181,7 +181,7 @@ ws/{workspaceId}/meetings/{meetingId}/video/poster.jpg
 
 | # | Check |
 |---|---|
-| 1 | `MediaRecorder` in the offscreen document records tab video + mixed audio for 60 min; which MIME types are supported |
+| 1 | `MediaRecorder` in the offscreen document records tab video + mixed audio for 60 min; which MIME types are supported — **partial 2026-11-04** (Anirudh's Chrome, M4 Mac): Chrome chose `video/mp4` (H.264 + Opus); a 33 s part plays at 1280×720, ~15 fps. The 60-minute run is pending |
 | 2 | The captured Meet tab keeps rendering at 15 fps when the user switches to another tab or window |
 | 3 | CPU, memory and battery with video on vs off (target: < 15% extra CPU on the reference laptop) |
 | 4 | Audio loss stays 0 on a 2 Mbps link with video on; data saver kicks in |

@@ -64,9 +64,12 @@ describe('message parsers', () => {
       lane: 'them',
       text: 'haan theek hai',
       startMs: 1200,
+      speaker: 'spk_2',
     };
     expect(parseSidePanelMessage(line)).toEqual(line);
     expect(parseSidePanelMessage({ ...line, lane: 'both' })).toBeNull();
+    expect(parseSidePanelMessage({ ...line, speaker: null })).toEqual({ ...line, speaker: null });
+    expect(parseSidePanelMessage({ ...line, speaker: 3 })).toBeNull();
   });
 
   it('parses capture start and status replies', () => {

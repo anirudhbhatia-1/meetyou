@@ -192,6 +192,37 @@ Stage 0 is complete (status table: IMPLEMENTATION_PLAN.md → "Stage 0 status").
 
 Newest first. One entry per working session (either person).
 
+### 2026-11-04 (later) — Anirudh (Claude Code): speaker names in the live transcript
+**Request (Anirudh):** show who spoke instead of "Me"/"Them".
+- Gateway: Deepgram streaming diarization on the `them` lane only (`diarize_model=latest`;
+  `diarize` is deprecated; smoke test with `language=multi` accepted). Finals are split into one
+  segment per speaker run with `speakerClusterId` `spk_N` (FR-SPK-02). Indices restart per
+  provider stream — S3-04 unifies them. [Verify] whether diarization changes Deepgram's price.
+- Side panel (developer control): `me` → the Meet "(You)" participant from the S1-07 adapter
+  (S2 replaces it with the signed-in user, FR-SPK-01); `them` → the only other participant on a
+  1:1 call (FR-SPK-03 1:1 case), else "Speaker N". Names refresh every 15 s via `meet.get-state`
+  because the adapter re-reads them only on call-state changes.
+- Still needed for real names on group calls: Gaurav's S1-08 `speaker.active` events, then
+  Anirudh's S3-04 cluster-to-name alignment; rename in S4 (FR-SPK-05).
+- Noticed in the screenshot: Hindi shows in Devanagari; D-01 Roman display comes with the
+  transliteration step (S3, `TODO` in the gateway).
+- **Bug (Anirudh's test):** recording continued after leaving the call. Likely cause: Meet's
+  left-meeting screen is not matched as `ended` (the Rejoin / Return-to-home selectors use
+  aria-labels the buttons may not have), so the adapter falls back to `lobby`, and the service
+  worker stopped only on `ended`. Fix: once the recorded tab has been `in_call`
+  (`callJoined`, also read right after Start), any other state stops the recording after it holds
+  at re-checks (3 s for `ended`; 5 s and 10 s otherwise). Re-test the same day: the video part
+  ends ~4 s after the "You left the meeting" screen appears (consistent with the `ended` path);
+  but Anirudh pressed Stop there, so auto-stop was not shown. The recording had started in the
+  lobby, so the `lobby` path needed ~10 s and was cut short. Added: the detector also recognises the
+  post-call screen by button text ("Rejoin", "Return to home screen"; English only) as `ended`
+  (stop after ~3 s), and the service worker logs each left-call check (`call: …` in its console).
+  Worst case Meet's own 60 s "Returning to home screen" changes the URL, which also stops it. The same run shows S1-07 health "Broken (3 missed)": the Leave
+  button selector did not match (in-call came from the control bar) and no participants were
+  found, so names fall back to Me/Them. Video: Chrome picked MP4 (H.264 + Opus), 720p ~15 fps.
+  **Gaurav (S1-12):** check what the adapter reports on the left-meeting screen
+  (`[MeetYou] Call state:` in the Meet tab console) and match those buttons by text too.
+
 ### 2026-11-04 — Anirudh (Claude Code): Opus, cost tracking, S1-11 local measurements
 **Decisions (Anirudh):** Opus per ADR-0003 but **the gateway wraps it in Ogg instead of decoding**
 (ADR-0003 §3.1 amendment); ran the Deepgram backlog test on public MUCS audio (paid, ~2 min).

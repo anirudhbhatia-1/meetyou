@@ -4,6 +4,15 @@
  * them to the session clock.
  * TODO(S2-03): move to backend/packages/providers with the registry and the Google adapter.
  */
+export interface SttWord {
+  text: string;
+  startMs: number;
+  endMs: number;
+  confidence?: number;
+  /** Provider diarization index within this stream (0, 1, …), when diarization is on. */
+  speaker?: number;
+}
+
 export interface SttResult {
   final: boolean;
   text: string;
@@ -11,7 +20,7 @@ export interface SttResult {
   endMs: number;
   /** Provider-reported language, e.g. "hi" or "en"; undefined when not reported. */
   language?: string;
-  words?: { text: string; startMs: number; endMs: number; confidence?: number }[];
+  words?: SttWord[];
 }
 
 /**
@@ -37,5 +46,9 @@ export interface SttProvider {
   readonly name: string;
   /** Streaming list price for cost tracking (AGENTS §3 rule 10); null when unknown. */
   readonly usdPerMinute: number | null;
-  open(input: SttInput, handlers: SttStreamHandlers): Promise<SttStream>;
+  open(
+    input: SttInput,
+    handlers: SttStreamHandlers,
+    options?: { diarize?: boolean },
+  ): Promise<SttStream>;
 }

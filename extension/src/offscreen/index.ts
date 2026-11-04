@@ -44,6 +44,7 @@ function forwardTranscript(message: ServerMessage): void {
       lane: message.lane,
       text: message.text,
       startMs: message.startMs,
+      speaker: null,
     });
   } else if (message.type === 'transcript.segment') {
     notifySidePanel({
@@ -53,6 +54,7 @@ function forwardTranscript(message: ServerMessage): void {
       lane: message.segment.lane,
       text: message.segment.text,
       startMs: message.segment.startMs,
+      speaker: message.segment.speakerClusterId ?? null,
     });
   }
 }

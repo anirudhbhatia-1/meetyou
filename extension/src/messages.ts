@@ -39,6 +39,8 @@ export type SidePanelMessage =
       lane: Lane;
       text: string;
       startMs: number;
+      /** Diarized cluster of a `them` segment (e.g. "spk_2"), null when unknown. */
+      speaker: string | null;
     };
 
 /** Offscreen reply to `capture.start`. `micError` is the DOMException name when the mic failed. */
@@ -170,7 +172,8 @@ export function parseSidePanelMessage(message: unknown): SidePanelMessage | null
     typeof message.lane === 'string' &&
     LANES.has(message.lane) &&
     typeof message.text === 'string' &&
-    isLevel(message.startMs)
+    isLevel(message.startMs) &&
+    (message.speaker === null || typeof message.speaker === 'string')
   ) {
     return {
       target: 'sidepanel',
@@ -179,6 +182,7 @@ export function parseSidePanelMessage(message: unknown): SidePanelMessage | null
       lane: message.lane as Lane,
       text: message.text,
       startMs: message.startMs,
+      speaker: message.speaker,
     };
   }
   return null;
