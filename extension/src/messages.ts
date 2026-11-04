@@ -68,7 +68,13 @@ const CALL_STATES = new Set<string>(['not_meet', 'home', 'lobby', 'in_call', 'en
 
 export function parseMeetCallState(message: unknown): MeetCallState | null {
   if (!isRecord(message) || message.type !== 'meet.state-changed') return null;
-  const snapshot = message.snapshot;
+  return parseMeetStateReply(message);
+}
+
+/** State from the content script's reply to `meet.get-state` (`{ snapshot, … }`). */
+export function parseMeetStateReply(reply: unknown): MeetCallState | null {
+  if (!isRecord(reply)) return null;
+  const snapshot = reply.snapshot;
   if (!isRecord(snapshot) || typeof snapshot.state !== 'string') return null;
   return CALL_STATES.has(snapshot.state) ? (snapshot.state as MeetCallState) : null;
 }

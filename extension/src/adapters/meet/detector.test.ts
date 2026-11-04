@@ -96,6 +96,21 @@ describe('detectCallState', () => {
     const result = detectCallState(container, 'https://meet.google.com/abc-defg-hij');
     expect(result.state).toBe('ended');
   });
+
+  it('stays in lobby when the join button and a control-bar fallback both match', () => {
+    const container = createMockContainer([
+      'button[aria-label*="Join now" i]',
+      'div[data-is-muted]',
+    ]);
+    const result = detectCallState(container, 'https://meet.google.com/abc-defg-hij');
+    expect(result.state).toBe('lobby');
+  });
+
+  it('stays in_call when an ended-screen fallback also matches on the call page', () => {
+    const container = createMockContainer(['button[aria-label*="Leave call" i]', 'a[href="/"]']);
+    const result = detectCallState(container, 'https://meet.google.com/abc-defg-hij');
+    expect(result.state).toBe('in_call');
+  });
 });
 
 describe('observeCallState', () => {

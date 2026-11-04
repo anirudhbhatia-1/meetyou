@@ -16,8 +16,9 @@ const MAX_TITLE_LENGTH = 200;
 const MAX_NAME_LENGTH = 100;
 const DEFAULT_TITLE = 'Untitled Meeting';
 
-// Regex to detect email addresses (PRD §13: No emails scraped in Phase 1)
-const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+// Detects an email address anywhere in the text (PRD §13: no emails scraped in Phase 1). Not
+// anchored: labels such as "Asha (asha@example.com)" must be rejected too.
+const EMAIL_REGEX = /[^\s@()<>]+@[^\s@()<>]+\.[^\s@()<>]+/;
 
 // Regex to extract name from Meet's 3-dot tile menu ("More options for <Name>")
 const MORE_OPTIONS_REGEX = /(?:more_vert\s*)?More options for\s+([^,]+)/i;

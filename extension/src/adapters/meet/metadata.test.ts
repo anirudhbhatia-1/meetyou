@@ -116,6 +116,8 @@ describe('cleanParticipantName', () => {
   it('rejects email addresses per PRD §13', () => {
     expect(cleanParticipantName('user@example.com')).toBeNull();
     expect(cleanParticipantName('sankhlagaurav66@gmail.com')).toBeNull();
+    expect(cleanParticipantName('Asha Rao (asha.rao@example.com)')).toBeNull();
+    expect(cleanParticipantName('Asha Rao')).toEqual({ name: 'Asha Rao', isSelf: false });
   });
 
   it('rejects empty or single character strings', () => {

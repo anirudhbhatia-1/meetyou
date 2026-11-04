@@ -236,8 +236,27 @@ code can import `@meetyou/contracts` and zod); build the S1-05 gateway **locally
 - Recording kept going after leaving the call: Meet keeps the call URL on its "You left the
   meeting" screen, and nothing consumed the adapter's state yet. The service worker now stops on
   the S1-07 `meet.state-changed` message (`ended`, `home`, `not_meet`) from the recorded tab, and
-  on any change of meeting code in that tab's URL. **Leaving a call stops recording only once
-  S1-07 is merged.**
+  on any change of meeting code in that tab's URL.
+- 2026-11-04, after S1-07 merged (PR #2): reviewed it. Logs now carry counts only (good). Two
+  changes so a wrong `ended` cannot cut a meeting short: the detector checks in-call controls
+  before ended signals (the `a[href="/"]` fallback can match on the call page; test added), and
+  the service worker re-reads the tab state after 3 s and stops only if it is still `ended`.
+- Second review pass on S1-07, fixed on `anirudh` (tests added):
+  - Detector: the weak control-bar signal (`div[data-is-muted]` also exists on the pre-call mic
+    toggle) now comes after the lobby checks, so a join button always means lobby (FR-DET-01).
+    Order is now: Leave button → ended → lobby → control bar → lobby default → home.
+  - Email filter matched only a whole-string email; "Asha (asha@example.com)" passed. Now any
+    email inside a name or title is rejected (PRD §13).
+  - Content script: `sendMessage` rejections were unhandled (try/catch cannot catch a rejected
+    promise); now caught in one helper.
+- **Gaurav, needs a live Meet DOM check (not changed, S1-08/S1-12):**
+  - `div[data-participant-id] div[aria-label]` may read tile control labels (e.g. pin/remove)
+    as participant names; action-item assignees come from this list (AGENTS §3 rule 7).
+  - People-panel `textContent` fallback may append role text ("Meeting host") to names.
+  - Participants are re-read only when the call state changes; people joining mid-call are not
+    broadcast — S1-08 needs its own participant observer.
+  - `a[href="/"]` and `button[aria-label*="leave" i]` are very broad; all aria-label selectors
+    are English only (Hindi UI).
 - Pause did not delete earlier video: each pause closes a video part and resume starts a new one,
   both kept in `video_buffer`; the panel's old download offered only the newest part. The panel
   now lists every part of the last recording ("Show last video").

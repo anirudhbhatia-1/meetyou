@@ -14,11 +14,19 @@ import {
 } from '../adapters/meet/health.ts';
 import { extractMeetingMetadata, type MeetingMetadata } from '../adapters/meet/metadata.ts';
 
-try {
-  void chrome.runtime.sendMessage({ type: 'meet.page-ready' });
-} catch {
-  // Ignored if runtime has closed.
+/**
+ * Best effort: after an extension reload this page keeps the old content script, whose runtime
+ * is gone. `sendMessage` then throws or rejects; neither may surface as an unhandled error.
+ */
+function notifyExtension(message: unknown): void {
+  try {
+    chrome.runtime.sendMessage(message).catch(() => undefined);
+  } catch {
+    // Extension context invalidated.
+  }
 }
+
+notifyExtension({ type: 'meet.page-ready' });
 
 function broadcastState(
   snapshot: ReturnType<typeof detectCallState>,
@@ -36,16 +44,7 @@ function broadcastState(
     console.error('[MeetYou] Selector health is BROKEN:', healthReport);
   }
 
-  try {
-    void chrome.runtime.sendMessage({
-      type: 'meet.state-changed',
-      snapshot,
-      metadata,
-      healthReport,
-    });
-  } catch {
-    // Runtime may disconnect when extension updates.
-  }
+  notifyExtension({ type: 'meet.state-changed', snapshot, metadata, healthReport });
 }
 
 // 1. Initial detection on script load

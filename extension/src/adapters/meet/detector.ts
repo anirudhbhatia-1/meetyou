@@ -72,7 +72,19 @@ export function detectCallState(
     }
   }
 
-  // 1. Check if Call Ended (rejoin button, return to home button)
+  // 1. The Leave call button wins over ended signals: an ended state stops recording, and broad
+  // fallbacks such as `a[href="/"]` can match on the in-call page too.
+  const leaveMatch = queryWithFallbacks(container, IN_CALL_SELECTORS.leaveCallButton);
+  if (leaveMatch.element !== null) {
+    return {
+      state: 'in_call',
+      meetingCode,
+      matchedSelector: leaveMatch.matchedSelector,
+      timestamp,
+    };
+  }
+
+  // 2. Check if Call Ended (rejoin button, return to home button)
   const rejoinMatch = queryWithFallbacks(container, CALL_ENDED_SELECTORS.rejoinButton);
   if (rejoinMatch.element !== null) {
     return {
@@ -89,27 +101,6 @@ export function detectCallState(
       state: 'ended',
       meetingCode,
       matchedSelector: returnHomeMatch.matchedSelector,
-      timestamp,
-    };
-  }
-
-  // 2. Check if In-Call (leave call button, call controls)
-  const leaveMatch = queryWithFallbacks(container, IN_CALL_SELECTORS.leaveCallButton);
-  if (leaveMatch.element !== null) {
-    return {
-      state: 'in_call',
-      meetingCode,
-      matchedSelector: leaveMatch.matchedSelector,
-      timestamp,
-    };
-  }
-
-  const controlBarMatch = queryWithFallbacks(container, IN_CALL_SELECTORS.controlBar);
-  if (controlBarMatch.element !== null && meetingCode !== null) {
-    return {
-      state: 'in_call',
-      meetingCode,
-      matchedSelector: controlBarMatch.matchedSelector,
       timestamp,
     };
   }
@@ -131,6 +122,18 @@ export function detectCallState(
       state: 'lobby',
       meetingCode,
       matchedSelector: readyMatch.matchedSelector,
+      timestamp,
+    };
+  }
+
+  // The control bar is a weaker in-call signal: its `data-is-muted` fallback also exists on the
+  // pre-call mic toggle, so lobby elements are checked first (FR-DET-01: never in lobby).
+  const controlBarMatch = queryWithFallbacks(container, IN_CALL_SELECTORS.controlBar);
+  if (controlBarMatch.element !== null && meetingCode !== null) {
+    return {
+      state: 'in_call',
+      meetingCode,
+      matchedSelector: controlBarMatch.matchedSelector,
       timestamp,
     };
   }

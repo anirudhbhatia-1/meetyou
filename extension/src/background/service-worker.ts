@@ -1,6 +1,7 @@
 import {
   parseBackgroundMessage,
   parseMeetCallState,
+  parseMeetStateReply,
   senderTabId,
   parseCaptureStartResult,
   parseCaptureStatusReply,
@@ -22,6 +23,8 @@ import { isMeetUrl, meetingCodeOf } from './meet-tab.ts';
 const OFFSCREEN_DOCUMENT_PATH = 'offscreen/index.html';
 /** Developer toggle until the settings page exists (S4); ADR-0011 default is on. */
 const RECORD_VIDEO_KEY = 'dev.recordVideo';
+/** An `ended` call state must still hold this long later before recording stops. */
+const ENDED_CONFIRM_MS = 3000;
 let creatingOffscreenDocument: Promise<void> | undefined;
 
 /** Chrome extension errors carry no meeting content, so the message is safe to log. */
@@ -293,6 +296,27 @@ async function stopIfCapturing(tabId: number): Promise<void> {
 }
 
 /**
+ * Stopping loses the rest of a meeting if the adapter is wrong, so `ended` is re-read from the
+ * tab after a short wait and must still hold (DOM selectors can flicker while Meet re-renders).
+ */
+async function stopIfCallEnded(tabId: number): Promise<void> {
+  const state = await loadCaptureState();
+  if (state.tabId !== tabId || !canStop(state)) return;
+  await new Promise((resolve) => setTimeout(resolve, ENDED_CONFIRM_MS));
+  let reply: unknown;
+  try {
+    reply = await chrome.tabs.sendMessage(tabId, { type: 'meet.get-state' });
+  } catch (error: unknown) {
+    // No content script answered; the tab URL and tab-close checks still apply.
+    logError('meet.get-state failed', error);
+    return;
+  }
+  if (parseMeetStateReply(reply) === 'ended') {
+    enqueueCapture(() => stopIfCapturing(tabId));
+  }
+}
+
+/**
  * Meet keeps the call URL on its "You left the meeting" screen, so the URL alone cannot tell that a
  * call ended; the adapter's `ended` state does (S1-07). The URL still catches leaving to Meet home
  * or another meeting in the same tab.
@@ -391,9 +415,9 @@ chrome.runtime.onMessage.addListener((message, sender) => {
   const callState = parseMeetCallState(message);
   const fromTab = senderTabId(sender);
   if (callState !== null && fromTab !== null) {
-    // The call in the recorded tab ended (or the user left for Meet home): stop recording.
-    if (callState === 'ended' || callState === 'home' || callState === 'not_meet') {
-      enqueueCapture(() => stopIfCapturing(fromTab));
+    // Leaving for Meet home or another site is caught by the URL check in tabs.onUpdated.
+    if (callState === 'ended') {
+      stopIfCallEnded(fromTab).catch((error: unknown) => logError('ended check failed', error));
     }
     return false;
   }

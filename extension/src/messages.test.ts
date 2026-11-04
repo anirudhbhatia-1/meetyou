@@ -5,6 +5,7 @@ import {
   parseCaptureStartResult,
   parseCaptureStatusReply,
   parseMeetCallState,
+  parseMeetStateReply,
   parseOffscreenMessage,
   parseSidePanelMessage,
   senderTabId,
@@ -94,6 +95,8 @@ describe('message parsers', () => {
     expect(parseMeetCallState(msg)).toBe('ended');
     expect(parseMeetCallState({ ...msg, snapshot: { state: 'gone' } })).toBeNull();
     expect(parseMeetCallState({ type: 'meet.page-ready' })).toBeNull();
+    expect(parseMeetStateReply({ snapshot: { state: 'in_call' }, metadata: {} })).toBe('in_call');
+    expect(parseMeetStateReply(undefined)).toBeNull();
     expect(senderTabId({ tab: { id: 12 } })).toBe(12);
     expect(senderTabId({ id: 'extension' })).toBeNull();
   });
