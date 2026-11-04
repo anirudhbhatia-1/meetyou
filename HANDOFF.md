@@ -6,10 +6,10 @@ pointer to where the full detail lives — the linked document stays the source 
 
 | Field | Value |
 |---|---|
-| Last updated | 2026-11-03 (S1-03..S1-06 and S1-13 code in; local gateway with Deepgram; Chrome checks pending) |
-| Updated by | Anirudh (Claude Code) |
-| Repository | [anirudhbhatia-1/meetyou](https://github.com/anirudhbhatia-1/meetyou) — branches `main`, `anirudh` |
-| Current stage | **Stage 1** in progress — S1-01, S1-02 done; Anirudh's S1-03..S1-06 and S1-13 code in, Chrome checks pending; Gaurav: S1-07 (branch), S1-09, S1-10 (§7) |
+| Last updated | 2026-11-04 (S1-07 rebased on capture path & esbuild; ready to merge) |
+| Updated by | Gaurav (Google Antigravity) |
+| Repository | [anirudhbhatia-1/meetyou](https://github.com/anirudhbhatia-1/meetyou) — branches `main`, `anirudh`, `feature/S1-07-meet-adapter-v0` |
+| Current stage | **Stage 1** in progress — S1-01, S1-02, S1-07 done; Anirudh's S1-03..S1-06 and S1-13 code in; Gaurav: S1-08, S1-09, S1-10 (§7) |
 
 ---
 
@@ -247,6 +247,21 @@ code can import `@meetyou/contracts` and zod); build the S1-05 gateway **locally
 `web_accessible_resources` entry are no longer needed — the content script can import the
 adapter modules directly and esbuild bundles it as a classic script. Also: no participant names
 or titles in console logs (AGENTS §7).
+
+### 2026-11-04 — Gaurav (Google Antigravity): S1-07 rebase on capture path & esbuild
+**Done** (branch `feature/S1-07-meet-adapter-v0`)
+- Rebased S1-07 Meet adapter on `origin/main` (`36afaf3` capture path + esbuild bundling).
+- Migrated content script to direct modular imports (`src/content/meet-content-script.ts`) bundled
+  cleanly by esbuild into `dist/content/meet-content-script.js`. Removed obsolete custom bundle scripts
+  and dynamic import mechanisms.
+- Removed participant names and meeting titles from console logs per AGENTS §7 privacy rule (logging
+  counts and call states only).
+- Verified seamless interoperability with Anirudh's capture state machine: S1-07's `meet.state-changed`
+  message with `ended`, `home`, and `not_meet` states directly drives the service worker to automatically
+  stop active recordings.
+- Updated side panel UI (`sidepanel/index.ts` & `sidepanel/index.html`) to display live call state badge,
+  meeting code, meeting title, participants list, and selector health status alongside the developer capture controls.
+- All 95 extension unit tests passing; 205 total tests passing across monorepo; `pnpm check` and `build` green.
 
 ### 2026-11-03 — Anirudh (Claude Code): S1-01 review, S1-02 two-lane capture
 **Review of S1-01 (merged, PR #1)** — fixed on `anirudh`:
