@@ -33,6 +33,8 @@ export interface StreamClientOptions {
   streamUrl: string;
   /** Stream tokens are single use (ADR-0004 §4.4), so every connect asks for a fresh one. */
   getToken(): Promise<string>;
+  /** Payload format of the frames in `store`; sent in `hello` (ADR-0003). */
+  format?: AudioFormat;
   store: FrameStore;
   openSocket: OpenSocket;
   onLink(link: StreamLink): void;
@@ -48,6 +50,8 @@ export const PCM16_FORMAT: AudioFormat = {
   channels: 1,
   frameMs: 100,
 };
+
+export const OPUS_FORMAT: AudioFormat = { ...PCM16_FORMAT, codec: 'opus' };
 
 /** The gateway selects the subprotocol `minutes.v1`; the token rides alongside so it stays out of URLs and logs. */
 export const SUBPROTOCOL = 'minutes.v1';
@@ -188,7 +192,7 @@ export class StreamClient {
         protocolVersion: PROTOCOL_VERSION,
         sessionId: this.#o.sessionId,
         resumeFrom: { me: this.#acked.me, them: this.#acked.them },
-        format: PCM16_FORMAT,
+        format: this.#o.format ?? PCM16_FORMAT,
       });
     };
     socket.onmessage = (event) => this.#onMessage(event.data as unknown);

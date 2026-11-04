@@ -21,6 +21,18 @@
         "location": "us",
         "languageCodes": ["hi-IN", "en-IN"]
       }
+    },
+    {
+      "id": "google-chirp3-hi-stream-ogg",
+      "mode": "stream",
+      "lanes": ["them"],
+      "options": {
+        "provider": "google",
+        "model": "chirp_3",
+        "location": "us",
+        "languageCodes": ["hi-IN"],
+        "encoding": "ogg_opus"
+      }
     }
   ]
 }

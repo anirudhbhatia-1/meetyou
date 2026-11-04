@@ -217,7 +217,8 @@ Work like a careful senior engineer pairing with the developer.
   2026-11-01, video); transcripts, notes, and summaries stay until the user deletes them.
 
 - **2026-10-29 — ADRs accepted** (verification items run in Stage 1):
-  [ADR-0003](docs/adr/0003-audio-transport-format.md) Opus 24 kbps transport and storage (D-06);
+  [ADR-0003](docs/adr/0003-audio-transport-format.md) Opus 24 kbps transport and storage (D-06;
+  amended 2026-11-04: WebCodecs encoder in the extension, the gateway wraps Opus in Ogg, no decode);
   [ADR-0004](docs/adr/0004-auth-and-token-model.md) Google sign-in via `launchWebAuthFlow` + PKCE,
   own JWT access / rotating refresh / single-use stream tokens;
   [ADR-0005](docs/adr/0005-job-queue-and-outbox.md) graphile-worker with transactional job creation.

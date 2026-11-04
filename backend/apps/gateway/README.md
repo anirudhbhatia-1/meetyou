@@ -33,15 +33,26 @@ MINUTES_GATEWAY_URL=http://127.0.0.1:8787 pnpm --filter @meetyou/extension build
 | `STT_PROVIDER` | `none` | `deepgram` for live transcripts; `none` calls no vendor |
 | `DEEPGRAM_API_KEY` | — | Needed for `deepgram`; keep it in `.env.bench`, never in code |
 
+## Tools (S1-11 measurements)
+
+| Command (repo root) | What it does |
+|---|---|
+| `node backend/apps/gateway/src/check-session.ts [sessionId]` | Loss check of a recorded session from `.data` (latest if no ID): missing frames, duplicates, pause gaps, usage and cost. Exit code 1 on loss |
+| `node backend/apps/gateway/src/load-test.ts [sessions] [seconds] [opus\|pcm16]` | Starts a gateway with STT off on a temp dir and measures CPU/RSS under N synthetic sessions (§26.2 Q6) |
+| `node --env-file=.env.bench backend/apps/gateway/src/backlog-speed.ts <wav> [seconds] [speed] [pcm16\|ogg_opus]` | Streams a public 16 kHz WAV to Deepgram faster than real time (§26.2 Q5). Paid API; Ogg mode needs ffmpeg |
+
 ## What is here and what is not yet
 
 - `POST /v1/dev/sessions` and `POST /v1/dev/sessions/{id}/stream-token` stand in for the API
   (`POST /v1/sessions`, ADR-0004). Tokens are random, single use, 10 minutes, sent as the
   `token.<value>` subprotocol next to `minutes.v1`.
 - Storage follows ARCHITECTURE §11.4 on local disk:
-  `ws/{workspaceId}/meetings/{sessionId}/audio/{lane}/{chunkStartMs}.pcm16` plus a `.json`
-  manifest written last (commit marker), each fsynced.
-- Not yet: Cloud Storage (after S1-10), Redis session state, JWT stream tokens, Opus decode
-  (clients send PCM16), transliteration of segment text, storing segments and events, health
-  messages. Each is marked `TODO` in the code.
+  `ws/{workspaceId}/meetings/{sessionId}/audio/{lane}/{chunkStartMs}.opus` (or `.pcm16`) plus a
+  `.json` manifest written last (commit marker), each fsynced.
+- Opus is not decoded (ADR-0003 §3.1): packets are wrapped in Ogg for storage and for STT.
+- Cost per session (AGENTS §3 rule 10): `usage.json` next to the chunks — stored audio per lane,
+  STT minutes per lane, bytes, connections, estimated cost from the provider's list price.
+- Not yet: Cloud Storage (after S1-10), Redis session state, JWT stream tokens, transliteration
+  of segment text, storing segments and events, health messages, a usage table. Each is marked
+  `TODO` in the code.
 - Logs carry IDs, counts and codes only (AGENTS §7).

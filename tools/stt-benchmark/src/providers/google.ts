@@ -1,3 +1,5 @@
+import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process';
+
 import { v2 } from '@google-cloud/speech';
 import { z } from 'zod';
 import type { ProviderOptions } from '../schemas.ts';
@@ -22,7 +24,7 @@ export function googleStreamingConfig(o: GoogleOptions, project: string, vocabul
     streamingConfig: {
       config: {
         explicitDecodingConfig: {
-          encoding: 'LINEAR16' as const,
+          encoding: o.encoding === 'ogg_opus' ? ('OGG_OPUS' as const) : ('LINEAR16' as const),
           sampleRateHertz: 16000,
           audioChannelCount: 1,
         },
@@ -116,11 +118,34 @@ export const googleStream: StreamProvider<GoogleOptions> = {
     });
     stream.write(googleStreamingConfig(options, project, ctx.vocabulary));
     emit({ kind: 'session', event: 'open' });
+
+    // ADR-0003 §3.1 check 5: does Chirp 3 streaming accept Ogg Opus? ffmpeg encodes the PCM chunks
+    // the runner sends to 24 kbps voip Opus in 100 ms Ogg pages, like the gateway's own muxer.
+    let opus: ChildProcessWithoutNullStreams | null = null;
+    if (options.encoding === 'ogg_opus') {
+      opus = spawn('ffmpeg', [
+        ...['-loglevel', 'error', '-f', 's16le', '-ar', '16000', '-ac', '1', '-i', 'pipe:0'],
+        ...['-c:a', 'libopus', '-b:a', '24k', '-application', 'voip', '-frame_duration', '20'],
+        ...['-page_duration', '100000', '-flush_packets', '1', '-f', 'ogg', 'pipe:1'],
+      ]);
+      opus.stdout.on('data', (data: Buffer) => {
+        if (stream.writable) stream.write({ audio: data });
+      });
+    }
+    const encoder = opus;
+    const encoded =
+      encoder === null
+        ? Promise.resolve()
+        : new Promise<void>((resolve) => encoder.stdout.once('end', () => resolve()));
+
     return {
       send(chunk) {
-        if (stream.writable) stream.write({ audio: chunk });
+        if (encoder !== null) encoder.stdin.write(chunk);
+        else if (stream.writable) stream.write({ audio: chunk });
       },
       async end() {
+        encoder?.stdin.end();
+        await encoded;
         stream.end();
         await closed;
         await client.close();

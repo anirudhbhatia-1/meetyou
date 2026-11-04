@@ -166,3 +166,45 @@ export function decodeAudioFrame(bytes: Uint8Array): AudioFrame {
 
 /** 100 ms of 16 kHz mono PCM16. */
 export const PCM16_FRAME_BYTES = 3200;
+
+// ---------- Opus payload of an audio frame (ADR-0003) ----------
+// A frame carries consecutive 20 ms Opus packets (normally 5 = 100 ms; fewer at a pause or the
+// end), each prefixed by its length: (len u16 LE | packet) repeated. The gateway wraps them in an
+// Ogg Opus stream for storage and STT.
+
+export const OPUS_PACKET_MS = 20;
+const MAX_OPUS_PACKET_BYTES = 1275; // RFC 6716 §3.4: largest valid packet
+
+export function packOpusFrame(packets: readonly Uint8Array[]): Uint8Array {
+  const size = packets.reduce((n, p) => n + 2 + p.byteLength, 0);
+  const out = new Uint8Array(size);
+  const view = new DataView(out.buffer);
+  let offset = 0;
+  for (const packet of packets) {
+    if (packet.byteLength === 0 || packet.byteLength > MAX_OPUS_PACKET_BYTES) {
+      throw new RangeError(`Opus packet of ${packet.byteLength} bytes`);
+    }
+    view.setUint16(offset, packet.byteLength, true);
+    out.set(packet, offset + 2);
+    offset += 2 + packet.byteLength;
+  }
+  return out;
+}
+
+export function unpackOpusFrame(payload: Uint8Array): Uint8Array[] {
+  const view = new DataView(payload.buffer, payload.byteOffset, payload.byteLength);
+  const packets: Uint8Array[] = [];
+  let offset = 0;
+  while (offset < payload.byteLength) {
+    if (offset + 2 > payload.byteLength) throw new RangeError('Truncated Opus packet length');
+    const length = view.getUint16(offset, true);
+    const end = offset + 2 + length;
+    if (length === 0 || length > MAX_OPUS_PACKET_BYTES || end > payload.byteLength) {
+      throw new RangeError(`Invalid Opus packet length ${length}`);
+    }
+    packets.push(payload.subarray(offset + 2, end));
+    offset = end;
+  }
+  if (packets.length === 0) throw new RangeError('Empty Opus frame');
+  return packets;
+}

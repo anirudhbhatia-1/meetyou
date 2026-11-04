@@ -3,15 +3,17 @@ import type { AddressInfo } from 'node:net';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
-import { encodeAudioFrame, ServerMessage, type Lane } from '@meetyou/contracts';
+import { encodeAudioFrame, packOpusFrame, ServerMessage, type Lane } from '@meetyou/contracts';
 import { afterEach, describe, expect, it } from 'vitest';
 import WebSocket from 'ws';
 
 import { LocalChunkStore, MemoryChunkStore, type ChunkStore } from './chunk-store.ts';
 import { LaneChunker } from './lane-chunker.ts';
 import { createGateway, SUBPROTOCOL, tokenFromProtocols, type Gateway } from './server.ts';
+import { checkLane } from './session-check.ts';
+import { EchoDetector, echoTokens, wordSimilarity } from './echo.ts';
 import { parseDeepgramMessage } from './stt/deepgram.ts';
-import type { SttProvider, SttResult } from './stt/types.ts';
+import type { SttInput, SttProvider, SttResult } from './stt/types.ts';
 import { StreamTimeline } from './timeline.ts';
 import { DevTokenIssuer } from './tokens.ts';
 
@@ -24,26 +26,27 @@ function frame(lane: Lane, seq: number) {
 describe('LaneChunker', () => {
   it('chunks in order, ignores duplicates and reports gaps', () => {
     const c = new LaneChunker(-1, 3);
-    expect(c.accept(frame('me', 0))).toBe('accepted');
-    expect(c.accept(frame('me', 0))).toBe('duplicate');
-    expect(c.accept(frame('me', 2))).toBe('gap');
-    c.accept(frame('me', 1));
+    expect(c.accept(frame('me', 0), 100)).toBe('accepted');
+    expect(c.accept(frame('me', 0), 100)).toBe('duplicate');
+    expect(c.accept(frame('me', 2), 100)).toBe('gap');
+    c.accept(frame('me', 1), 100);
     expect(c.take()).toBeNull();
-    c.accept(frame('me', 2));
+    c.accept(frame('me', 2), 100);
     const chunk = c.take();
     expect(chunk?.frames.map((f) => f.seq)).toEqual([0, 1, 2]);
-    expect(chunk?.audio.byteLength).toBe(3 * 3200);
+    expect(chunk?.payloads.map((p) => p.byteLength)).toEqual([3200, 3200, 3200]);
+    expect(chunk?.frames[0]?.durationMs).toBe(100);
   });
 
   it('drops pending frames on disconnect and resumes after the durable seq', () => {
     const c = new LaneChunker(-1, 3);
-    for (const seq of [0, 1, 2, 3]) c.accept(frame('me', seq));
+    for (const seq of [0, 1, 2, 3]) c.accept(frame('me', seq), 100);
     c.take();
     c.committed(2);
     c.dropPending();
     expect(c.durableUpTo).toBe(2);
     expect(c.take(true)).toBeNull();
-    expect(c.accept(frame('me', 3))).toBe('accepted');
+    expect(c.accept(frame('me', 3), 100)).toBe('accepted');
   });
 });
 
@@ -115,8 +118,8 @@ describe('LocalChunkStore', () => {
         meetingId: 'ses_1',
         lane: 'them',
         frames: [
-          { seq: 0, captureMs: 0 },
-          { seq: 1, captureMs: 100 },
+          { seq: 0, captureMs: 0, durationMs: 100 },
+          { seq: 1, captureMs: 100, durationMs: 100 },
         ],
         audio: new Uint8Array(6400),
         codec: 'pcm16',
@@ -134,10 +137,15 @@ describe('LocalChunkStore', () => {
 
 class FakeStt implements SttProvider {
   readonly name = 'fake';
+  readonly usdPerMinute = 0.01;
   frames = 0;
-  open(handlers: { onResult(result: SttResult): void }) {
+  inputs: SttInput[] = [];
+  firstBytes: Uint8Array[] = [];
+  open(input: SttInput, handlers: { onResult(result: SttResult): void }) {
+    this.inputs.push(input);
     return Promise.resolve({
-      send: () => {
+      send: (bytes: Uint8Array) => {
+        if (this.firstBytes.length < 2) this.firstBytes.push(bytes);
         this.frames += 1;
         if (this.frames === 10) {
           handlers.onResult({ final: true, text: 'haan theek hai', startMs: 200, endMs: 900 });
@@ -185,14 +193,18 @@ class Client {
     this.closed = new Promise((resolve) => this.socket.once('close', (code) => resolve(code)));
   }
 
-  hello(sessionId: string, resumeFrom = { me: -1, them: -1 }): void {
+  hello(
+    sessionId: string,
+    resumeFrom = { me: -1, them: -1 },
+    codec: 'pcm16' | 'opus' = 'pcm16',
+  ): void {
     this.socket.send(
       JSON.stringify({
         type: 'hello',
         protocolVersion: 1,
         sessionId,
         resumeFrom,
-        format: { codec: 'pcm16', sampleRate: 16000, channels: 1, frameMs: 100 },
+        format: { codec, sampleRate: 16000, channels: 1, frameMs: 100 },
       }),
     );
   }
@@ -260,6 +272,65 @@ describe('gateway end to end', () => {
     const seqs = store.chunks.flatMap((c) => c.frames.map((f) => f.seq));
     expect(seqs).toEqual(Array.from({ length: 160 }, (_, i) => i));
     expect(stt.frames).toBe(160);
+    expect(stt.inputs).toEqual(['pcm16']);
+
+    const usage = store.usage.get(sessionId ?? '');
+    expect(usage).toMatchObject({
+      codec: 'pcm16',
+      connections: 2,
+      audioMs: { me: 0, them: 16_000 },
+      stt: { provider: 'fake', audioMs: { me: 0, them: 16_000 }, streamsOpened: 1 },
+      estimatedCostUsd: 0.0027,
+    });
+  });
+
+  it('stores Opus as Ogg files and streams Ogg (headers first) to STT without decoding', async () => {
+    const store = new MemoryChunkStore();
+    const stt = new FakeStt();
+    const base = await start(store, stt);
+    const { sessionId, streamUrl } = await post(`${base}/v1/dev/sessions`);
+    const { streamToken } = await post(`${base}/v1/dev/sessions/${sessionId}/stream-token`);
+    const client = new Client(streamUrl ?? '', streamToken ?? '');
+    await client.opened;
+    client.hello(sessionId ?? '', { me: -1, them: -1 }, 'opus');
+    await client.until((m) => m.some((x) => x.type === 'ready'));
+    const ready = client.messages.find((m) => m.type === 'ready');
+    expect(ready?.type === 'ready' && ready.acceptedFormat.codec).toBe('opus');
+
+    const packet = new Uint8Array(60).fill(9);
+    for (let seq = 0; seq < 3; seq++) {
+      const payload = packOpusFrame([packet, packet, packet, packet, packet]);
+      client.socket.send(encodeAudioFrame({ lane: 'me', seq, captureMs: seq * 100, payload }));
+    }
+    client.socket.send(JSON.stringify({ type: 'control', action: 'end', at: 300 }));
+    await client.until((m) => lastAck(m, 'me') === 2);
+
+    const [chunk] = store.chunks;
+    expect(chunk?.codec).toBe('opus');
+    expect(Buffer.from(chunk?.audio.subarray(0, 4) ?? []).toString()).toBe('OggS');
+    expect(chunk?.frames.map((f) => f.durationMs)).toEqual([100, 100, 100]);
+    expect(stt.inputs).toEqual(['ogg_opus']);
+    expect(Buffer.from(stt.firstBytes[0]?.subarray(28, 36) ?? []).toString()).toBe('OpusHead');
+    expect(store.usage.get(sessionId ?? '')?.audioMs.me).toBe(300);
+  });
+
+  it('rejects a codec change within a session', async () => {
+    const base = await start(new MemoryChunkStore(), null);
+    const { sessionId, streamUrl } = await post(`${base}/v1/dev/sessions`);
+    const token = async () =>
+      (await post(`${base}/v1/dev/sessions/${sessionId}/stream-token`)).streamToken ?? '';
+    const first = new Client(streamUrl ?? '', await token());
+    await first.opened;
+    first.hello(sessionId ?? '');
+    await first.until((m) => m.some((x) => x.type === 'ready'));
+    first.socket.terminate();
+    const second = new Client(streamUrl ?? '', await token());
+    await second.opened;
+    second.hello(sessionId ?? '', { me: -1, them: -1 }, 'opus');
+    await second.until((m) => m.some((x) => x.type === 'error'));
+    expect(second.messages.find((m) => m.type === 'error')).toMatchObject({
+      code: 'format_changed',
+    });
   });
 
   it('asks the client to reconnect on a sequence gap', async () => {
@@ -276,5 +347,64 @@ describe('gateway end to end', () => {
       code: 'sequence_gap',
       retryable: true,
     });
+  });
+});
+
+describe('checkLane', () => {
+  it('reports missing frames as loss and captureMs jumps as gaps', () => {
+    const frames = [0, 1, 2, 4, 5].map((seq) => ({
+      seq,
+      captureMs: seq < 4 ? seq * 100 : seq * 100 + 5000,
+      durationMs: 100,
+    }));
+    const r = checkLane(frames);
+    expect(r.missingSeqs).toEqual([3]);
+    expect(r.gaps).toEqual([{ atMs: 300, lengthMs: 5100 }]);
+    expect(r.audioMs).toBe(500);
+  });
+
+  it('passes a contiguous lane', () => {
+    const frames = Array.from({ length: 10 }, (_, seq) => ({
+      seq,
+      captureMs: seq * 100,
+      durationMs: 100,
+    }));
+    const r = checkLane(frames);
+    expect([r.missingSeqs, r.duplicateSeqs, r.gaps]).toEqual([[], [], []]);
+    expect(r.spanMs).toBe(1000);
+  });
+});
+
+describe('EchoDetector', () => {
+  it('flags a me segment that repeats a recent them segment', () => {
+    const d = new EchoDetector();
+    expect(d.check('them', 1000, 3000, 'Kal ki meeting cancel hai.')).toEqual({
+      flag: false,
+      late: false,
+    });
+    expect(d.check('me', 1200, 3100, 'kal ki meeting cancel hai')).toEqual({
+      flag: true,
+      late: false,
+    });
+  });
+
+  it('counts a late echo when the them copy arrives second', () => {
+    const d = new EchoDetector();
+    d.check('me', 1000, 2000, 'हाँ ठीक है भेज दो');
+    expect(d.check('them', 1100, 2100, 'हाँ ठीक है भेज दो')).toEqual({ flag: false, late: true });
+  });
+
+  it('ignores different words, far-apart times and one-word replies', () => {
+    const d = new EchoDetector();
+    d.check('them', 1000, 2000, 'please send the report today');
+    expect(d.check('me', 1500, 2500, 'I will check with finance').flag).toBe(false);
+    expect(d.check('me', 30_000, 31_000, 'please send the report today').flag).toBe(false);
+    d.check('them', 40_000, 40_500, 'okay');
+    expect(d.check('me', 40_100, 40_600, 'okay').flag).toBe(false);
+  });
+
+  it('scores word overlap', () => {
+    expect(wordSimilarity(echoTokens('a b c d'), echoTokens('a b c d'))).toBe(1);
+    expect(wordSimilarity(echoTokens('a b'), echoTokens('c d'))).toBe(0);
   });
 });

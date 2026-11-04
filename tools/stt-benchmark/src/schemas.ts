@@ -57,6 +57,8 @@ const GoogleOptions = z.object({
   location: z.string().default('us'),
   languageCodes: z.array(z.string()).default(['hi-IN']),
   keyterms: z.boolean().default(false),
+  /** `ogg_opus` streams Ogg Opus like the gateway does (ADR-0003 §3.1); needs ffmpeg. */
+  encoding: z.enum(['linear16', 'ogg_opus']).default('linear16'),
 });
 
 export const ProviderOptions = z.discriminatedUnion('provider', [

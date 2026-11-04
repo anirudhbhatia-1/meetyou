@@ -1,11 +1,12 @@
-import { newUlid, type ServerMessage } from '@meetyou/contracts';
+import { newUlid, packOpusFrame, type AudioFormat, type ServerMessage } from '@meetyou/contracts';
 
 import type { Lane, LaneFlags, StreamLink, VideoStatus } from '../messages.ts';
 import { startCapture, type CaptureSession } from './capture.ts';
 import { createDevSession, devStreamToken } from './dev-gateway.ts';
 import { IdbFrameStore } from './frame-store.ts';
 import { openMinutesDb } from './idb.ts';
-import { StreamClient } from './stream-client.ts';
+import { createLaneEncoder, type LaneEncoder } from './opus-encoder.ts';
+import { OPUS_FORMAT, PCM16_FORMAT, StreamClient } from './stream-client.ts';
 import { pickVideoMimeType, startVideoPart, type VideoPart } from './video-recorder.ts';
 
 export interface RecorderEvents {
@@ -39,6 +40,7 @@ export async function startRecorder(options: {
   recordVideo: boolean;
   gatewayUrl: string;
   workletUrl: string;
+  preferredCodec: AudioFormat['codec'];
   events: RecorderEvents;
 }): Promise<Recorder> {
   const { events } = options;
@@ -64,6 +66,40 @@ export async function startRecorder(options: {
   let client: StreamClient | null = null;
   let link: StreamLink = 'off';
 
+  /** Write first (FR-CAP-07), then tell the stream client; per-lane order is kept by chaining. */
+  const enqueueFrame = (lane: Lane, payload: Uint8Array, captureMs: number): void => {
+    if (store === null) return;
+    const seq = nextSeq[lane]++;
+    writes[lane] = writes[lane].then(async () => {
+      try {
+        await store.put({ lane, seq, captureMs, payload });
+        client?.frameWritten(lane, seq);
+      } catch (error: unknown) {
+        events.onError('audio buffer write failed', error);
+      }
+    });
+  };
+
+  // Opus when streaming and this Chrome can encode it (ADR-0003); PCM16 otherwise.
+  const encoders: Partial<Record<Lane, LaneEncoder>> = {};
+  if (store !== null && options.preferredCodec === 'opus') {
+    for (const lane of ['me', 'them'] as const) {
+      const encoder = await createLaneEncoder({
+        onFrame: (group) => enqueueFrame(lane, packOpusFrame(group.packets), group.captureMs),
+        onError: events.onError,
+      });
+      if (encoder !== null) encoders[lane] = encoder;
+    }
+    if (encoders.me === undefined || encoders.them === undefined) {
+      encoders.me?.close();
+      encoders.them?.close();
+      delete encoders.me;
+      delete encoders.them;
+    }
+  }
+  const format: AudioFormat = encoders.me !== undefined ? OPUS_FORMAT : PCM16_FORMAT;
+  console.info('offscreen: audio codec', format.codec);
+
   const capture: CaptureSession = await startCapture({
     streamId: options.streamId,
     video: options.recordVideo,
@@ -71,16 +107,12 @@ export async function startRecorder(options: {
     callbacks: {
       onFrame(lane, pcm, captureMs) {
         if (paused || store === null) return;
-        const seq = nextSeq[lane]++;
-        const payload = new Uint8Array(pcm.buffer, pcm.byteOffset, pcm.byteLength);
-        writes[lane] = writes[lane].then(async () => {
-          try {
-            await store.put({ lane, seq, captureMs, payload });
-            client?.frameWritten(lane, seq);
-          } catch (error: unknown) {
-            events.onError('audio buffer write failed', error);
-          }
-        });
+        const encoder = encoders[lane];
+        if (encoder !== undefined) {
+          encoder.encode(pcm, captureMs);
+        } else {
+          enqueueFrame(lane, new Uint8Array(pcm.buffer, pcm.byteOffset, pcm.byteLength), captureMs);
+        }
       },
       onTabEnded: events.onTabEnded,
       onMicLost: events.onMicLost,
@@ -94,6 +126,7 @@ export async function startRecorder(options: {
       sessionId,
       streamUrl,
       getToken: () => devStreamToken(baseUrl, sessionId),
+      format,
       store,
       openSocket: (url, protocols) => new WebSocket(url, protocols),
       onLink(next) {
@@ -166,6 +199,14 @@ export async function startRecorder(options: {
       paused = true;
       await capture.stop();
       await stopPart();
+      for (const encoder of Object.values(encoders)) {
+        try {
+          await encoder.flush();
+        } catch (error: unknown) {
+          events.onError('opus flush failed', error);
+        }
+        encoder.close();
+      }
       await Promise.all([writes.me, writes.them]);
       if (client !== null) {
         const { unacked } = await client.stop(at);

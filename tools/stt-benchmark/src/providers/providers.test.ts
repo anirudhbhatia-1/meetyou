@@ -195,6 +195,9 @@ describe('google', () => {
     expect(c.streamingConfig.streamingFeatures.interimResults).toBe(true);
     const plain = googleStreamingConfig({ ...go, keyterms: false }, 'p', ['Ravi']);
     expect('adaptation' in plain.streamingConfig.config).toBe(false);
+    expect(c.streamingConfig.config.explicitDecodingConfig.encoding).toBe('LINEAR16');
+    const ogg = googleStreamingConfig({ ...go, encoding: 'ogg_opus' }, 'p', []);
+    expect(ogg.streamingConfig.config.explicitDecodingConfig.encoding).toBe('OGG_OPUS');
   });
 
   it('parses interim and final results with end offsets', () => {

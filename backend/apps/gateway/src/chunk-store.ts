@@ -4,9 +4,12 @@ import { dirname, join } from 'node:path';
 import type { Lane } from '@meetyou/contracts';
 import { z } from 'zod';
 
+import type { SessionUsage } from './usage.ts';
+
 export interface ChunkFrame {
   seq: number;
   captureMs: number;
+  durationMs: number;
 }
 
 export interface AudioChunk {
@@ -27,13 +30,21 @@ export interface ChunkStore {
   put(chunk: AudioChunk): Promise<void>;
   /** Highest durable seq per lane for a meeting; -1 when nothing is stored. */
   durableUpTo(workspaceId: string, meetingId: string): Promise<Record<Lane, number>>;
+  /** Usage counts for cost tracking (AGENTS §3 rule 10); overwrites the previous snapshot. */
+  putUsage(usage: SessionUsage): Promise<void>;
 }
 
 const Manifest = z.object({
   codec: z.enum(['pcm16', 'opus']),
   firstSeq: z.number().int().nonnegative(),
   lastSeq: z.number().int().nonnegative(),
-  frames: z.array(z.object({ seq: z.number().int(), captureMs: z.number().int() })),
+  frames: z.array(
+    z.object({
+      seq: z.number().int(),
+      captureMs: z.number().int(),
+      durationMs: z.number().int().optional(),
+    }),
+  ),
 });
 
 const ID = /^[A-Za-z0-9_-]{1,80}$/;
@@ -51,9 +62,19 @@ export class LocalChunkStore implements ChunkStore {
     this.#root = root;
   }
 
-  #laneDir(workspaceId: string, meetingId: string, lane: Lane): string {
+  #meetingDir(workspaceId: string, meetingId: string): string {
     if (!ID.test(workspaceId) || !ID.test(meetingId)) throw new Error('invalid storage id');
-    return join(this.#root, 'ws', workspaceId, 'meetings', meetingId, 'audio', lane);
+    return join(this.#root, 'ws', workspaceId, 'meetings', meetingId);
+  }
+
+  #laneDir(workspaceId: string, meetingId: string, lane: Lane): string {
+    return join(this.#meetingDir(workspaceId, meetingId), 'audio', lane);
+  }
+
+  async putUsage(usage: SessionUsage): Promise<void> {
+    const path = join(this.#meetingDir(usage.workspaceId, usage.sessionId), 'usage.json');
+    await mkdir(dirname(path), { recursive: true });
+    await writeDurably(path, new TextEncoder().encode(JSON.stringify(usage, null, 2)));
   }
 
   async put(chunk: AudioChunk): Promise<void> {
@@ -110,6 +131,12 @@ async function writeDurably(path: string, bytes: Uint8Array): Promise<void> {
 /** In-memory store for tests. */
 export class MemoryChunkStore implements ChunkStore {
   readonly chunks: AudioChunk[] = [];
+  readonly usage = new Map<string, SessionUsage>();
+
+  putUsage(usage: SessionUsage): Promise<void> {
+    this.usage.set(usage.sessionId, usage);
+    return Promise.resolve();
+  }
 
   put(chunk: AudioChunk): Promise<void> {
     this.chunks.push(chunk);

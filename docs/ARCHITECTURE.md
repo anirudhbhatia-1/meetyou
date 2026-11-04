@@ -319,8 +319,11 @@ every future adapter (desktop, upload, bot) emits the same events.
 | PCM16, 16 kHz | ~512 kbps | Simplest; every STT provider accepts it; heavy on weak connections |
 | Opus 24–32 kbps | ~48–64 kbps | Needs decoding (or provider support); benchmark Phase D checks accuracy impact |
 
-**Decided ([ADR-0003](adr/0003-audio-transport-format.md)):** Opus 24 kbps over the wire, decoded to PCM
-in the gateway; PCM as fallback. Phase D showed ≤ 0.5-point accuracy difference. Stored audio is Opus.
+**Decided ([ADR-0003](adr/0003-audio-transport-format.md)):** Opus 24 kbps over the wire (WebCodecs in
+the offscreen document); the gateway wraps the packets in Ogg Opus for storage and STT without
+decoding (amended 2026-11-04); PCM as fallback. Phase D showed ≤ 0.5-point accuracy difference.
+Stored audio is Opus. An Opus frame payload is consecutive 20 ms packets, each prefixed by its
+length (u16 LE).
 
 ---
 
@@ -1027,3 +1030,22 @@ contracts. Changing them requires an ADR and a migration plan.
    toolbar icon? (`sidePanel.open()` requires a user gesture — DESIGN §2, §19 item 10.)
 8. Does `backdrop-filter` glass on the Meet overlay cost noticeable CPU/GPU during a call? If yes,
    use the solid fallback inside Meet (DESIGN §5.6).
+
+**Findings so far (S1, 2026-11-03/04; update as checks complete)**
+- Q1 (partial): a side-panel button counts only after a real toolbar click on the tab. With
+  `openPanelOnActionClick` the browser opens the panel and capture is refused; opening it from
+  `action.onClicked` with `sidePanel.open()` grants capture (verified in Chrome). The keyboard
+  shortcut also invokes. In-page chip: S1-09.
+- Q2 (tooling ready): the gateway flags `me` segments that repeat a `them` segment within 3 s as
+  `echo` (§8.1 step 7) and counts them per session; `check-session` prints the share. Run one
+  call on laptop speakers to answer it.
+- Q5 (Deepgram, preliminary): 60 s of public MUCS audio sent at 10× real time (PCM16 and the
+  gateway's Ogg Opus) — results came back at only ~1.2× real time (≈13 s of audio transcribed
+  11 s after the start). A long backlog does not catch up quickly; the provider adapter now waits
+  while results keep arriving on close (it cut off after 5 s before). Follow-up: one run that waits
+  to the end, and Google in S1-14. Design consequence: for a backlog longer than a few minutes, mark
+  the gap for the batch pass (§6.3) rather than replaying it live.
+- Q6 (local, indicative): gateway with STT off, 20 sessions × 30 s, both lanes, Apple M4: Opus
+  0.14% of one core per session, 127 MB RSS in total against ~110 MB with 2 sessions (about
+  1 MB per extra session); PCM16 0.22% (162 MB). Provider
+  WebSockets and Cloud Run sizing still to measure on staging.

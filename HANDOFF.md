@@ -192,6 +192,42 @@ Stage 0 is complete (status table: IMPLEMENTATION_PLAN.md → "Stage 0 status").
 
 Newest first. One entry per working session (either person).
 
+### 2026-11-04 — Anirudh (Claude Code): Opus, cost tracking, S1-11 local measurements
+**Decisions (Anirudh):** Opus per ADR-0003 but **the gateway wraps it in Ogg instead of decoding**
+(ADR-0003 §3.1 amendment); ran the Deepgram backlog test on public MUCS audio (paid, ~2 min).
+
+**Done**
+- Extension: WebCodecs Opus encoder per lane (24 kbps, 20 ms, voip), grouped into 100 ms frames
+  (`packOpusFrame`), PCM16 fallback; `MINUTES_AUDIO_CODEC=pcm16` build flag for comparisons.
+- Gateway: Ogg Opus muxer (OpusHead page byte-identical to ffmpeg; ffmpeg decodes our files),
+  `.opus` chunks, Ogg stream to Deepgram (no `encoding`/`sample_rate`), codec fixed per session.
+- Cost per meeting (AGENTS §3 rule 10): `usage.json` per session — stored audio, STT minutes,
+  bytes, estimated cost (Deepgram list price $0.0092/min, [Verify]). Fixed while testing: replayed
+  frames were counted twice.
+- Tools: `check-session.ts` (loss check for the M1 60-minute run), `load-test.ts` (§26.2 Q6),
+  `backlog-speed.ts` (Q5). Findings in ARCHITECTURE §26.2.
+- Deepgram close waited only 5 s, which dropped results for a backlog; it now waits while results
+  keep coming (10 s idle).
+- Measured: Deepgram accepts our Ogg Opus; at 10× send speed it returned results at only ~1.2×
+  real time (Q5, preliminary). Gateway, STT off, 20 sessions: Opus 0.14% CPU/session (Q6, local).
+
+- **Verified in Chrome (Anirudh):** Opus end to end — session `ses_01M6JKPB…`, 48.5 s, 485
+  frames per lane, `check-session`: no missing or duplicate frames, codec opus, 0.1 MB stored,
+  1.61 STT minutes, est. $0.0148. An earlier PCM16 run (70 s, 702 frames per lane) also had no loss.
+  Live `me`-lane transcript lines showed in the side panel; S1-07's panel showed IN CALL / Healthy.
+
+- Later the same day: echo flagging (§8.1 step 7) with counts in `usage.json` and
+  `check-session` (answers Q2 from one speaker call); benchmark `encoding: ogg_opus` for Google and
+  a third run in `runs.google.json` (ADR-0003 check 5 runs with S1-14).
+- **Decision (Anirudh):** S1-05 staging waits for S2 sign-in — dev endpoints have no auth and would
+  be open on the internet. The Cloud Storage library is added when the GCP project exists. So the
+  Cloud Run 2-hour test also moves after S2; local runs cover S1.
+
+**Not done / next**
+- Chrome: CPU with Opus vs PCM16 in Task Manager, plus the pending Chrome checks from 2026-11-03.
+- Q5 follow-up run that waits to the end; Google Chirp 3 + `OGG_OPUS` streaming in S1-14 (needs
+  the GCP project).
+
 ### 2026-11-03 (later) — Anirudh (Claude Code): S1-03..S1-06, S1-13, local gateway
 **Decisions (Anirudh):** add **esbuild** to the extension (bundles each entry point, so extension
 code can import `@meetyou/contracts` and zod); build the S1-05 gateway **locally first** with `ws`

@@ -2,7 +2,7 @@
 
 | Field | Value |
 |---|---|
-| Status | **Accepted** (Anirudh, 2026-10-29) — verification items below run in Stage 1; a failed check reopens this ADR |
+| Status | **Accepted** (Anirudh, 2026-10-29); **amended 2026-11-04** (Anirudh): the gateway wraps Opus in Ogg instead of decoding it (§3.1). Verification items run in Stage 1; a failed check reopens this ADR |
 | Date | 2026-10-29 |
 | Decision | D-06 (PRD §22) |
 | Related | [ARCHITECTURE §5.6](../ARCHITECTURE.md) · [STT_BENCHMARK_PLAN Phase D](../STT_BENCHMARK_PLAN.md) · [ADR-0001](0001-stt-provider.md) |
@@ -38,11 +38,35 @@ Limitations: one provider; clean lecture audio (not Meet-compressed meeting audi
 - **Fallback:** PCM16 if a client cannot encode Opus (the `hello.format` negotiation already
   supports both codecs).
 
+### 3.1 Amendment (2026-11-04): Ogg wrap, no decode
+
+Decided by Anirudh during S1-11. Superseding "decoded to PCM16 in the gateway":
+
+- **Client:** WebCodecs `AudioEncoder` (built into Chrome, no WASM or dependency): `opus`, 16 kHz
+  mono, 24 kbps, 20 ms packets, `application: voip`. If `isConfigSupported` fails, the client
+  streams PCM16. A build flag (`MINUTES_AUDIO_CODEC=pcm16`) forces PCM16 for comparisons.
+- **Frame payload:** consecutive 20 ms packets, each prefixed with its length (u16 LE); normally 5
+  per 100 ms frame, fewer at a pause or the end (`packOpusFrame` / `unpackOpusFrame` in
+  `shared/contracts`).
+- **Gateway:** does not decode. It wraps the packets in an Ogg Opus stream (RFC 7845; our own
+  ~150-line muxer, byte-identical to ffmpeg's `OpusHead` page in tests) and
+  - stores each 10 s chunk as a standalone `.opus` file (ARCHITECTURE §11.4 layout);
+  - streams Ogg Opus to the STT provider: Deepgram reads the container header, so `encoding` and
+    `sample_rate` are omitted; Google V2 lists `OGG_OPUS` (explicit, 8–48 kHz, or auto-detect)
+    but does not state streaming support — **[Verify] in S1-14**; if Chirp 3 streaming refuses it,
+    decode for Google only.
+- **Why:** no decoder dependency, less gateway CPU, and the stored files are directly playable and
+  usable by batch STT. A future gateway-side VAD (§6.4 silence gating) would need decoding; it
+  stays an optional optimization.
+
 ## 4. Consequences
 
-- Client CPU: an Opus encoder in the offscreen document (WebCodecs `AudioEncoder` or a WASM
-  encoder) — measure in S1-11. [Verify] WebCodecs Opus support in the Chrome versions we target.
-- Gateway: Opus decoder per lane; measure per-session CPU in S1-11.
+- Client CPU: the WebCodecs Opus encoder in the offscreen document — measure in S1-11 (Chrome
+  Task Manager, Opus vs `MINUTES_AUDIO_CODEC=pcm16`). [Verify] that `isConfigSupported` passes on
+  the Chrome versions we target (`minimum_chrome_version` 116).
+- Gateway: no decoder (§3.1). Local load test 2026-11-04 (Apple M4, STT off, 20 sessions × 30 s,
+  both lanes): Opus 0.14% of one core per session, 127 MB RSS; PCM16 0.22%, 162 MB. Cloud Run
+  sizing is measured on staging.
 - Re-test with the ADR-0001 provider(s) on real meeting audio before acceptance.
 
 ## 5. Verification before acceptance
@@ -51,4 +75,7 @@ Limitations: one provider; clean lecture audio (not Meet-compressed meeting audi
 |---|---|---|
 | 1 | Repeat Phase D with the chosen streaming provider (and Sarvam once its key is available) | Anirudh |
 | 2 | Encoder CPU and battery impact in the extension (S1-11) | Anirudh |
-| 3 | Gateway decode CPU per session (S1-11) | Anirudh |
+| 3 | ~~Gateway decode CPU per session~~ — no decode since §3.1; gateway CPU per session measured locally (§4), staging pending | Anirudh |
+| 4 | Deepgram accepts the gateway's Ogg Opus stream — **done 2026-11-04**: 60 s MUCS clip streamed as our Ogg, transcripts returned | Anirudh |
+| 5 | Google Chirp 3 streaming accepts `OGG_OPUS` (S1-14) | Anirudh |
+| 6 | WebCodecs Opus encodes in the offscreen document — **done 2026-11-04** (Anirudh's Chrome, M4 Mac): 48.5 s Meet recording, both lanes Opus, 485 frames each, no loss, ~0.1 MB stored, live Deepgram transcripts | Anirudh |

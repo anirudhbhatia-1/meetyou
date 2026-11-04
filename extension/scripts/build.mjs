@@ -8,6 +8,8 @@ import { build } from 'esbuild';
 // MINUTES_GATEWAY_URL turns on streaming to a gateway (e.g. http://localhost:8787 in local dev);
 // unset, the extension captures and buffers locally only.
 const gatewayUrl = process.env.MINUTES_GATEWAY_URL ?? '';
+// MINUTES_AUDIO_CODEC=pcm16 turns off Opus transport (ADR-0003), e.g. to compare CPU in S1-11.
+const audioCodec = process.env.MINUTES_AUDIO_CODEC === 'pcm16' ? 'pcm16' : 'opus';
 
 await rm('dist', { force: true, recursive: true });
 
@@ -19,7 +21,10 @@ const common = {
   outdir: 'dist',
   legalComments: 'none',
   logLevel: 'warning',
-  define: { __GATEWAY_URL__: JSON.stringify(gatewayUrl) },
+  define: {
+    __GATEWAY_URL__: JSON.stringify(gatewayUrl),
+    __AUDIO_CODEC__: JSON.stringify(audioCodec),
+  },
 };
 
 await build({
@@ -41,4 +46,6 @@ await build({
 });
 
 await cp('public', 'dist', { recursive: true });
-console.log(`extension built to dist/ (gateway: ${gatewayUrl === '' ? 'off' : gatewayUrl})`);
+console.log(
+  `extension built to dist/ (gateway: ${gatewayUrl === '' ? 'off' : gatewayUrl}, codec: ${audioCodec})`,
+);

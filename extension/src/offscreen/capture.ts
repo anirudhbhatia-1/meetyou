@@ -45,7 +45,7 @@ export const MIC_CONSTRAINTS: MediaStreamConstraints = {
 
 export interface CaptureCallbacks {
   /** One 100 ms PCM16 frame of one lane, placed on the shared session clock. */
-  onFrame(lane: Lane, pcm: Int16Array, captureMs: number): void;
+  onFrame(lane: Lane, pcm: Int16Array<ArrayBuffer>, captureMs: number): void;
   onTabEnded(): void;
   onMicLost(): void;
   onLevels(me: number | null, them: number): void;

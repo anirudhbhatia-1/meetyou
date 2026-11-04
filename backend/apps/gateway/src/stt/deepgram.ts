@@ -1,7 +1,16 @@
 import WebSocket from 'ws';
 import { z } from 'zod';
 
-import type { SttProvider, SttResult, SttStream, SttStreamHandlers } from './types.ts';
+import type { SttInput, SttProvider, SttResult, SttStream, SttStreamHandlers } from './types.ts';
+
+/**
+ * Nova-3 multilingual streaming list price, ~$0.0092/min (third-party source, STT_PREFLIGHT §1).
+ * [Verify] on Deepgram's pricing page and whether `mip_opt_out` changes it (STT_PREFLIGHT §3.6).
+ */
+export const DEEPGRAM_USD_PER_MINUTE = 0.0092;
+
+/** On close, give up after this long without any message from Deepgram. */
+const CLOSE_IDLE_MS = 10_000;
 
 /**
  * Deepgram Nova-3 streaming, the ADR-0001 backup and the dev/test STT (decided 2026-11-03).
@@ -9,19 +18,23 @@ import type { SttProvider, SttResult, SttStream, SttStreamHandlers } from './typ
  * listen-streaming, multilingual code-switching). `mip_opt_out=true` is always sent
  * (STT_PREFLIGHT §3.5). KeepAlive every 3 s of silence keeps the ~10 s idle timeout away.
  */
-export function deepgramStreamUrl(): string {
+export function deepgramStreamUrl(input: SttInput): string {
   const p = new URLSearchParams({
     model: 'nova-3',
     language: 'multi',
     punctuate: 'true',
     smart_format: 'true',
     mip_opt_out: 'true',
-    encoding: 'linear16',
-    sample_rate: '16000',
-    channels: '1',
     interim_results: 'true',
     endpointing: '100',
   });
+  // Containerized audio (Ogg Opus): Deepgram reads the header, so encoding and sample rate are
+  // omitted (developers.deepgram.com/docs/determining-your-audio-format-for-live-streaming-audio).
+  if (input === 'pcm16') {
+    p.set('encoding', 'linear16');
+    p.set('sample_rate', '16000');
+    p.set('channels', '1');
+  }
   p.append('language_hint', 'hi');
   p.append('language_hint', 'en');
   return `wss://api.deepgram.com/v1/listen?${p}`;
@@ -93,8 +106,9 @@ export function parseDeepgramMessage(raw: string): SttResult | null {
 export function deepgramProvider(apiKey: string): SttProvider {
   return {
     name: 'deepgram',
-    async open(handlers: SttStreamHandlers): Promise<SttStream> {
-      const ws = new WebSocket(deepgramStreamUrl(), {
+    usdPerMinute: DEEPGRAM_USD_PER_MINUTE,
+    async open(input: SttInput, handlers: SttStreamHandlers): Promise<SttStream> {
+      const ws = new WebSocket(deepgramStreamUrl(input), {
         headers: { Authorization: `Token ${apiKey}` },
       });
       await new Promise<void>((resolve, reject) => {
@@ -102,6 +116,7 @@ export function deepgramProvider(apiKey: string): SttProvider {
         ws.once('error', reject);
       });
       let lastSend = Date.now();
+      let lastMessage = Date.now();
       let closing = false;
       const keepAlive = setInterval(() => {
         if (Date.now() - lastSend > 3000 && ws.readyState === WebSocket.OPEN) {
@@ -109,6 +124,7 @@ export function deepgramProvider(apiKey: string): SttProvider {
         }
       }, 1000);
       ws.on('message', (data, isBinary) => {
+        lastMessage = Date.now();
         if (isBinary) return;
         const result = parseDeepgramMessage(data.toString());
         if (result !== null) handlers.onResult(result);
@@ -122,17 +138,25 @@ export function deepgramProvider(apiKey: string): SttProvider {
         });
       });
       return {
-        send(pcm) {
+        send(bytes) {
           lastSend = Date.now();
-          if (ws.readyState === WebSocket.OPEN) ws.send(pcm);
+          if (ws.readyState === WebSocket.OPEN) ws.send(bytes);
         },
         async close() {
           closing = true;
+          lastMessage = Date.now();
           if (ws.readyState === WebSocket.OPEN) {
             ws.send(JSON.stringify({ type: 'Finalize' }));
             ws.send(JSON.stringify({ type: 'CloseStream' }));
           }
-          await Promise.race([closed, new Promise((r) => setTimeout(r, 5000))]);
+          // Deepgram closes the socket after its last result. A backlog can take about as long
+          // as the audio itself (S1-11, Q5), so wait while results keep coming and stop only
+          // after CLOSE_IDLE_MS of silence.
+          let isClosed = false;
+          void closed.then(() => (isClosed = true));
+          while (!isClosed && Date.now() - lastMessage < CLOSE_IDLE_MS) {
+            await Promise.race([closed, new Promise((r) => setTimeout(r, 500))]);
+          }
           if (ws.readyState !== WebSocket.CLOSED) ws.terminate();
         },
       };

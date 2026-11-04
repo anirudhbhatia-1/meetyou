@@ -1,6 +1,6 @@
 import type { ServerMessage } from '@meetyou/contracts';
 
-import { GATEWAY_URL } from '../build-config.ts';
+import { AUDIO_CODEC, GATEWAY_URL } from '../build-config.ts';
 import {
   parseOffscreenMessage,
   type BackgroundMessage,
@@ -67,6 +67,7 @@ async function start(streamId: string, recordVideo: boolean): Promise<CaptureSta
       streamId,
       recordVideo,
       gatewayUrl: GATEWAY_URL,
+      preferredCodec: AUDIO_CODEC,
       workletUrl: chrome.runtime.getURL('offscreen/pcm-worklet.js'),
       events: {
         onTabEnded: () => notifyBackground({ target: 'background', type: 'capture.tab_ended' }),

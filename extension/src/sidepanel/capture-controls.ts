@@ -71,9 +71,10 @@ videoToggleRow.append(videoToggle, ' Record video (Meet tab)');
 const me = meterRow('Me (microphone)');
 const them = meterRow('Them (Meet tab)');
 const transcript = el('ol', { ariaLabel: 'Live transcript' });
-const interim: Record<Lane, HTMLLIElement> = {
-  me: el('li', { className: 'status' }),
-  them: el('li', { className: 'status' }),
+// Paragraphs, not list items: they sit outside the transcript list and are empty most of the time.
+const interim: Record<Lane, HTMLParagraphElement> = {
+  me: el('p', { className: 'status' }),
+  them: el('p', { className: 'status' }),
 };
 const download = el('button', { type: 'button', textContent: 'Show last video' });
 const videoLinks = el('ul', { ariaLabel: 'Video parts' });

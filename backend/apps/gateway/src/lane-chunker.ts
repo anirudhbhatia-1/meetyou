@@ -9,7 +9,8 @@ export type AcceptResult = 'accepted' | 'duplicate' | 'gap';
 
 export interface PendingChunk {
   frames: ChunkFrame[];
-  audio: Uint8Array;
+  /** Each frame's payload, in order (PCM16 bytes or a packed Opus frame). */
+  payloads: Uint8Array[];
 }
 
 /**
@@ -20,7 +21,7 @@ export interface PendingChunk {
 export class LaneChunker {
   #durable: number;
   #lastAccepted: number;
-  #pending: AudioFrame[] = [];
+  #pending: { frame: AudioFrame; durationMs: number }[] = [];
   readonly #framesPerChunk: number;
 
   constructor(durableUpTo: number, framesPerChunk: number = FRAMES_PER_CHUNK) {
@@ -33,10 +34,10 @@ export class LaneChunker {
     return this.#durable;
   }
 
-  accept(frame: AudioFrame): AcceptResult {
+  accept(frame: AudioFrame, durationMs: number): AcceptResult {
     if (frame.seq <= this.#lastAccepted) return 'duplicate';
     if (frame.seq !== this.#lastAccepted + 1) return 'gap';
-    this.#pending.push({ ...frame, payload: frame.payload.slice() });
+    this.#pending.push({ frame: { ...frame, payload: frame.payload.slice() }, durationMs });
     this.#lastAccepted = frame.seq;
     return 'accepted';
   }
@@ -45,14 +46,15 @@ export class LaneChunker {
   take(force = false): PendingChunk | null {
     if (this.#pending.length === 0) return null;
     if (!force && this.#pending.length < this.#framesPerChunk) return null;
-    const frames = this.#pending.splice(0, this.#framesPerChunk);
-    const audio = new Uint8Array(frames.reduce((n, f) => n + f.payload.byteLength, 0));
-    let offset = 0;
-    for (const f of frames) {
-      audio.set(f.payload, offset);
-      offset += f.payload.byteLength;
-    }
-    return { frames: frames.map(({ seq, captureMs }) => ({ seq, captureMs })), audio };
+    const taken = this.#pending.splice(0, this.#framesPerChunk);
+    return {
+      frames: taken.map(({ frame, durationMs }) => ({
+        seq: frame.seq,
+        captureMs: frame.captureMs,
+        durationMs,
+      })),
+      payloads: taken.map(({ frame }) => frame.payload),
+    };
   }
 
   committed(lastSeq: number): void {

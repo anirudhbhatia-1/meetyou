@@ -14,9 +14,15 @@ export interface SttResult {
   words?: { text: string; startMs: number; endMs: number; confidence?: number }[];
 }
 
+/**
+ * What the session sends: raw 16 kHz mono PCM16, or an Ogg Opus byte stream (header pages first)
+ * built from the client's packets without decoding (ADR-0003).
+ */
+export type SttInput = 'pcm16' | 'ogg_opus';
+
 export interface SttStream {
-  /** One 100 ms frame of 16 kHz mono PCM16. */
-  send(pcm: Uint8Array): void;
+  /** Audio bytes in the stream's input format, in order. */
+  send(bytes: Uint8Array): void;
   /** Closes after the provider has returned its last results. */
   close(): Promise<void>;
 }
@@ -29,5 +35,7 @@ export interface SttStreamHandlers {
 
 export interface SttProvider {
   readonly name: string;
-  open(handlers: SttStreamHandlers): Promise<SttStream>;
+  /** Streaming list price for cost tracking (AGENTS §3 rule 10); null when unknown. */
+  readonly usdPerMinute: number | null;
+  open(input: SttInput, handlers: SttStreamHandlers): Promise<SttStream>;
 }

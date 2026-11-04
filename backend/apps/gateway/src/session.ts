@@ -1,39 +1,60 @@
+import { randomInt } from 'node:crypto';
+
 import {
   ClientMessage,
   decodeAudioFrame,
   LanguageTag,
   newUlid,
+  OPUS_PACKET_MS,
   PROTOCOL_VERSION,
   Segment,
+  unpackOpusFrame,
   type AudioFormat,
+  type AudioFrame,
   type Lane,
   type ServerMessage,
 } from '@meetyou/contracts';
 import WebSocket from 'ws';
 
 import type { ChunkStore } from './chunk-store.ts';
-import { LaneChunker } from './lane-chunker.ts';
+import { EchoDetector } from './echo.ts';
+import { LaneChunker, type PendingChunk } from './lane-chunker.ts';
 import { errorCode, log } from './log.ts';
+import { oggOpusFile, OggOpusWriter } from './ogg.ts';
 import type { SttProvider, SttResult, SttStream } from './stt/types.ts';
 import { StreamTimeline } from './timeline.ts';
+import { UsageMeter } from './usage.ts';
 
 const LANES: readonly Lane[] = ['me', 'them'];
-const FRAME_MS = 100;
 const STT_RETRY_MS = 5_000;
+/** 16 kHz × 2 bytes per sample. */
+const PCM16_BYTES_PER_MS = 32;
 
-export const PCM16_FORMAT: AudioFormat = {
-  codec: 'pcm16',
-  sampleRate: 16000,
-  channels: 1,
-  frameMs: 100,
-};
+type Codec = AudioFormat['codec'];
+
+function formatFor(codec: Codec): AudioFormat {
+  return { codec, sampleRate: 16000, channels: 1, frameMs: 100 };
+}
 
 interface LaneStt {
   stream: SttStream | null;
   opening: Promise<void> | null;
-  queued: Uint8Array[];
+  queued: { bytes: Uint8Array; durationMs: number }[];
   timeline: StreamTimeline;
+  /** Per provider stream: Opus packets are wrapped in a fresh Ogg stream (ADR-0003). */
+  ogg: OggOpusWriter | null;
   retryAt: number;
+}
+
+function newLaneStt(): LaneStt {
+  return {
+    stream: null,
+    opening: null,
+    queued: [],
+    timeline: new StreamTimeline(),
+    ogg: null,
+    retryAt: 0,
+  };
 }
 
 /**
@@ -46,16 +67,16 @@ export class StreamSession {
   readonly workspaceId: string;
   readonly #store: ChunkStore;
   readonly #stt: SttProvider | null;
+  readonly #meter: UsageMeter;
+  readonly #echo = new EchoDetector();
+  #codec: Codec | null = null;
   #lanes: Record<Lane, LaneChunker> | null = null;
   readonly #writes: Record<Lane, Promise<void>> = {
     me: Promise.resolve(),
     them: Promise.resolve(),
   };
   readonly #sttUpTo: Record<Lane, number> = { me: -1, them: -1 };
-  readonly #laneStt: Record<Lane, LaneStt> = {
-    me: { stream: null, opening: null, queued: [], timeline: new StreamTimeline(), retryAt: 0 },
-    them: { stream: null, opening: null, queued: [], timeline: new StreamTimeline(), retryAt: 0 },
-  };
+  readonly #laneStt: Record<Lane, LaneStt> = { me: newLaneStt(), them: newLaneStt() };
   #socket: WebSocket | null = null;
   #ended = false;
 
@@ -69,6 +90,12 @@ export class StreamSession {
     this.workspaceId = options.workspaceId;
     this.#store = options.store;
     this.#stt = options.stt;
+    this.#meter = new UsageMeter({
+      sessionId: options.sessionId,
+      workspaceId: options.workspaceId,
+      provider: options.stt?.name ?? null,
+      usdPerMinute: options.stt?.usdPerMinute ?? null,
+    });
   }
 
   /** Binds a new connection; the first text frame must be `hello`. */
@@ -98,6 +125,7 @@ export class StreamSession {
       if (this.#socket === socket) {
         this.#socket = null;
         log('stream.disconnected', { sessionId: this.sessionId });
+        void this.#saveUsage();
       }
     });
     socket.on('error', (error) => log('stream.socket_error', { code: errorCode(error) }));
@@ -113,15 +141,16 @@ export class StreamSession {
       this.#fail(socket, 'session_mismatch', false);
       return;
     }
-    if (parsed.format.codec !== 'pcm16') {
-      // TODO(S1-11): Opus decode in the gateway (ADR-0003); clients fall back to PCM16.
-      this.#fail(socket, 'format_unsupported', false);
+    // Stored chunks and open STT streams use one codec, so a session keeps the codec it began with.
+    if (this.#codec !== null && parsed.format.codec !== this.#codec) {
+      this.#fail(socket, 'format_changed', false);
       return;
     }
     if (this.#ended) {
       this.#fail(socket, 'session_ended', false);
       return;
     }
+    this.#codec = parsed.format.codec;
 
     const previous = this.#socket;
     this.#socket = socket;
@@ -133,14 +162,16 @@ export class StreamSession {
       await Promise.all(LANES.map((l) => this.#writes[l]));
       for (const lane of LANES) lanes[lane].dropPending();
       if (this.#socket !== socket) return;
+      this.#meter.connected(this.#codec);
       this.#send(socket, {
         type: 'ready',
         sessionId: this.sessionId,
-        acceptedFormat: PCM16_FORMAT,
+        acceptedFormat: formatFor(this.#codec),
         durableUpTo: { me: lanes.me.durableUpTo, them: lanes.them.durableUpTo },
       });
       log('stream.ready', {
         sessionId: this.sessionId,
+        codec: this.#codec,
         durableMe: lanes.me.durableUpTo,
         durableThem: lanes.them.durableUpTo,
         resumeMe: parsed.resumeFrom.me,
@@ -163,26 +194,49 @@ export class StreamSession {
   #binary(socket: WebSocket, bytes: Uint8Array): void {
     const lanes = this.#lanes;
     if (lanes === null) return;
-    let frame;
+    let frame: AudioFrame;
+    let packets: Uint8Array[] | null = null;
+    let durationMs: number;
     try {
       frame = decodeAudioFrame(bytes);
+      if (this.#codec === 'opus') {
+        packets = unpackOpusFrame(frame.payload);
+        durationMs = packets.length * OPUS_PACKET_MS;
+      } else {
+        if (frame.payload.byteLength % PCM16_BYTES_PER_MS !== 0) throw new RangeError('PCM size');
+        durationMs = frame.payload.byteLength / PCM16_BYTES_PER_MS;
+      }
     } catch {
       this.#fail(socket, 'bad_frame', false);
       return;
     }
-    const result = lanes[frame.lane].accept(frame);
+    const result = lanes[frame.lane].accept(frame, durationMs);
     if (result === 'gap') {
       // The client replays from durableUpTo on reconnect, which closes the gap.
       this.#fail(socket, 'sequence_gap', true);
       return;
     }
-    if (result === 'duplicate') return;
+    if (result === 'duplicate') {
+      this.#meter.duplicate();
+      return;
+    }
+    this.#meter.frame(frame.lane);
 
     if (frame.seq > this.#sttUpTo[frame.lane]) {
       this.#sttUpTo[frame.lane] = frame.seq;
-      this.#forwardToStt(frame.lane, frame.payload, frame.captureMs);
+      this.#forwardToStt(frame.lane, frame.payload, packets, frame.captureMs, durationMs);
     }
     this.#writeChunk(frame.lane, false);
+  }
+
+  #chunkAudio(chunk: PendingChunk): Uint8Array {
+    if (this.#codec === 'opus') {
+      return oggOpusFile(
+        chunk.payloads.flatMap((p) => unpackOpusFrame(p)),
+        { serial: randomInt(0, 2 ** 32) },
+      );
+    }
+    return Buffer.concat(chunk.payloads);
   }
 
   #writeChunk(lane: Lane, force: boolean): Promise<void> {
@@ -191,16 +245,23 @@ export class StreamSession {
     const chunk = lanes[lane].take(force);
     if (chunk === null) return this.#writes[lane];
     const lastSeq = chunk.frames.at(-1)?.seq ?? -1;
+    const codec = this.#codec ?? 'pcm16';
     this.#writes[lane] = this.#writes[lane].then(async () => {
       try {
+        const audio = this.#chunkAudio(chunk);
         await this.#store.put({
           workspaceId: this.workspaceId,
           meetingId: this.sessionId,
           lane,
           frames: chunk.frames,
-          audio: chunk.audio,
-          codec: 'pcm16',
+          audio,
+          codec,
         });
+        this.#meter.chunk(
+          lane,
+          audio.byteLength,
+          chunk.frames.reduce((n, f) => n + f.durationMs, 0),
+        );
       } catch (error: unknown) {
         log('chunk.write_failed', { sessionId: this.sessionId, lane, code: errorCode(error) });
         const socket = this.#socket;
@@ -256,47 +317,81 @@ export class StreamSession {
         await stream?.close();
       }),
     );
-    log('stream.ended', { sessionId: this.sessionId });
+    const usage = await this.#saveUsage();
+    log('stream.ended', {
+      sessionId: this.sessionId,
+      audioMsMe: usage.audioMs.me,
+      audioMsThem: usage.audioMs.them,
+      sttMsMe: usage.stt.audioMs.me,
+      sttMsThem: usage.stt.audioMs.them,
+      bytesStored: usage.bytesStored,
+      estimatedCostUsd: usage.estimatedCostUsd,
+    });
     if (this.#socket === socket) socket.close(1000, 'ended');
   }
 
-  #forwardToStt(lane: Lane, pcm: Uint8Array, captureMs: number): void {
+  async #saveUsage() {
+    const usage = this.#meter.snapshot();
+    try {
+      await this.#store.putUsage(usage);
+    } catch (error: unknown) {
+      log('usage.write_failed', { sessionId: this.sessionId, code: errorCode(error) });
+    }
+    return usage;
+  }
+
+  #forwardToStt(
+    lane: Lane,
+    payload: Uint8Array,
+    packets: Uint8Array[] | null,
+    captureMs: number,
+    durationMs: number,
+  ): void {
     const provider = this.#stt;
     if (provider === null || this.#ended) return;
     const stt = this.#laneStt[lane];
+    if (stt.stream === null && stt.opening === null && Date.now() < stt.retryAt) return;
+
+    const opening = stt.stream === null && stt.opening === null;
+    if (opening) {
+      stt.timeline = new StreamTimeline();
+      stt.ogg = packets === null ? null : new OggOpusWriter({ serial: randomInt(0, 2 ** 32) });
+      if (stt.ogg !== null) stt.queued.push({ bytes: stt.ogg.headers(), durationMs: 0 });
+    }
+    const bytes = packets !== null && stt.ogg !== null ? stt.ogg.packets(packets) : payload;
+    stt.timeline.sent(captureMs, durationMs);
+
     if (stt.stream !== null) {
-      stt.timeline.sent(captureMs, FRAME_MS);
-      stt.stream.send(pcm);
+      stt.stream.send(bytes);
+      this.#meter.sttSent(lane, durationMs);
       return;
     }
-    if (stt.opening === null && Date.now() < stt.retryAt) return;
-    stt.queued.push(pcm);
-    stt.timeline.sent(captureMs, FRAME_MS);
-    if (stt.opening !== null) return;
+    stt.queued.push({ bytes, durationMs });
+    if (!opening) return;
 
     const timeline = stt.timeline;
     stt.opening = provider
-      .open({
+      .open(packets === null ? 'pcm16' : 'ogg_opus', {
         onResult: (result) => this.#onSttResult(lane, timeline, result),
         onClosed: (reason) => {
           log('stt.closed', { sessionId: this.sessionId, lane, reason });
-          if (stt.timeline === timeline) {
-            stt.stream = null;
-            stt.timeline = new StreamTimeline();
-          }
+          if (stt.timeline === timeline) stt.stream = null;
         },
       })
       .then((stream) => {
         stt.stream = stream;
-        for (const queued of stt.queued) stream.send(queued);
+        for (const queued of stt.queued) {
+          stream.send(queued.bytes);
+          this.#meter.sttSent(lane, queued.durationMs);
+        }
         stt.queued = [];
+        this.#meter.sttStreamOpened();
         log('stt.opened', { sessionId: this.sessionId, lane, provider: provider.name });
       })
       .catch((error: unknown) => {
         // Audio stays durable; transcription of this gap is left to the batch pass (§6.3).
         log('stt.open_failed', { sessionId: this.sessionId, lane, code: errorCode(error) });
         stt.queued = [];
-        stt.timeline = new StreamTimeline();
         stt.retryAt = Date.now() + STT_RETRY_MS;
       })
       .finally(() => {
@@ -305,20 +400,26 @@ export class StreamSession {
   }
 
   #onSttResult(lane: Lane, timeline: StreamTimeline, result: SttResult): void {
-    const socket = this.#socket;
-    if (socket === null) return;
     const startMs = timeline.toSessionMs(result.startMs);
+    const endMs = Math.max(startMs, timeline.toSessionMs(result.endMs));
     if (!result.final) {
-      this.#send(socket, { type: 'transcript.interim', lane, text: result.text, startMs });
+      const socket = this.#socket;
+      if (socket !== null) {
+        this.#send(socket, { type: 'transcript.interim', lane, text: result.text, startMs });
+      }
       return;
     }
+    const echo = this.#echo.check(lane, startMs, endMs, result.text);
+    this.#meter.segment(lane, echo);
+    const socket = this.#socket;
+    if (socket === null) return;
     const segment = Segment.safeParse({
       id: `seg_${newUlid()}`,
       workspaceId: this.workspaceId,
       meetingId: this.sessionId,
       lane,
       startMs,
-      endMs: Math.max(startMs, timeline.toSessionMs(result.endMs)),
+      endMs,
       // TODO(S3): transliterate to Roman display text (D-01, ARCHITECTURE §8.1 step 2).
       text: result.text,
       rawText: result.text,
@@ -330,7 +431,7 @@ export class StreamSession {
         endMs: timeline.toSessionMs(w.endMs),
         ...(w.confidence !== undefined ? { confidence: w.confidence } : {}),
       })),
-      flags: [],
+      flags: echo.flag ? ['echo'] : [],
     });
     if (!segment.success) {
       log('segment.invalid', {

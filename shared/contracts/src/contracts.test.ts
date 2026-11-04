@@ -15,6 +15,9 @@ import {
   decodeAudioFrame,
   encodeAudioFrame,
   summaryOutputJsonSchema,
+  OPUS_PACKET_MS,
+  packOpusFrame,
+  unpackOpusFrame,
 } from './index.ts';
 
 const ULID = '01JBX7W3Q8M4K2T6V9R5N1P3ZA';
@@ -241,5 +244,18 @@ describe('rest dto', () => {
     expect(
       StartSessionResponse.safeParse({ ...res, streamUrl: 'https://gw.example.com' }).success,
     ).toBe(false);
+  });
+});
+
+describe('Opus frame payload', () => {
+  it('round-trips packets and rejects malformed payloads', () => {
+    const packets = [new Uint8Array([1, 2, 3]), new Uint8Array(60).fill(7)];
+    const payload = packOpusFrame(packets);
+    expect(payload.byteLength).toBe(2 + 3 + 2 + 60);
+    expect(unpackOpusFrame(payload)).toEqual(packets);
+    expect(() => unpackOpusFrame(payload.subarray(0, 4))).toThrow(RangeError);
+    expect(() => unpackOpusFrame(new Uint8Array(0))).toThrow(RangeError);
+    expect(() => packOpusFrame([new Uint8Array(0)])).toThrow(RangeError);
+    expect(OPUS_PACKET_MS).toBe(20);
   });
 });
