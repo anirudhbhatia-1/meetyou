@@ -87,6 +87,7 @@ export class StreamSession {
   /** A chunk write failed: later chunks of the lane are not written or acked until a new hello. */
   readonly #writeFailed: Record<Lane, boolean> = { me: false, them: false };
   #idleTimer: ReturnType<typeof setTimeout> | null = null;
+  #lastActivityAt = Date.now();
   readonly #onEnded: (() => void) | undefined;
 
   constructor(options: {
@@ -111,7 +112,21 @@ export class StreamSession {
   }
 
   /** Binds a new connection; the first text frame must be `hello`. */
+  /** No client attached; with `lastActivityAt`, lets the server evict abandoned sessions. */
+  get connected(): boolean {
+    return this.#socket !== null;
+  }
+
+  get lastActivityAt(): number {
+    return this.#lastActivityAt;
+  }
+
+  get ended(): boolean {
+    return this.#ended;
+  }
+
   attach(socket: WebSocket): void {
+    this.#lastActivityAt = Date.now();
     let greeted = false;
     const helloTimer = setTimeout(() => {
       if (!greeted) this.#fail(socket, 'hello_timeout', true);
@@ -218,6 +233,7 @@ export class StreamSession {
   }
 
   #binary(socket: WebSocket, bytes: Uint8Array): void {
+    this.#lastActivityAt = Date.now();
     const lanes = this.#lanes;
     if (lanes === null) return;
     let frame: AudioFrame;

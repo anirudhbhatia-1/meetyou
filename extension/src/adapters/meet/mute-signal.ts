@@ -111,7 +111,8 @@ export function observeMuteState(
       childList: true,
       subtree: true,
       attributes: true,
-      attributeFilter: ['data-is-muted', 'aria-label', 'aria-pressed', 'class'],
+      // Not `class`: speaking animations change classes constantly and say nothing about mute.
+      attributeFilter: ['data-is-muted', 'aria-label', 'aria-pressed'],
     });
   } catch {
     // Graceful fallback if target observation fails

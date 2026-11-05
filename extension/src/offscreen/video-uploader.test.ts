@@ -5,6 +5,8 @@ import {
   baseContentType,
   UploadRejected,
   VideoUploader,
+  FragmentRejected,
+  type FragmentFilter,
   type FragmentQueue,
   type SignedFragment,
   type VideoUploaderOptions,
@@ -37,8 +39,10 @@ class MemoryQueue implements FragmentQueue {
     return [...this.rows].sort((a, b) => key(a).localeCompare(key(b)));
   }
 
-  next(include: (sessionId: string) => boolean): Promise<VideoFragmentRow | null> {
-    return Promise.resolve(this.#sorted().find((r) => include(r.sessionId)) ?? null);
+  next(include: FragmentFilter): Promise<VideoFragmentRow | null> {
+    return Promise.resolve(
+      this.#sorted().find((r) => include(r.sessionId, r.partId, r.index)) ?? null,
+    );
   }
 
   indices(sessionId: string, partId: string, limit: number): Promise<number[]> {
@@ -50,8 +54,8 @@ class MemoryQueue implements FragmentQueue {
     );
   }
 
-  count(include: (sessionId: string) => boolean): Promise<number> {
-    return Promise.resolve(this.rows.filter((r) => include(r.sessionId)).length);
+  count(include: FragmentFilter): Promise<number> {
+    return Promise.resolve(this.rows.filter((r) => include(r.sessionId, r.partId, r.index)).length);
   }
 
   remove(target: VideoFragmentRow): Promise<void> {
@@ -193,6 +197,23 @@ describe('VideoUploader (ADR-0011 §3.3)', () => {
     expect(h.puts).toEqual(['https://upload/vp_2/0']);
     expect(h.queue.rows.map((r) => r.sessionId)).toEqual(['ses_A']);
     expect(await h.uploader.pending()).toBe(0);
+    h.uploader.stop();
+  });
+
+  it('moves past a fragment the server refuses for good, keeping it locally', async () => {
+    const h = harness([row('ses_A', 'vp_1', 0), row('ses_A', 'vp_1', 1)], {
+      put(url) {
+        h.puts.push(url);
+        if (url.endsWith('/0')) return Promise.reject(new FragmentRejected(413));
+        return Promise.resolve();
+      },
+    });
+    h.uploader.kick();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(h.puts).toEqual(['https://upload/ses_A/vp_1/0', 'https://upload/ses_A/vp_1/1']);
+    expect(h.queue.rows.map((r) => r.index)).toEqual([0]);
+    expect(await h.uploader.pending()).toBe(0);
+    expect(h.idle).toBe(1);
     h.uploader.stop();
   });
 

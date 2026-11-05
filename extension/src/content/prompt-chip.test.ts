@@ -218,11 +218,16 @@ describe('PromptChip', () => {
     expect(chip.isShowing()).toBe(false);
   });
 
-  it('dismisses when Escape key is pressed while showing', () => {
+  it('dismisses on Escape only when it comes from inside the chip', () => {
     chip.show();
     expect(chip.isShowing()).toBe(true);
+    const root = doc.getElementById('meetyou-prompt-root');
 
-    doc.trigger('keydown', { key: 'Escape' });
+    // Escape meant for Meet's own panels leaves the chip alone.
+    doc.trigger('keydown', { key: 'Escape', composedPath: () => [doc] });
+    expect(onDismiss).not.toHaveBeenCalled();
+
+    doc.trigger('keydown', { key: 'Escape', composedPath: () => [root, doc] });
 
     expect(onDismiss).toHaveBeenCalledTimes(1);
     expect(chip.isDismissed()).toBe(true);
@@ -235,6 +240,54 @@ describe('PromptChip', () => {
 
     chip.updateRecordingStatus('recording');
     expect(chip.isShowing()).toBe(false);
+  });
+
+  it('never shows over a recording in progress, including after a re-join', () => {
+    chip.updateRecordingStatus('recording');
+    chip.updateCallState('in_call', 'abc-defg-hij');
+    expect(chip.isShowing()).toBe(false);
+    chip.updateRecordingStatus('paused');
+    chip.updateCallState('in_call', 'abc-defg-hij');
+    expect(chip.isShowing()).toBe(false);
+    chip.updateRecordingStatus('processing');
+    chip.updateCallState('in_call', 'abc-defg-hij');
+    expect(chip.isShowing()).toBe(true);
+  });
+
+  it('ignores synthetic clicks from page scripts', () => {
+    chip.show();
+    const root = doc.getElementById('meetyou-prompt-root');
+    root?.shadow?.querySelector('#start-btn')?.trigger('click', {
+      stopPropagation: vi.fn(),
+      isTrusted: false,
+    });
+    expect(onStart).not.toHaveBeenCalled();
+    expect(chip.isShowing()).toBe(true);
+  });
+
+  it('offers the chip again in the next call after "Not now"', () => {
+    chip.updateCallState('in_call', 'abc-defg-hij');
+    chip.dismiss();
+    chip.updateCallState('in_call', 'abc-defg-hij');
+    expect(chip.isShowing()).toBe(false);
+    chip.updateCallState('in_call', 'xyz-wxyz-xyz');
+    expect(chip.isShowing()).toBe(true);
+  });
+
+  it('comes back with an explanation when the start failed', () => {
+    chip.show();
+    chip.updateRecordingStatus('starting');
+    expect(chip.isShowing()).toBe(false);
+    chip.showProblem('start_failed');
+    expect(chip.isShowing()).toBe(true);
+  });
+
+  it('replaces a chip left behind by an orphaned script', () => {
+    const stale = new PromptChip(doc as unknown as Document, { onStart, onDismiss });
+    stale.mount();
+    chip.mount();
+    expect(chip.isMounted()).toBe(true);
+    expect(stale.isMounted()).toBe(false);
   });
 
   it('unmounts cleanly from DOM', () => {

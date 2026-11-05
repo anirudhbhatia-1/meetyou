@@ -10,10 +10,10 @@ type CreatedAt = ColumnType<Date, Date | string | undefined, never>;
 type UpdatedAt = ColumnType<Date, Date | string | undefined, Date | string>;
 type Timestamp = ColumnType<Date, Date | string, Date | string>;
 type NullableTimestamp = ColumnType<Date | null, Date | string | null, Date | string | null>;
-/** bigint and numeric come back from pg as strings. */
-type BigIntColumn = ColumnType<string, number | bigint | string, number | bigint | string>;
+/** int8 is read as number (pg.ts TYPE_PARSERS); numeric stays a string. */
+type BigIntColumn = ColumnType<number, number | bigint | string, number | bigint | string>;
 type NullableBigInt = ColumnType<
-  string | null,
+  number | null,
   number | bigint | string | null,
   number | bigint | string | null
 >;
@@ -117,7 +117,7 @@ export interface VideoAssetsTable extends Audit {
   partId: string | null;
   status: 'uploading' | 'processing' | 'ready' | 'failed' | 'expired';
   mimeType: 'video/mp4' | 'video/webm';
-  startMs: ColumnType<string, number | string | undefined, number | string>;
+  startMs: ColumnType<number, number | string | undefined, number | string>;
   durationMs: NullableBigInt;
   fragments: number | null;
   storageKey: string | null;
@@ -167,12 +167,14 @@ export interface SummariesTable extends Audit {
 export interface SummaryItemsTable extends Audit {
   id: string;
   workspaceId: string;
+  meetingId: string;
   summaryId: string;
   kind: 'anchor_detail' | 'decision' | 'action_item' | 'question' | 'topic';
   text: string;
   anchorNoteId: string | null;
   ownerParticipantId: string | null;
-  dueDate: ColumnType<Date | null, string | null, string | null>;
+  /** 'YYYY-MM-DD', as in the SummaryItem contract. */
+  dueDate: string | null;
   duePhrase: string | null;
   status: 'open' | 'done' | null;
   completedAt: NullableTimestamp;
@@ -184,6 +186,7 @@ export interface SummaryItemsTable extends Audit {
 export interface CitationsTable extends Audit {
   id: string;
   workspaceId: string;
+  meetingId: string;
   summaryItemId: string;
   segmentId: string;
 }
@@ -200,7 +203,9 @@ export interface ConsentLogsTable extends Audit {
   workspaceId: string;
   meetingId: string;
   mode: 'one_click' | 'automatic' | 'off';
-  noticeSent: boolean;
+  outcome: 'posted' | 'skipped' | 'failed';
+  /** Generated from `outcome`. */
+  noticeSent: ColumnType<boolean, never, never>;
   noticeText: string | null;
   sentAt: NullableTimestamp;
 }
@@ -222,15 +227,16 @@ export interface UsageRecordsTable extends Audit {
   sttSecondsMe: ColumnType<string, number | string | undefined, number | string>;
   sttSecondsThem: ColumnType<string, number | string | undefined, number | string>;
   llmModel: string | null;
-  inputTokens: ColumnType<string, number | string | undefined, number | string>;
-  outputTokens: ColumnType<string, number | string | undefined, number | string>;
-  storageBytes: ColumnType<string, number | string | undefined, number | string>;
+  inputTokens: ColumnType<number, number | string | undefined, number | string>;
+  outputTokens: ColumnType<number, number | string | undefined, number | string>;
+  storageBytes: ColumnType<number, number | string | undefined, number | string>;
   estimatedCostUsd: ColumnType<string, number | string | undefined, number | string>;
 }
 
 export interface DeletionRequestsTable extends Audit {
   id: string;
-  workspaceId: string;
+  /** Null once the workspace itself is deleted (the audit row stays). */
+  workspaceId: string | null;
   scope: 'meeting' | 'account';
   targetId: string;
   requestedAt: CreatedAt;

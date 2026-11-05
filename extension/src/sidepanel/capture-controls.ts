@@ -240,8 +240,6 @@ async function videoRows(): Promise<VideoFragmentRow[]> {
 }
 
 let videoUrls: string[] = [];
-/** Fragments still waiting to upload; the local copy is the only one until they are sent. */
-let uploadPending = 0;
 
 /**
  * Lists every part of the newest recording as a download link. Pause/resume starts a new part, so
@@ -333,14 +331,22 @@ download.addEventListener('click', () => {
 });
 
 clearVideo.addEventListener('click', () => {
-  if (isLive(current)) return;
-  if (uploadPending > 0) {
-    status.textContent = 'Video is still uploading; delete it after the upload finishes.';
-    return;
-  }
-  // Developer control; S4 replaces it with the DESIGN.md confirmation dialog.
-  if (!confirm('Delete all video stored on this computer?')) return;
-  deleteLocalVideo().catch((error: unknown) => console.error('sidepanel: delete failed', error));
+  if (isLive(current) || current.status === 'stopping') return;
+  void (async () => {
+    // Count in IndexedDB, not from progress messages: a panel opened later, or an uploader in
+    // backoff, has none, and fragments must only leave this computer after a successful PUT.
+    const waiting =
+      GATEWAY_URL === ''
+        ? 0
+        : (await videoRows()).filter((row) => row.sessionId.startsWith('ses_')).length;
+    if (waiting > 0) {
+      status.textContent = `${waiting} video fragments are still waiting to upload; delete them after they upload.`;
+      return;
+    }
+    // Developer control; S4 replaces it with the DESIGN.md confirmation dialog.
+    if (!confirm('Delete all video stored on this computer?')) return;
+    await deleteLocalVideo();
+  })().catch((error: unknown) => console.error('sidepanel: delete failed', error));
 });
 
 chrome.storage.onChanged.addListener((changes, areaName) => {
@@ -364,7 +370,6 @@ chrome.runtime.onMessage.addListener((message, sender) => {
   } else if (parsed?.type === 'transcript') {
     showTranscript(parsed.final, parsed.lane, parsed.text, parsed.startMs, parsed.speaker);
   } else if (parsed?.type === 'video.upload') {
-    uploadPending = parsed.pending;
     uploadLine.textContent = uploadLabel(parsed.pending, parsed.uploaded);
   }
   return false;

@@ -140,7 +140,9 @@ export class StreamClient {
       this.#wake();
     }, timeoutMs);
     const done = () => timedOut || this.#stopped;
-    while (!done() && !this.#allAcked()) {
+    // `end` must be sent even when everything is already acknowledged (e.g. stopped while paused):
+    // without it the gateway never ends the session.
+    while (!done() && !(this.#endSent && this.#allAcked())) {
       await this.#waitUntil(() => done() || (this.#online && this.#allSent()));
       if (done()) break;
       if (!this.#endSent) {

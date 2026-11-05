@@ -11,6 +11,17 @@ export interface PromptChipCallbacks {
   onDismiss: () => void;
 }
 
+/** Recording statuses during which the chip must stay hidden (capture-state.ts CAPTURING). */
+const ACTIVE_STATUSES = new Set(['starting', 'recording', 'paused', 'reconnecting', 'stopping']);
+
+/** Problems reported back by the service worker after a chip action. */
+export type PromptProblem = 'start_failed' | 'panel_failed';
+
+const PROBLEM_TEXT: Record<PromptProblem, string> = {
+  start_failed: 'Recording did not start. Click the MeetYou icon in the toolbar to start.',
+  panel_failed: 'Recording started. Open MeetYou from the toolbar to see notes.',
+};
+
 export class PromptChip {
   private readonly doc: Document;
   private readonly callbacks: PromptChipCallbacks;
@@ -18,15 +29,20 @@ export class PromptChip {
   private shadow: ShadowRoot | null = null;
   private dismissed = false;
   private isVisible = false;
+  private recordingActive = false;
+  private meetingCode: string | null = null;
+  private liveRegion: HTMLElement | null = null;
+  private problemEl: HTMLElement | null = null;
   private readonly boundOnKeyDown: (e: KeyboardEvent) => void;
 
   constructor(doc: Document = document, callbacks: PromptChipCallbacks) {
     this.doc = doc;
     this.callbacks = callbacks;
+    // Only an Escape pressed inside the chip dismisses it; Meet uses Escape for its own panels.
     this.boundOnKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape' && this.isVisible) {
-        this.dismiss();
-      }
+      if (e.key !== 'Escape' || !this.isVisible || this.host === null) return;
+      const path = typeof e.composedPath === 'function' ? e.composedPath() : [];
+      if (path.includes(this.host)) this.dismiss();
     };
   }
 
@@ -34,9 +50,9 @@ export class PromptChip {
    * Mounts the host container and creates the isolated Shadow DOM tree.
    */
   public mount(): void {
-    if (this.host !== null || this.doc.getElementById('meetyou-prompt-root') !== null) {
-      return;
-    }
+    if (this.host !== null) return;
+    // A chip left by a content script whose extension was reloaded has dead buttons: replace it.
+    this.doc.getElementById('meetyou-prompt-root')?.remove();
 
     const host = this.doc.createElement('div');
     host.id = 'meetyou-prompt-root';
@@ -46,7 +62,8 @@ export class PromptChip {
     host.style.zIndex = '2147483647';
     host.style.display = 'none';
 
-    const shadow = host.attachShadow({ mode: 'open' });
+    // Closed, so page scripts cannot reach the Start button through `host.shadowRoot`.
+    const shadow = host.attachShadow({ mode: 'closed' });
     this.shadow = shadow;
     this.host = host;
 
@@ -59,7 +76,7 @@ export class PromptChip {
    * Shows the prompt chip unless previously dismissed during this session.
    */
   public show(): void {
-    if (this.dismissed) {
+    if (this.dismissed || this.recordingActive) {
       return;
     }
     if (this.host === null) {
@@ -68,6 +85,8 @@ export class PromptChip {
     if (this.host !== null) {
       this.host.style.display = 'block';
       this.isVisible = true;
+      // Changing the live region's text (not toggling display) is what screen readers announce.
+      if (this.liveRegion !== null) this.liveRegion.textContent = 'Take notes for this call?';
     }
   }
 
@@ -99,6 +118,8 @@ export class PromptChip {
       this.host.remove();
       this.host = null;
       this.shadow = null;
+      this.liveRegion = null;
+      this.problemEl = null;
       this.isVisible = false;
     }
   }
@@ -106,7 +127,12 @@ export class PromptChip {
   /**
    * Reacts to Meet call state changes.
    */
-  public updateCallState(state: string): void {
+  public updateCallState(state: string, meetingCode: string | null = null): void {
+    // "Not now" applies to one call (DESIGN §8.2); Meet can move to another call without a reload.
+    if (meetingCode !== null && meetingCode !== this.meetingCode) {
+      this.meetingCode = meetingCode;
+      this.dismissed = false;
+    }
     if (state === 'in_call') {
       this.show();
     } else {
@@ -115,11 +141,22 @@ export class PromptChip {
   }
 
   /**
-   * Reacts to extension recording status updates.
+   * Reacts to extension recording status updates: never shown over a recording in progress.
    */
   public updateRecordingStatus(status: string): void {
-    if (status === 'starting' || status === 'recording') {
-      this.hide();
+    this.recordingActive = ACTIVE_STATUSES.has(status);
+    if (this.recordingActive) this.hide();
+  }
+
+  /** Shows the chip again with a short explanation after a chip action failed. */
+  public showProblem(problem: PromptProblem): void {
+    if (this.host === null) this.mount();
+    if (this.problemEl !== null) this.problemEl.textContent = PROBLEM_TEXT[problem];
+    if (problem === 'start_failed') this.recordingActive = false;
+    if (this.host !== null) {
+      this.host.style.display = 'block';
+      this.isVisible = true;
+      if (this.liveRegion !== null) this.liveRegion.textContent = PROBLEM_TEXT[problem];
     }
   }
 
@@ -235,12 +272,19 @@ export class PromptChip {
       .btn-primary:hover {
         background: #2a2b26;
       }
+      .sr-only {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        overflow: hidden;
+        clip: rect(0 0 0 0);
+        white-space: nowrap;
+      }
     `;
 
     const container = this.doc.createElement('div');
     container.className = 'prompt-card';
     container.setAttribute('role', 'dialog');
-    container.setAttribute('aria-live', 'polite');
     container.setAttribute('aria-labelledby', 'prompt-heading');
 
     container.innerHTML = `
@@ -256,20 +300,36 @@ export class PromptChip {
       </div>
     `;
 
+    // Synthetic clicks from page scripts (`isTrusted === false`) must not start a recording.
     const notNowBtn = container.querySelector('#not-now-btn');
     notNowBtn?.addEventListener('click', (e) => {
       e.stopPropagation();
+      if (e.isTrusted === false) return;
       this.dismiss();
     });
 
     const startBtn = container.querySelector('#start-btn');
     startBtn?.addEventListener('click', (e) => {
       e.stopPropagation();
+      if (e.isTrusted === false) return;
+      if (this.problemEl !== null) this.problemEl.textContent = '';
       this.hide();
       this.callbacks.onStart();
     });
 
+    const problem = this.doc.createElement('p');
+    problem.className = 'prompt-reminder';
+    problem.setAttribute('role', 'status');
+    container.appendChild(problem);
+    this.problemEl = problem;
+
+    const live = this.doc.createElement('div');
+    live.setAttribute('aria-live', 'polite');
+    live.className = 'sr-only';
+    this.liveRegion = live;
+
     this.shadow.appendChild(style);
     this.shadow.appendChild(container);
+    this.shadow.appendChild(live);
   }
 }

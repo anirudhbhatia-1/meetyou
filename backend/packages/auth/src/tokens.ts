@@ -134,6 +134,8 @@ export class TokenService {
         issuer: ISSUER,
         audience,
         algorithms: [SIGNING_ALG],
+        // A token without `exp` would never expire; ours always carry it.
+        requiredClaims: ['exp', 'iat'],
         clockTolerance: CLOCK_TOLERANCE_S,
         currentDate: new Date(this.#now()),
       });

@@ -66,6 +66,33 @@ export function allowedOrigin(origin: string | undefined): boolean {
   return origin === undefined || origin.startsWith('chrome-extension://');
 }
 
+/**
+ * The dev gateway listens on 127.0.0.1 only; a request naming any other host reached it through
+ * DNS rebinding (a web page whose domain now resolves to 127.0.0.1) and is refused.
+ */
+export function allowedHost(host: string | undefined): boolean {
+  if (host === undefined) return false;
+  const name = host.startsWith('[') ? host.slice(0, host.indexOf(']') + 1) : host.split(':')[0];
+  return name === '127.0.0.1' || name === 'localhost' || name === '[::1]';
+}
+
+/** Resolves false once the client has gone away. */
+function writeWithBackpressure(res: ServerResponse, chunk: Uint8Array): Promise<boolean> {
+  if (res.destroyed) return Promise.resolve(false);
+  if (res.write(chunk)) return Promise.resolve(true);
+  return new Promise((resolve) => {
+    const done = (ok: boolean) => () => {
+      res.off('drain', onDrain);
+      res.off('close', onClose);
+      resolve(ok);
+    };
+    const onDrain = done(true);
+    const onClose = done(false);
+    res.once('drain', onDrain);
+    res.once('close', onClose);
+  });
+}
+
 function devCors(req: IncomingMessage): Record<string, string> {
   const origin = req.headers.origin;
   if (origin === undefined || !allowedOrigin(origin)) return {};
@@ -134,6 +161,22 @@ export function createGateway(options: GatewayOptions): Gateway {
 
   const videoSigner = options.videoSigner ?? new DevVideoSigner();
   const evictions = new Map<string, ReturnType<typeof setTimeout>>();
+  // Sessions that never ended (client gone, drain timed out, or created by a timed-out retry)
+  // are dropped once nothing has happened for ENDED_SESSION_TTL_MS.
+  const abandonedTtlMs = options.endedSessionTtlMs ?? ENDED_SESSION_TTL_MS;
+  const sweep = setInterval(
+    () => {
+      const cutoff = Date.now() - abandonedTtlMs;
+      for (const [id, session] of sessions) {
+        if (session.ended || session.connected || session.lastActivityAt > cutoff) continue;
+        sessions.delete(id);
+        void session.shutdown();
+        log('session.evicted', { sessionId: id });
+      }
+    },
+    Math.min(10 * 60 * 1000, abandonedTtlMs),
+  );
+  sweep.unref();
 
   /** Dev stand-in for `fragments:sign` (ADR-0011 §3.3): URLs only for a session this gateway holds. */
   const signVideo = async (req: IncomingMessage, res: ServerResponse, sessionId: string) => {
@@ -218,9 +261,12 @@ export function createGateway(options: GatewayOptions): Gateway {
     const first = await options.store.readVideoFragment(workspaceId, sessionId, partId, 0);
     const type = videoExtension(first.subarray(0, 8)) === 'webm' ? 'video/webm' : 'video/mp4';
     res.writeHead(200, { 'content-type': type, ...devCors(req) });
-    res.write(first);
+    // One fragment at a time, waiting for the player to drain: an hour-long part is ~470 MB and
+    // must not pile up in memory; a closed tab stops the reads.
+    if (!(await writeWithBackpressure(res, first))) return;
     for (let i = 1; i < count; i++) {
-      res.write(await options.store.readVideoFragment(workspaceId, sessionId, partId, i));
+      const chunk = await options.store.readVideoFragment(workspaceId, sessionId, partId, i);
+      if (!(await writeWithBackpressure(res, chunk))) return;
     }
     res.end();
   };
@@ -232,6 +278,7 @@ export function createGateway(options: GatewayOptions): Gateway {
       return;
     }
     if (!options.devEndpoints) throw new HttpError(404, 'not_found');
+    if (!allowedHost(req.headers.host)) throw new HttpError(403, 'host_not_allowed');
     if (!allowedOrigin(req.headers.origin)) throw new HttpError(403, 'origin_not_allowed');
     if (req.method === 'OPTIONS') {
       res.writeHead(204, devCors(req));
@@ -288,6 +335,13 @@ export function createGateway(options: GatewayOptions): Gateway {
 
   const server = createServer((req: IncomingMessage, res: ServerResponse) => {
     handle(req, res).catch((error: unknown) => {
+      // A failure mid-stream cannot send a JSON error any more (headers are out); writing one
+      // would throw and take the whole process down.
+      if (res.headersSent) {
+        log('http.stream_failed', { code: errorCode(error) });
+        res.destroy();
+        return;
+      }
       if (error instanceof HttpError) {
         json(req, res, error.status, { error: error.message });
         return;
@@ -300,6 +354,10 @@ export function createGateway(options: GatewayOptions): Gateway {
   server.on('upgrade', (req: IncomingMessage, socket: Duplex, head: Buffer) => {
     // Parsed defensively: an exception in this listener would crash the process and every session.
     const path = (req.url ?? '/').split('?')[0];
+    if (!allowedHost(req.headers.host)) {
+      reject(socket, 403, 'Forbidden');
+      return;
+    }
     if (path !== '/v1/stream') {
       reject(socket, 404, 'Not Found');
       return;
@@ -331,6 +389,7 @@ export function createGateway(options: GatewayOptions): Gateway {
       wss.close();
       for (const timer of evictions.values()) clearTimeout(timer);
       evictions.clear();
+      clearInterval(sweep);
       await Promise.all([...sessions.values()].map((s) => s.shutdown()));
       await new Promise<void>((resolve) => server.close(() => resolve()));
     },

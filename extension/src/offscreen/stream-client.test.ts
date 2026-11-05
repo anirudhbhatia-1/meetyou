@@ -248,6 +248,18 @@ describe('StreamClient', () => {
     expect(await store.count()).toBe(0);
   });
 
+  it('sends end even when everything is already acknowledged (stopped while paused)', async () => {
+    const { gateway, client, write } = setup();
+    client.start();
+    await settle();
+    await write(10); // one full chunk: durable and acked on both lanes
+    expect(client.acked).toEqual({ me: 9, them: 9 });
+    const stopped = client.stop(1000, 5000);
+    await settle();
+    expect(gateway.received).toContain('control:end');
+    expect((await stopped).unacked).toBe(0);
+  });
+
   it('keeps unacknowledged frames when the stream ends without acks', async () => {
     const { store, gateway, timers, client, write } = setup();
     client.start();

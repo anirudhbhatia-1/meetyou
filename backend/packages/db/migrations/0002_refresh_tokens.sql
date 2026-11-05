@@ -15,7 +15,7 @@ CREATE TABLE refresh_token_families (
   user_id        text NOT NULL REFERENCES users (id) ON DELETE CASCADE,
   workspace_id   text NOT NULL REFERENCES workspaces (id) ON DELETE CASCADE,
   revoked_at     timestamptz,
-  revoke_reason  text CHECK (revoke_reason IN ('logout', 'reuse', 'account_deleted')),
+  revoke_reason  text CHECK (revoke_reason IN ('logout', 'reuse', 'account_deleted', 'membership_removed')),
   created_at     timestamptz NOT NULL DEFAULT now(),
   updated_at     timestamptz NOT NULL DEFAULT now()
 );
@@ -32,6 +32,7 @@ CREATE TABLE refresh_tokens (
   updated_at  timestamptz NOT NULL DEFAULT now()
 );
 CREATE INDEX refresh_tokens_family_idx ON refresh_tokens (family_id);
+CREATE INDEX refresh_tokens_user_idx ON refresh_tokens (user_id);
 
 CREATE TRIGGER refresh_token_families_updated_at BEFORE UPDATE ON refresh_token_families
   FOR EACH ROW EXECUTE FUNCTION touch_updated_at();
@@ -49,7 +50,15 @@ CREATE POLICY own_tokens ON refresh_tokens
   USING (token_hash = app_refresh_hash() OR user_id = app_user_id())
   WITH CHECK (user_id = app_user_id());
 
--- Starts a family for a sign-in and stores its first token.
+-- A retry of a refresh whose response was lost, or two extension contexts refreshing at once,
+-- presents the just-used token again within seconds; that is not theft (ADR-0004 §4.3).
+-- Within this window a used token gets another successor instead of revoking the family.
+-- (The window must stay short: a stolen token is usable for this long after the legit refresh.)
+CREATE FUNCTION app_refresh_reuse_grace() RETURNS interval
+  LANGUAGE sql IMMUTABLE AS $$ SELECT interval '30 seconds' $$;
+
+-- Starts a family for a sign-in and stores its first token. The user must be a member of the
+-- workspace the tokens will name.
 CREATE FUNCTION app_issue_refresh_token(
   p_user_id text, p_workspace_id text, p_family_id text, p_token_id text,
   p_token_hash text, p_expires_at timestamptz
@@ -59,6 +68,10 @@ CREATE FUNCTION app_issue_refresh_token(
   AS $$
 BEGIN
   PERFORM set_config('app.user_id', p_user_id, true);
+  IF NOT EXISTS (SELECT 1 FROM memberships m
+                 WHERE m.user_id = p_user_id AND m.workspace_id = p_workspace_id) THEN
+    RAISE EXCEPTION 'user is not a member of the workspace' USING ERRCODE = '42501';
+  END IF;
   INSERT INTO refresh_token_families (id, user_id, workspace_id)
     VALUES (p_family_id, p_user_id, p_workspace_id);
   INSERT INTO refresh_tokens (id, family_id, user_id, token_hash, expires_at)
@@ -66,7 +79,8 @@ BEGIN
 END $$;
 
 -- Rotates a presented token. Status: 'ok' (new token stored), 'unknown', 'expired', 'revoked'
--- (family already revoked) or 'reused' (a used token came back: the family is revoked now).
+-- (family revoked, or the user left the workspace: the family is revoked now) or 'reused' (a used
+-- token came back after the grace window: the family is revoked now).
 CREATE FUNCTION app_rotate_refresh_token(
   p_token_hash text, p_new_token_id text, p_new_token_hash text, p_new_expires_at timestamptz
 ) RETURNS TABLE (status text, user_id text, workspace_id text)
@@ -90,7 +104,7 @@ BEGIN
     RETURN QUERY SELECT 'revoked'::text, t.user_id, f.workspace_id;
     RETURN;
   END IF;
-  IF t.used_at IS NOT NULL THEN
+  IF t.used_at IS NOT NULL AND t.used_at < now() - app_refresh_reuse_grace() THEN
     UPDATE refresh_token_families SET revoked_at = now(), revoke_reason = 'reuse' WHERE id = f.id;
     RETURN QUERY SELECT 'reused'::text, t.user_id, f.workspace_id;
     RETURN;
@@ -99,8 +113,16 @@ BEGIN
     RETURN QUERY SELECT 'expired'::text, t.user_id, f.workspace_id;
     RETURN;
   END IF;
+  -- Removed from the workspace: no more tokens naming it.
+  IF NOT EXISTS (SELECT 1 FROM memberships m
+                 WHERE m.user_id = t.user_id AND m.workspace_id = f.workspace_id) THEN
+    UPDATE refresh_token_families SET revoked_at = now(), revoke_reason = 'membership_removed'
+      WHERE id = f.id;
+    RETURN QUERY SELECT 'revoked'::text, t.user_id, f.workspace_id;
+    RETURN;
+  END IF;
 
-  UPDATE refresh_tokens SET used_at = now() WHERE id = t.id;
+  UPDATE refresh_tokens SET used_at = coalesce(used_at, now()) WHERE id = t.id;
   INSERT INTO refresh_tokens (id, family_id, user_id, token_hash, expires_at)
     VALUES (p_new_token_id, f.id, t.user_id, p_new_token_hash, p_new_expires_at);
   RETURN QUERY SELECT 'ok'::text, t.user_id, f.workspace_id;
@@ -126,3 +148,8 @@ BEGIN
     WHERE id = t.family_id;
   RETURN true;
 END $$;
+
+-- Only the application role (the owner) may call these; nothing is granted to PUBLIC.
+REVOKE EXECUTE ON FUNCTION app_issue_refresh_token(text, text, text, text, text, timestamptz) FROM PUBLIC;
+REVOKE EXECUTE ON FUNCTION app_rotate_refresh_token(text, text, text, timestamptz) FROM PUBLIC;
+REVOKE EXECUTE ON FUNCTION app_revoke_refresh_family(text, text) FROM PUBLIC;

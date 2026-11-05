@@ -6,7 +6,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import WebSocket from 'ws';
 
 import { MemoryChunkStore, type AudioChunk } from './chunk-store.ts';
-import { createGateway, SUBPROTOCOL, type Gateway } from './server.ts';
+import { allowedHost, createGateway, SUBPROTOCOL, type Gateway } from './server.ts';
 import type { SttInput, SttProvider, SttStreamHandlers } from './stt/types.ts';
 
 const PCM = new Uint8Array(3200);
@@ -182,5 +182,36 @@ describe('gateway robustness (code review 2026-11-05)', () => {
     // Evicted only after the grace period.
     await new Promise((r) => setTimeout(r, 300));
     expect((await sign()).status).toBe(404);
+  });
+
+  it('refuses requests naming another host (DNS rebinding)', async () => {
+    const { port } = await start(new MemoryChunkStore());
+    const reply = await new Promise<string>((resolve) => {
+      const raw = connect(port, '127.0.0.1', () => {
+        raw.write(
+          'POST /v1/dev/sessions HTTP/1.1\r\nHost: evil.example\r\nContent-Length: 0\r\n\r\n',
+        );
+      });
+      raw.once('data', (d) => {
+        resolve(String(d));
+        raw.destroy();
+      });
+    });
+    expect(reply).toMatch(/^HTTP\/1\.1 403/);
+    expect(allowedHost('127.0.0.1:8787')).toBe(true);
+    expect(allowedHost('localhost:8787')).toBe(true);
+    expect(allowedHost('[::1]:8787')).toBe(true);
+    expect(allowedHost('evil.example:8787')).toBe(false);
+    expect(allowedHost(undefined)).toBe(false);
+  });
+
+  it('evicts a session nobody ever connected to', async () => {
+    const { base } = await start(new MemoryChunkStore(), null, 100);
+    const { sessionId = '' } = await post(`${base}/v1/dev/sessions`);
+    await new Promise((r) => setTimeout(r, 350));
+    const res = await fetch(`${base}/v1/dev/sessions/${sessionId}/stream-token`, {
+      method: 'POST',
+    });
+    expect(res.status).toBe(404);
   });
 });

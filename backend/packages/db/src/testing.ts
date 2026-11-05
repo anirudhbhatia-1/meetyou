@@ -12,7 +12,8 @@ import { migrate, type SqlRunner } from './migrate.ts';
  * where that role owns the tables. Superusers always bypass row security; this role does not.
  */
 export async function createTestDb(): Promise<{ db: Db; pg: PGlite; close(): Promise<void> }> {
-  const pg = new PGlite();
+  // Parsers matching `pg.ts` TYPE_PARSERS: int8 as number, date as 'YYYY-MM-DD'.
+  const pg = new PGlite({ parsers: { 20: (v: string) => Number(v), 1082: (v: string) => v } });
   await pg.exec(`
     CREATE ROLE meetyou_app NOLOGIN;
     GRANT CREATE ON SCHEMA public TO meetyou_app;

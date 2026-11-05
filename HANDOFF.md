@@ -249,6 +249,46 @@ Anirudh asked to finish all S1 code first and run the Chrome tests at the end.
   missing fragments, `--join` writes a playable file. 20 new tests; `pnpm check` passes (267 tests).
 - **Not done:** all Chrome checks (ADR-0011 1–4, 60-min run); server finalize stays S2-14.
 
+### 2026-11-05 (night, review 2) — Anirudh (Claude Code): second code review and fixes
+Three parallel reviews of the code added since the first review (db + auth, S1-08/S1-09, video and
+drain paths); each finding was checked against the code. `pnpm check` passes (347 tests). Nothing
+was applied to a real database (none is migrated yet), so `0001`/`0002` were edited in place.
+
+**Database and auth**
+- Refresh: issuing or rotating now requires a current membership of the token's workspace (a
+  removed member is revoked, `membership_removed`); a used token presented again within 30 s
+  gets a successor (lost response / two contexts) instead of revoking the family; afterwards it is
+  still treated as theft. Access tokens and Google ID tokens must carry `exp`.
+- Schema: summary items, citations, owners, anchors and speaker clusters must belong to the same
+  meeting (composite keys with `meeting_id`); citations no longer vanish when segments are
+  replaced; the deletion audit trail survives workspace deletion; `consent_logs.outcome`
+  (posted/skipped/failed) as in the `consent.notice` event; missing indexes; one playback video row
+  per meeting; first sign-ins of one account are serialised; app functions not executable by
+  PUBLIC.
+- Migrations refuse duplicate versions and edits to applied files (checksum) and run under an
+  advisory lock. Tests and production return the same types (int8 → number, date → 'YYYY-MM-DD').
+  `Db.assertRowSecurityEnforced()` refuses a superuser/BYPASSRLS role — **for Gaurav (S2-08): call
+  it at API startup.**
+
+**Extension (S1-08/S1-09 code, now Anirudh's UI)**
+- Prompt chip: never shown over a running recording (asks the SW on load); Escape only from inside
+  the chip; closed shadow root and trusted clicks only; explains a failed Start or side-panel open;
+  replaces a chip left by an orphaned script; "Not now" resets for the next call; live-region
+  announcement. Mute observer no longer watches `class`. ARCHITECTURE §26.2 corrected: the chip
+  hides (does not unmount); mute gating is not wired yet (TODO FR-CAP-11, S2-04).
+- Drain and upload: no "idle" while a stop is still registering its drain (the SW also asks the
+  document before closing); `end` is sent even when everything is already acknowledged; video
+  waits for earlier recordings' drains too; a fragment refused for good (400/413/415/422) no longer
+  blocks the queue; "Delete local video" checks IndexedDB for fragments still to upload.
+
+**Gateway:** video playback streams with backpressure and stops when the tab closes; an error
+mid-stream no longer crashes the process; dev endpoints accept only loopback `Host` (DNS
+rebinding); sessions nobody uses are evicted after 24 h.
+
+**Open:** speaker detection fallbacks and the `data-self-name` meaning still need the Meet DOM dump
+(S1-12); chip placement left of Meet's side panel and focus return (S4-04); single-flight refresh in
+the extension (S4-03); a separate migration-owner role in Cloud SQL (infra).
+
 ### 2026-11-05 (night) — Anirudh (Claude Code): merged Gaurav's S1-08/S1-09/S1-12; review fixes
 Pulled `main` (`d3e912c`) into `anirudh`; only the HANDOFF header conflicted. Review of the new code:
 - **Names in logs (AGENTS §7):** `speaker-signal.ts` built IDs like `p_<name>` when a tile has no

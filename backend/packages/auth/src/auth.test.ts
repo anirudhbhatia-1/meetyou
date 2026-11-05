@@ -217,7 +217,11 @@ describe('AuthService with the database', () => {
     expect(second.refreshToken).not.toBe(first.refreshToken);
     expect(second.workspaceId).toBe(first.workspaceId);
 
-    // A stolen copy of the first token comes back: the family dies, the real holder signs in again.
+    // A stolen copy of the first token comes back after the 30 s retry grace: the family dies and
+    // the real holder signs in again.
+    await env.pg.exec(`RESET ROLE;
+      UPDATE refresh_tokens SET used_at = used_at - interval '1 minute' WHERE used_at IS NOT NULL;
+      SET ROLE meetyou_app;`);
     await expect(service.refresh(first.refreshToken)).rejects.toMatchObject({
       code: 'refresh_reused',
     });

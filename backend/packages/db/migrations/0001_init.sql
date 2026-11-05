@@ -87,6 +87,7 @@ CREATE TABLE user_settings (
   updated_at                timestamptz NOT NULL DEFAULT now(),
   UNIQUE (workspace_id, user_id)
 );
+CREATE INDEX user_settings_user_idx ON user_settings (user_id);
 
 -- ---------- meetings and recordings ----------
 
@@ -112,6 +113,7 @@ CREATE TABLE meetings (
   UNIQUE (id, workspace_id)
 );
 CREATE INDEX meetings_list_idx ON meetings (workspace_id, started_at DESC) WHERE deleted_at IS NULL;
+CREATE INDEX meetings_workspace_idx ON meetings (workspace_id);
 
 CREATE TABLE participants (
   id            text PRIMARY KEY,
@@ -123,7 +125,8 @@ CREATE TABLE participants (
   created_at    timestamptz NOT NULL DEFAULT now(),
   updated_at    timestamptz NOT NULL DEFAULT now(),
   FOREIGN KEY (meeting_id, workspace_id) REFERENCES meetings (id, workspace_id) ON DELETE CASCADE,
-  UNIQUE (id, workspace_id)
+  UNIQUE (id, workspace_id),
+  UNIQUE (id, meeting_id, workspace_id)
 );
 CREATE INDEX participants_meeting_idx ON participants (meeting_id);
 
@@ -138,9 +141,12 @@ CREATE TABLE speaker_clusters (
   created_at      timestamptz NOT NULL DEFAULT now(),
   updated_at      timestamptz NOT NULL DEFAULT now(),
   FOREIGN KEY (meeting_id, workspace_id) REFERENCES meetings (id, workspace_id) ON DELETE CASCADE,
-  FOREIGN KEY (participant_id, workspace_id) REFERENCES participants (id, workspace_id),
+  -- Same meeting only; naming a cluster must not block deleting or merging the participant.
+  FOREIGN KEY (participant_id, meeting_id, workspace_id)
+    REFERENCES participants (id, meeting_id, workspace_id) ON DELETE SET NULL (participant_id),
   UNIQUE (meeting_id, lane, provider_label),
-  UNIQUE (id, workspace_id)
+  UNIQUE (id, workspace_id),
+  UNIQUE (id, meeting_id, workspace_id)
 );
 
 CREATE TABLE audio_assets (
@@ -179,7 +185,8 @@ CREATE TABLE video_assets (
   created_at    timestamptz NOT NULL DEFAULT now(),
   updated_at    timestamptz NOT NULL DEFAULT now(),
   FOREIGN KEY (meeting_id, workspace_id) REFERENCES meetings (id, workspace_id) ON DELETE CASCADE,
-  UNIQUE (meeting_id, part_id)
+  -- At most one finalized playback row (part_id NULL) per meeting.
+  UNIQUE NULLS NOT DISTINCT (meeting_id, part_id)
 );
 CREATE INDEX video_assets_delete_after_idx ON video_assets (delete_after) WHERE delete_after IS NOT NULL;
 
@@ -203,8 +210,10 @@ CREATE TABLE transcript_segments (
   updated_at          timestamptz NOT NULL DEFAULT now(),
   CHECK (end_ms >= start_ms),
   FOREIGN KEY (meeting_id, workspace_id) REFERENCES meetings (id, workspace_id) ON DELETE CASCADE,
-  FOREIGN KEY (speaker_cluster_id, workspace_id) REFERENCES speaker_clusters (id, workspace_id),
-  UNIQUE (id, workspace_id)
+  FOREIGN KEY (speaker_cluster_id, meeting_id, workspace_id)
+    REFERENCES speaker_clusters (id, meeting_id, workspace_id) ON DELETE SET NULL (speaker_cluster_id),
+  UNIQUE (id, workspace_id),
+  UNIQUE (id, meeting_id, workspace_id)
 );
 CREATE INDEX transcript_segments_meeting_idx ON transcript_segments (meeting_id, start_ms);
 
@@ -219,7 +228,8 @@ CREATE TABLE notes (
   created_at    timestamptz NOT NULL DEFAULT now(),
   updated_at    timestamptz NOT NULL DEFAULT now(),
   FOREIGN KEY (meeting_id, workspace_id) REFERENCES meetings (id, workspace_id) ON DELETE CASCADE,
-  UNIQUE (id, workspace_id)
+  UNIQUE (id, workspace_id),
+  UNIQUE (id, meeting_id, workspace_id)
 );
 CREATE INDEX notes_meeting_idx ON notes (meeting_id, "order");
 
@@ -241,12 +251,15 @@ CREATE TABLE summaries (
   updated_at    timestamptz NOT NULL DEFAULT now(),
   FOREIGN KEY (meeting_id, workspace_id) REFERENCES meetings (id, workspace_id) ON DELETE CASCADE,
   UNIQUE (meeting_id, version),
-  UNIQUE (id, workspace_id)
+  UNIQUE (id, workspace_id),
+  UNIQUE (id, meeting_id, workspace_id)
 );
 
 CREATE TABLE summary_items (
   id                    text PRIMARY KEY,
   workspace_id          text NOT NULL,
+  -- Denormalised from the summary so owners, anchors and citations must come from the same meeting.
+  meeting_id            text NOT NULL,
   summary_id            text NOT NULL,
   kind                  text NOT NULL
                         CHECK (kind IN ('anchor_detail', 'decision', 'action_item', 'question', 'topic')),
@@ -265,11 +278,14 @@ CREATE TABLE summary_items (
   updated_at            timestamptz NOT NULL DEFAULT now(),
   -- Open/done applies to action items only (PRD §13).
   CHECK ((kind = 'action_item') = (status IS NOT NULL)),
-  FOREIGN KEY (summary_id, workspace_id) REFERENCES summaries (id, workspace_id) ON DELETE CASCADE,
-  FOREIGN KEY (anchor_note_id, workspace_id) REFERENCES notes (id, workspace_id) ON DELETE SET NULL (anchor_note_id),
-  FOREIGN KEY (owner_participant_id, workspace_id) REFERENCES participants (id, workspace_id)
-    ON DELETE SET NULL (owner_participant_id),
-  UNIQUE (id, workspace_id)
+  FOREIGN KEY (summary_id, meeting_id, workspace_id)
+    REFERENCES summaries (id, meeting_id, workspace_id) ON DELETE CASCADE,
+  FOREIGN KEY (anchor_note_id, meeting_id, workspace_id)
+    REFERENCES notes (id, meeting_id, workspace_id) ON DELETE SET NULL (anchor_note_id),
+  FOREIGN KEY (owner_participant_id, meeting_id, workspace_id)
+    REFERENCES participants (id, meeting_id, workspace_id) ON DELETE SET NULL (owner_participant_id),
+  UNIQUE (id, workspace_id),
+  UNIQUE (id, meeting_id, workspace_id)
 );
 CREATE INDEX summary_items_summary_idx ON summary_items (summary_id, "order");
 CREATE INDEX summary_items_open_actions_idx ON summary_items (workspace_id, created_at DESC)
@@ -279,12 +295,18 @@ CREATE INDEX summary_items_open_actions_idx ON summary_items (workspace_id, crea
 CREATE TABLE citations (
   id               text PRIMARY KEY,
   workspace_id     text NOT NULL,
+  meeting_id       text NOT NULL,
   summary_item_id  text NOT NULL,
   segment_id       text NOT NULL,
   created_at       timestamptz NOT NULL DEFAULT now(),
   updated_at       timestamptz NOT NULL DEFAULT now(),
-  FOREIGN KEY (summary_item_id, workspace_id) REFERENCES summary_items (id, workspace_id) ON DELETE CASCADE,
-  FOREIGN KEY (segment_id, workspace_id) REFERENCES transcript_segments (id, workspace_id) ON DELETE CASCADE,
+  -- An item may cite only segments of its own meeting.
+  FOREIGN KEY (summary_item_id, meeting_id, workspace_id)
+    REFERENCES summary_items (id, meeting_id, workspace_id) ON DELETE CASCADE,
+  -- NO ACTION: replacing segments (batch pass) must regenerate citations explicitly instead of
+  -- silently losing grounding; deleting the whole meeting still cascades through both paths.
+  FOREIGN KEY (segment_id, meeting_id, workspace_id)
+    REFERENCES transcript_segments (id, meeting_id, workspace_id),
   UNIQUE (summary_item_id, segment_id)
 );
 CREATE INDEX citations_segment_idx ON citations (segment_id);
@@ -306,7 +328,9 @@ CREATE TABLE consent_logs (
   workspace_id  text NOT NULL,
   meeting_id    text NOT NULL,
   mode          text NOT NULL CHECK (mode IN ('one_click', 'automatic', 'off')),
-  notice_sent   boolean NOT NULL,
+  -- As in the `consent.notice` event: skipped (mode off) and failed are different facts (FR-CON-03).
+  outcome       text NOT NULL CHECK (outcome IN ('posted', 'skipped', 'failed')),
+  notice_sent   boolean NOT NULL GENERATED ALWAYS AS (outcome = 'posted') STORED,
   notice_text   text,
   sent_at       timestamptz,
   created_at    timestamptz NOT NULL DEFAULT now(),
@@ -325,6 +349,7 @@ CREATE TABLE feedback (
   created_at    timestamptz NOT NULL DEFAULT now(),
   updated_at    timestamptz NOT NULL DEFAULT now()
 );
+CREATE INDEX feedback_workspace_idx ON feedback (workspace_id);
 
 -- AGENTS §3 rule 10: cost per meeting (STT minutes per lane, LLM tokens, storage).
 CREATE TABLE usage_records (
@@ -345,10 +370,12 @@ CREATE TABLE usage_records (
 );
 CREATE INDEX usage_records_meeting_idx ON usage_records (meeting_id);
 
--- Audit trail; kept after the target is gone, so no foreign key to the target.
+-- Audit trail; kept after the target is gone, so no foreign key to the target, and the workspace
+-- link becomes NULL (not cascaded) when the workspace itself is deleted. Orphaned rows are then
+-- invisible to the application (RLS) and remain for audits run by an operator.
 CREATE TABLE deletion_requests (
   id             text PRIMARY KEY,
-  workspace_id   text NOT NULL REFERENCES workspaces (id) ON DELETE CASCADE,
+  workspace_id   text REFERENCES workspaces (id) ON DELETE SET NULL,
   scope          text NOT NULL CHECK (scope IN ('meeting', 'account')),
   target_id      text NOT NULL,
   requested_at   timestamptz NOT NULL DEFAULT now(),
@@ -360,6 +387,7 @@ CREATE TABLE deletion_requests (
 );
 CREATE INDEX deletion_requests_due_idx ON deletion_requests (execute_after)
   WHERE cancelled_at IS NULL AND completed_at IS NULL;
+CREATE INDEX deletion_requests_workspace_idx ON deletion_requests (workspace_id);
 
 -- ---------- updated_at and row-level security ----------
 
@@ -419,6 +447,9 @@ DECLARE
   v_user text;
   v_workspace text;
 BEGIN
+  -- Two first sign-ins of one account at once (two devices) must not race into a unique
+  -- violation; the lock serialises them for this Google subject only.
+  PERFORM pg_advisory_xact_lock(hashtext('sign-in:' || p_google_sub));
   PERFORM set_config('app.google_sub', p_google_sub, true);
   SELECT u.id INTO v_user FROM users u WHERE u.google_sub = p_google_sub;
   IF v_user IS NOT NULL THEN
@@ -440,3 +471,6 @@ BEGIN
     VALUES (p_new_settings_id, p_new_workspace_id, p_new_user_id);
   RETURN QUERY SELECT p_new_user_id, p_new_workspace_id, true;
 END $$;
+
+-- Only the application role (the owner) may call these; nothing is granted to PUBLIC.
+REVOKE EXECUTE ON FUNCTION app_sign_in_google_user(text, text, text, text, text, text, text) FROM PUBLIC;

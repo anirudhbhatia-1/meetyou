@@ -59,6 +59,21 @@ export class Db {
     });
   }
 
+  /**
+   * Startup check (run before serving): a superuser or `BYPASSRLS` role would skip every policy,
+   * so the service refuses to run as one.
+   */
+  async assertRowSecurityEnforced(): Promise<void> {
+    const { rows } = await sql<{ rolsuper: boolean; rolbypassrls: boolean }>`
+      select rolsuper, rolbypassrls from pg_roles where rolname = current_user`.execute(
+      this.#kysely,
+    );
+    const role = rows[0];
+    if (role === undefined || role.rolsuper || role.rolbypassrls) {
+      throw new Error('database role bypasses row-level security; use the application role');
+    }
+  }
+
   /** Runs `work` in one transaction that can see only `workspaceId`'s rows. */
   async inWorkspace<T>(workspaceId: string, work: (tx: WorkspaceTx) => Promise<T>): Promise<T> {
     if (!WORKSPACE_ID.test(workspaceId)) throw new Error('invalid workspace id');

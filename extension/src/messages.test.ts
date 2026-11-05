@@ -95,7 +95,11 @@ describe('message parsers', () => {
     });
     expect(parseCaptureStartResult({ ok: false, reason: 'other' })).toBeNull();
     expect(parseCaptureStartResult(undefined)).toBeNull();
-    expect(parseCaptureStatusReply({ active: true })).toEqual({ active: true });
+    expect(parseCaptureStatusReply({ active: true })).toEqual({ active: true, busy: false });
+    expect(parseCaptureStatusReply({ active: false, busy: true })).toEqual({
+      active: false,
+      busy: true,
+    });
     expect(parseCaptureStatusReply({})).toBeNull();
     expect(parseCaptureStopReply({ ok: true, uploading: true })).toEqual({
       ok: true,

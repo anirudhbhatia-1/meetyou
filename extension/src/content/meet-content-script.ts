@@ -15,25 +15,37 @@ import {
 import { extractMeetingMetadata, type MeetingMetadata } from '../adapters/meet/metadata.ts';
 import { detectMuteState, observeMuteState } from '../adapters/meet/mute-signal.ts';
 import { observeActiveSpeakers } from '../adapters/meet/speaker-signal.ts';
-import { PromptChip } from './prompt-chip.ts';
+import { PromptChip, type PromptProblem } from './prompt-chip.ts';
 
 let stopObserving: (() => void) | null = null;
 let stopMuteObserving: (() => void) | null = null;
 let stopSpeakerObserving: (() => void) | null = null;
+let tornDown = false;
+
+/** After an extension reload or update this script's runtime is gone (`chrome.runtime.id`). */
+function contextValid(): boolean {
+  return chrome.runtime.id !== undefined;
+}
 
 /**
- * Best effort: after an extension reload this page keeps the old content script, whose runtime
- * is gone (`chrome.runtime.id` becomes undefined). It then stops observing instead of running a
- * dead observer for the rest of the call; the Meet tab needs a reload to get the new script.
+ * The orphaned script stops observing and removes its chip (its buttons would do nothing); the
+ * Meet tab needs a reload to get the new script, whose chip then replaces any leftover.
  */
+function teardown(): void {
+  if (tornDown) return;
+  tornDown = true;
+  stopObserving?.();
+  stopObserving = null;
+  stopMuteObserving?.();
+  stopMuteObserving = null;
+  stopSpeakerObserving?.();
+  stopSpeakerObserving = null;
+  promptChip.unmount();
+}
+
 function notifyExtension(message: unknown): void {
-  if (chrome.runtime.id === undefined) {
-    stopObserving?.();
-    stopObserving = null;
-    stopMuteObserving?.();
-    stopMuteObserving = null;
-    stopSpeakerObserving?.();
-    stopSpeakerObserving = null;
+  if (!contextValid()) {
+    teardown();
     return;
   }
   try {
@@ -42,8 +54,6 @@ function notifyExtension(message: unknown): void {
     // Extension context invalidated between the check and the call.
   }
 }
-
-notifyExtension({ type: 'meet.page-ready' });
 
 const promptChip = new PromptChip(document, {
   onStart: () => {
@@ -91,6 +101,10 @@ function broadcastState(
   metadata: MeetingMetadata,
   healthReport: SelectorHealthReport,
 ): void {
+  if (!contextValid()) {
+    teardown();
+    return;
+  }
   // AGENTS §7: Never log participant names or meeting titles. Log IDs and counts only.
   console.log(
     `[MeetYou] Call state: ${snapshot.state} | Participants: ${metadata.participants.length} | Health: ${healthReport.overallStatus}`,
@@ -103,12 +117,25 @@ function broadcastState(
   }
 
   // Update prompt chip visibility based on call state (DESIGN §8.2)
-  promptChip.updateCallState(snapshot.state);
+  promptChip.updateCallState(snapshot.state, snapshot.meetingCode);
 
   // Activate or teardown DOM signal observers for mute and active speaker (S1-08)
   updateSignalObservers(snapshot.state);
 
   notifyExtension({ type: 'meet.state-changed', snapshot, metadata, healthReport });
+}
+
+// Content scripts cannot read the recording state, so ask once: a reloaded Meet tab must not show
+// the chip over a recording that is already running.
+if (contextValid()) {
+  chrome.runtime
+    .sendMessage({ type: 'meet.page-ready' })
+    .then((reply: unknown) => {
+      if (isRecord(reply) && typeof reply.status === 'string') {
+        promptChip.updateRecordingStatus(reply.status);
+      }
+    })
+    .catch(() => undefined);
 }
 
 // Detection on load and on every change: `observeCallState` evaluates immediately, so the first
@@ -139,6 +166,12 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
     typeof message.status === 'string'
   ) {
     promptChip.updateRecordingStatus(message.status);
+  } else if (
+    message.target === 'content' &&
+    message.type === 'prompt.problem' &&
+    (message.problem === 'start_failed' || message.problem === 'panel_failed')
+  ) {
+    promptChip.showProblem(message.problem as PromptProblem);
   }
 });
 

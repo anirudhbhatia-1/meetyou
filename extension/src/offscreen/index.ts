@@ -24,6 +24,10 @@ let recorder: Recorder | null = null;
 let uploader: Promise<VideoUploader | null> | null = null;
 /** Stopped recordings still sending buffered audio (FR-CAP-07); the document stays open for them. */
 const drains = new Set<Promise<void>>();
+/** Stopped recorders whose audio is still draining: video must wait for them too (audio first). */
+const draining = new Set<Recorder>();
+/** Stops in progress; until they register their drain, the document is not idle. */
+let stopping = 0;
 let videoIdle = true;
 let idleReported = false;
 
@@ -87,7 +91,9 @@ function videoUploader(): Promise<VideoUploader | null> {
         sign: (sessionId, partId, indices, contentType) =>
           signDevVideoFragments(GATEWAY_URL, sessionId, partId, indices, contentType),
         put: putFragment,
-        canUpload: () => recorder === null || recorder.audioClear(),
+        canUpload: () =>
+          (recorder === null || recorder.audioClear()) &&
+          [...draining].every((r) => r.audioClear()),
         isUploadable: (sessionId) => sessionId.startsWith('ses_'),
         onProgress: reportUpload,
         onIdle() {
@@ -105,20 +111,33 @@ function videoUploader(): Promise<VideoUploader | null> {
 }
 
 /** Tells the service worker it may close the document: no recording, audio drain or video left. */
+function isBusy(): boolean {
+  return recorder !== null || stopping > 0 || drains.size > 0 || !videoIdle;
+}
+
 function reportIdleIfDone(): void {
-  if (recorder !== null || drains.size > 0 || !videoIdle || idleReported) return;
+  if (isBusy() || idleReported) return;
   idleReported = true;
   notifyBackground({ target: 'background', type: 'capture.upload_idle' });
 }
 
 /** Stops a recording and keeps its audio drain alive until the buffered frames are acknowledged. */
 async function stopRecorder(current: Recorder): Promise<void> {
-  const { drained } = await current.stop();
-  drains.add(drained);
-  void drained.finally(() => {
-    drains.delete(drained);
-    reportIdleIfDone();
-  });
+  // Counted before the first await: until the drain is registered, an uploader going idle must
+  // not let the service worker close the document (it would kill the drain).
+  stopping += 1;
+  try {
+    const { drained } = await current.stop();
+    drains.add(drained);
+    draining.add(current);
+    void drained.finally(() => {
+      drains.delete(drained);
+      draining.delete(current);
+      reportIdleIfDone();
+    });
+  } finally {
+    stopping -= 1;
+  }
 }
 
 function reportUpload(progress: { pending: number; uploaded: number }): void {
@@ -225,7 +244,7 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
       sendResponse({ ok: true });
       return false;
     case 'capture.status': {
-      const status: CaptureStatusReply = { active: recorder !== null };
+      const status: CaptureStatusReply = { active: recorder !== null, busy: isBusy() };
       sendResponse(status);
       return false;
     }

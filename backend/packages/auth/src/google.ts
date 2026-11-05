@@ -72,7 +72,12 @@ export async function exchangeGoogleCode(
     throw new AuthError('google_exchange_failed');
   }
   if (!response.ok) throw new AuthError('google_exchange_failed');
-  const body = (await response.json()) as { id_token?: unknown };
+  let body: { id_token?: unknown };
+  try {
+    body = (await response.json()) as { id_token?: unknown };
+  } catch {
+    throw new AuthError('google_exchange_failed');
+  }
   if (typeof body.id_token !== 'string') throw new AuthError('google_exchange_failed');
 
   let payload: Record<string, unknown>;
@@ -82,6 +87,7 @@ export async function exchangeGoogleCode(
       issuer: GOOGLE_ISSUERS,
       audience: config.clientId,
       algorithms: ['RS256'],
+      requiredClaims: ['exp', 'sub'],
       currentDate: new Date((deps.now ?? Date.now)()),
     });
     payload = verified.payload;

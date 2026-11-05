@@ -1,6 +1,6 @@
 import { z } from 'zod';
 
-import { UploadRejected, type SignedFragment } from './video-uploader.ts';
+import { FragmentRejected, UploadRejected, type SignedFragment } from './video-uploader.ts';
 
 /**
  * Local-dev session API of the S1-05 gateway (`backend/apps/gateway`, APP_ENV=local only).
@@ -104,6 +104,8 @@ export async function putFragment(url: string, blob: Blob, contentType: string):
     // A 10 s fragment is ~1.3 MB; a minute covers a slow (~200 kbps) link.
     signal: AbortSignal.timeout(60_000),
   });
+  // 400/413/415/422 will never succeed on a retry; 403 (expired URL) and 5xx may.
+  if ([400, 413, 415, 422].includes(response.status)) throw new FragmentRejected(response.status);
   if (!response.ok) throw new Error(`HTTP ${response.status}`);
 }
 

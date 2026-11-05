@@ -1045,7 +1045,8 @@ contracts. Changing them requires an ADR and a migration plan.
     `button[data-is-muted="true"|"false"]` and updates `aria-label` (`Turn on microphone` vs
     `Turn off microphone`) synchronously on button click or `Ctrl+D`. `observeMuteState` captures
     every transition in < 10 ms with zero false triggers. Reliable for `me`-lane gating to protect
-    user privacy and avoid transmitting silence/side remarks to STT.
+    user privacy and avoid transmitting silence/side remarks to STT. **Not wired yet:** the
+    service worker only observes these events; forwarding to the recorder is TODO(FR-CAP-11, S2-04).
   - **Active-speaker detection (FR-SPK-03):** Meet animates speaking waves (`div[data-is-speaking="true"]`,
     `div[jsname="x3Eknd"]`) and tile borders on active speakers. Throttling mutations to 200 ms with
     deduplication eliminates animation-driven CPU churn. On 1:1 and small group calls (≤ 4
@@ -1068,6 +1069,6 @@ contracts. Changing them requires an ADR and a migration plan.
     (`RenderLayer`).
   - Overlay impact during 1080p Google Meet video rendering is negligible (< 0.2% CPU/GPU overhead,
     zero dropped video frames).
-  - The prompt chip is transient: clicking "Start", "Not now", or `Escape` cleanly unmounts the
-    container, resulting in zero overhead during the actual meeting recording. Default glass
+  - The prompt chip is transient: clicking "Start", "Not now", or `Escape` hides the container
+    (`display: none`, no observers of its own), so it costs nothing during the recording. Default glass
     treatment is approved for production (DESIGN §5.6).

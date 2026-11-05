@@ -138,6 +138,12 @@ async function applyCaptureEvent(event: CaptureEvent): Promise<CaptureState> {
   return next;
 }
 
+function notifyPromptProblem(tabId: number, problem: 'start_failed' | 'panel_failed'): void {
+  chrome.tabs
+    .sendMessage(tabId, { target: 'content', type: 'prompt.problem', problem })
+    .catch(() => undefined);
+}
+
 // Capture tasks run one at a time so a double click or a shortcut during start cannot interleave.
 let captureQueue: Promise<void> = Promise.resolve();
 
@@ -258,7 +264,17 @@ async function closeOffscreenQuietly(): Promise<void> {
 
 /** The offscreen document finished uploading video; close it unless a recording uses it. */
 async function closeIfUploadsDone(): Promise<void> {
-  if (canStart(await loadCaptureState())) await closeOffscreenQuietly();
+  if (!canStart(await loadCaptureState())) return;
+  // Backstop: ask the document itself, which knows about drains and stops in flight.
+  try {
+    const reply = parseCaptureStatusReply(
+      await sendToOffscreen({ target: 'offscreen', type: 'capture.status' }),
+    );
+    if (reply?.busy === true) return;
+  } catch (error: unknown) {
+    logError('offscreen status failed', error);
+  }
+  await closeOffscreenQuietly();
 }
 
 async function pauseRecording(): Promise<void> {
@@ -461,7 +477,7 @@ chrome.commands.onCommand.addListener((command, tab) => {
   }
 });
 
-chrome.runtime.onMessage.addListener((message, sender) => {
+chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   const callState = parseMeetCallState(message);
   const fromTab = senderTabId(sender);
   if (callState !== null && fromTab !== null) {
@@ -477,6 +493,17 @@ chrome.runtime.onMessage.addListener((message, sender) => {
 
   if (typeof message === 'object' && message !== null) {
     const record = message as Record<string, unknown>;
+    if (record.type === 'meet.page-ready') {
+      // The content script asks once so its prompt chip never shows over a running recording.
+      void loadCaptureState().then((state) => {
+        sendResponse({
+          status: fromTab !== null && state.tabId === fromTab ? state.status : 'idle',
+        });
+      });
+      return true;
+    }
+    // TODO(FR-CAP-11, S2-04): forward mute and speaker events of the recording tab to the
+    // offscreen document for me-lane gating and speaker naming; today they are only observed.
     if (record.type === 'meet.mute-changed') {
       console.log(`[MeetYou] Background observed mic.mute_changed: muted=${Boolean(record.muted)}`);
       return false;
@@ -507,6 +534,7 @@ chrome.runtime.onMessage.addListener((message, sender) => {
           })
           .catch((error: unknown) => {
             logError('[MeetYou] Prompt chip: chrome.sidePanel.open() FAILED', error);
+            notifyPromptProblem(tabId, 'panel_failed');
           });
       }
       break;
@@ -516,6 +544,11 @@ chrome.runtime.onMessage.addListener((message, sender) => {
         const tabId = fromTab ?? (await activeTabId());
         console.log('[MeetYou] Prompt chip: startRecording requested for tab', tabId);
         await startRecording(tabId);
+        // A click in the page may not count as invoking the extension, so tabCapture can refuse;
+        // the chip then tells the user to use the toolbar instead of failing silently.
+        if (tabId !== undefined && (await loadCaptureState()).status === 'error') {
+          notifyPromptProblem(tabId, 'start_failed');
+        }
       });
       break;
     }

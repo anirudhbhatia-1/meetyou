@@ -71,6 +71,8 @@ export interface CaptureStopReply {
 /** Offscreen reply to `capture.status`, used to reconcile after a service-worker restart. */
 export interface CaptureStatusReply {
   active: boolean;
+  /** Recording, stopping, draining audio or uploading video: the document must stay open. */
+  busy: boolean;
 }
 
 /**
@@ -254,5 +256,5 @@ export function parseCaptureStartResult(value: unknown): CaptureStartResult | nu
 
 export function parseCaptureStatusReply(value: unknown): CaptureStatusReply | null {
   if (!isRecord(value) || typeof value.active !== 'boolean') return null;
-  return { active: value.active };
+  return { active: value.active, busy: value.busy === true };
 }

@@ -13,13 +13,15 @@ const MAX_BACKOFF_MS = 30_000;
 /** Re-sign a little before the URL expires, so a slow PUT does not start on a dead URL. */
 const URL_MARGIN_MS = 60_000;
 
+export type FragmentFilter = (sessionId: string, partId: string, index: number) => boolean;
+
 /** Fragments waiting in IndexedDB, oldest first (session, part and index are all time-ordered). */
 export interface FragmentQueue {
-  /** Oldest fragment of a session that `include` accepts, or null. */
-  next(include: (sessionId: string) => boolean): Promise<VideoFragmentRow | null>;
+  /** Oldest fragment that `include` accepts, or null. */
+  next(include: FragmentFilter): Promise<VideoFragmentRow | null>;
   /** Fragment indices still waiting for one part, ascending, at most `limit`. */
   indices(sessionId: string, partId: string, limit: number): Promise<number[]>;
-  count(include: (sessionId: string) => boolean): Promise<number>;
+  count(include: FragmentFilter): Promise<number>;
   remove(row: VideoFragmentRow): Promise<void>;
 }
 
@@ -30,6 +32,19 @@ export interface SignedFragment {
 }
 
 /** The server will never accept this session's fragments (unknown or ended session). */
+/**
+ * The server refused this one fragment for good (e.g. 413 too large, 400 type mismatch). It stays
+ * in IndexedDB (pruned with the 7-day retention) and the uploader moves on to the next one.
+ */
+export class FragmentRejected extends Error {
+  readonly status: number;
+
+  constructor(status: number) {
+    super(`fragment refused (HTTP ${status})`);
+    this.status = status;
+  }
+}
+
 export class UploadRejected extends Error {
   readonly sessionId: string;
 
@@ -75,12 +90,16 @@ export class VideoUploader {
   readonly #now: () => number;
   readonly #sleep: (ms: number) => Promise<void>;
   readonly #skip = new Set<string>();
+  /** Fragments the server refused for good; retrying them forever would block every later one. */
+  readonly #skipFragments = new Set<string>();
   readonly #urls = new Map<string, SignedFragment>();
   #uploaded = 0;
   #failures = 0;
   #running = false;
   #stopped = false;
   #wake: (() => void) | null = null;
+  /** Key of the fragment being uploaded, for per-fragment refusals. */
+  #current: string | null = null;
 
   constructor(options: VideoUploaderOptions) {
     this.#o = options;
@@ -115,8 +134,10 @@ export class VideoUploader {
     return this.#o.queue.count(this.#include);
   }
 
-  readonly #include = (sessionId: string): boolean =>
-    !this.#skip.has(sessionId) && this.#o.isUploadable(sessionId);
+  readonly #include: FragmentFilter = (sessionId, partId, index) =>
+    !this.#skip.has(sessionId) &&
+    !this.#skipFragments.has(fragmentKey(sessionId, partId, index)) &&
+    this.#o.isUploadable(sessionId);
 
   async #run(): Promise<void> {
     while (!this.#stopped) {
@@ -137,6 +158,11 @@ export class VideoUploader {
         this.#uploaded += 1;
         this.#o.onProgress({ pending: await this.pending(), uploaded: this.#uploaded });
       } catch (error: unknown) {
+        if (error instanceof FragmentRejected && this.#current !== null) {
+          this.#o.onError('video fragment refused', error);
+          this.#skipFragments.add(this.#current);
+          continue;
+        }
         if (error instanceof UploadRejected) {
           // Its fragments stay in IndexedDB (never deleted without a successful PUT).
           this.#o.onError('video session rejected', error);
@@ -154,6 +180,7 @@ export class VideoUploader {
   async #upload(row: VideoFragmentRow): Promise<void> {
     const contentType = baseContentType(row.mimeType);
     const key = fragmentKey(row.sessionId, row.partId, row.index);
+    this.#current = key;
     const url = await this.#urlFor(row, contentType);
     try {
       await this.#o.put(url, row.blob, contentType);
@@ -214,11 +241,13 @@ export class IdbFragmentQueue implements FragmentQueue {
     this.#db = db;
   }
 
-  async next(include: (sessionId: string) => boolean): Promise<VideoFragmentRow | null> {
+  async next(include: FragmentFilter): Promise<VideoFragmentRow | null> {
     const store = this.#db.transaction(VIDEO_STORE, 'readonly').objectStore(VIDEO_STORE);
     for (const key of await idbRequest(store.getAllKeys())) {
-      const sessionId = Array.isArray(key) ? key[0] : undefined;
-      if (typeof sessionId !== 'string' || !include(sessionId)) continue;
+      if (!Array.isArray(key)) continue;
+      const [sessionId, partId, index] = key as unknown[];
+      if (typeof sessionId !== 'string' || typeof partId !== 'string') continue;
+      if (typeof index !== 'number' || !include(sessionId, partId, index)) continue;
       const row = (await idbRequest(
         this.#db.transaction(VIDEO_STORE, 'readonly').objectStore(VIDEO_STORE).get(key),
       )) as VideoFragmentRow | undefined;
@@ -236,10 +265,12 @@ export class IdbFragmentQueue implements FragmentQueue {
     );
   }
 
-  async count(include: (sessionId: string) => boolean): Promise<number> {
+  async count(include: FragmentFilter): Promise<number> {
     const store = this.#db.transaction(VIDEO_STORE, 'readonly').objectStore(VIDEO_STORE);
     const keys = await idbRequest(store.getAllKeys());
-    return keys.filter((key) => Array.isArray(key) && include(String(key[0]))).length;
+    return keys.filter(
+      (key) => Array.isArray(key) && include(String(key[0]), String(key[1]), Number(key[2])),
+    ).length;
   }
 
   async remove(row: VideoFragmentRow): Promise<void> {
