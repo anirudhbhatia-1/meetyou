@@ -2,12 +2,44 @@
 
 | Field | Value |
 |---|---|
-| Status | **Accepted with a gate** (Anirudh, 2026-11-01) — Google Chirp 3 is primary once it passes the §6.2 gate on our benchmark; otherwise Deepgram Nova-3 is primary |
+| Status | **Accepted, amended 2026-11-05** (Anirudh) — **Deepgram Nova-3 is the only STT provider**; Google Chirp 3 is dropped and the §6.2 gate is cancelled (§0). First accepted 2026-11-01 with a gate |
 | Decision | D-03 (PRD §22) |
 | Inputs | [STT_BENCHMARK_PLAN.md](../STT_BENCHMARK_PLAN.md) · [STT_PREFLIGHT.md](../STT_PREFLIGHT.md) · `bench-data/mucs/results/scores*.csv` (gitignored) |
 | Owner | Anirudh |
 
 ---
+
+## 0. Amendment 2026-11-05 — Deepgram only
+
+**Decision (Anirudh, 2026-11-05):** we will not use Google Cloud Speech-to-Text (Chirp 3).
+**Deepgram Nova-3** is the STT provider for live streaming and for the post-meeting pass.
+
+**Facts behind it**
+- Deepgram was the best measured provider on our benchmark (§4.1: 14.2% spelling-insensitive WER,
+  final P90 2.8 s). Chirp 3 was never benchmarked.
+- Deepgram is already integrated and verified end to end in the S1-05 gateway: Ogg Opus input
+  (ADR-0003 check 4), `them`-lane diarization, `mip_opt_out=true`.
+- It gives streaming diarization and word timestamps; Chirp 3 has both only in batch.
+
+**What changes**
+- §6.1: Deepgram for both roles; no backup provider for now.
+- §6.2 gate and S1-14 are cancelled. The Google consequences in §7 (stream rotation, quota,
+  `OGG_OPUS` check, `us`/`eu` region, $0.016/min) no longer apply.
+- The provider interface stays (ARCHITECTURE §7). A new provider later means a new adapter and an
+  ADR update, not a pipeline change.
+- The Google provider in `tools/stt-benchmark` stays as benchmark code only; the product does not use it.
+
+**Consequences of Deepgram only**
+- **Region:** audio is transcribed in the United States, so it leaves India. Storage stays in
+  `asia-south1`. SUBPROCESSORS and the privacy policy say so.
+- **Cost:** about $0.0092 per audio-minute for Nova-3 multilingual streaming [Verify on Deepgram's
+  pricing page; third-party source] → about **$1.10 per meeting-hour** with both lanes; `me`-lane
+  mute gating (FR-CAP-11) lowers it.
+- **Keep-alive:** send `KeepAlive` during silence (AGENTS §10).
+- **Script (D-01):** check on dogfooding which script `multi` returns for Hindi words; the assembler
+  still transliterates Devanagari to Roman and keeps `rawText`.
+- **Open:** what the product does during a Deepgram outage, with no second provider. Audio is still
+  stored durably by the gateway. Decide before beta.
 
 ## 1. Context
 
@@ -30,8 +62,8 @@ optional post-meeting batch pass, with strong Hindi–English code-switching and
 
 | Option | Streaming | Batch | Status |
 |---|---|---|---|
-| **Google Cloud Speech-to-Text V2, Chirp 3** (`@google-cloud/speech`) | ✓ `StreamingRecognize`, 5-min streams | ✓ `BatchRecognize` with diarization, ≤ 8 h | **Chosen (gated)** — not yet benchmarked: needs a billing-enabled Cloud project |
-| Deepgram Nova-3 (`multi`, hints `hi,en`) | ✓ | ✓ | Measured — **fallback** |
+| **Google Cloud Speech-to-Text V2, Chirp 3** (`@google-cloud/speech`) | ✓ `StreamingRecognize`, 5-min streams | ✓ `BatchRecognize` with diarization, ≤ 8 h | **Dropped 2026-11-05** (§0) — never benchmarked |
+| Deepgram Nova-3 (`multi`, hints `hi,en`) | ✓ | ✓ | Measured — **chosen, only provider (2026-11-05)** |
 | Gemini 3.5 Transcribe (Live / Interactions) | ✓ (10-min sessions) | ✓ | Measured — rejected for STT |
 | Sarvam Saaras v3 (`translit`) | ✓ | ✓ | Measured — **dropped 2026-11-01** |
 
@@ -102,15 +134,17 @@ Only the accuracy and latency criteria could be scored. The others need data we 
 
 | Role | Provider and configuration | Condition |
 |---|---|---|
-| **Live (both lanes)** | Google Cloud STT V2 `chirp_3`, `StreamingRecognize`, `languageCodes` `["hi-IN"]` or `["hi-IN","en-IN"]` (whichever wins the gate), interim results on, automatic punctuation, inline phrase set from meeting vocabulary | Passes §6.2 |
-| **Post-meeting pass** | Google `chirp_3` `BatchRecognize` with diarization, from the stored Opus lanes (Cloud Storage input) | Passes §6.2 on batch |
-| **Backup** (confirmed by Anirudh 2026-11-01; primary if the gate fails, failover during a Google outage) | Deepgram Nova-3, `language=multi`, `language_hint=hi,en`, `mip_opt_out=true` | Already measured |
-| Not used | Gemini for STT; Sarvam (dropped) | — |
+| **Live (both lanes)** | Deepgram Nova-3 streaming, `language=multi`, `language_hint=hi,en`, interim results, `mip_opt_out=true`, diarization on the `them` lane | Since 2026-11-05 (§0) |
+| **Post-meeting pass** | Deepgram Nova-3 pre-recorded, from the stored Opus lanes, with diarization | Since 2026-11-05; settings in S2-03 |
+| Backup | None for now (§0, open item) | — |
+| Not used | Google Chirp 3 (dropped 2026-11-05); Gemini for STT; Sarvam (dropped) | — |
 
 The gateway talks to providers only through the provider-adapter interface (ARCHITECTURE §6), so
-switching between Google and Deepgram is a configuration change, not a rewrite.
+adding another provider later is a new adapter, not a rewrite.
 
-### 6.2 Gate before S2-03 (provider layer)
+### 6.2 Gate before S2-03 (provider layer) — cancelled 2026-11-05
+
+Kept for the record; not run (§0).
 
 Run `bench run-stream --config tools/stt-benchmark/examples/runs.google.json` on the same 20 MUCS
 clips (≈ 160 audio-minutes ≈ $3).
@@ -133,6 +167,9 @@ If Chirp 3 misses a target, Deepgram becomes primary and this ADR is updated. No
 is needed.
 
 ## 7. Consequences
+
+> Since 2026-11-05 (§0) the Google-specific parts below (gateway rotation, quota, timestamps,
+> region, cost) no longer apply; §0 lists the Deepgram consequences. The Gemini free-key rule still applies.
 
 ### Gateway (S2-03/S2-04)
 - Rotate Google streams before 5 minutes, using the harness pattern (open the next stream, replay
@@ -195,13 +232,13 @@ The provider layer enforces this: `GEMINI_FREE_TIER_ACCEPTED` is honoured only w
 | 2026-10-29 | B (stream) | Deepgram, Gemini Live, Sarvam translit | 20 / 20 / 19 | Anirudh | Sarvam run stopped on `ENOTFOUND api.sarvam.ai` (mx-018/019 partial, mx-020 missing); not re-run because Sarvam was dropped |
 | 2026-10-29 | D (Opus) | Deepgram multi batch, PCM vs Opus 24k | 8 | Anirudh | ≤ 0.5 pt difference |
 | 2026-11-01 | — | — | — | Anirudh | Decision: Google primary (gated), Sarvam dropped. Google provider added to `tools/stt-benchmark` (`provider: "google"`, streaming) |
-| | Gate §6.2 | google-chirp3-hi / hi-en stream | 20 | Anirudh | Pending Cloud project |
+| 2026-11-05 | — | — | — | Anirudh | Decision: Deepgram only; Google Chirp 3 dropped, §6.2 gate and S1-14 cancelled |
 
 ## 9. Follow-ups
 
-- Google batch in the benchmark (needs a Cloud Storage bucket for `BatchRecognize` input).
+- Deepgram pre-recorded settings for the post-meeting pass (S2-03).
 - Phases E–G with consented meeting recordings during S1 dogfooding.
-- Re-run the gate when Google or Deepgram ships a new model.
+- Re-run the benchmark when Deepgram ships a new model.
 
 ## Sources
 

@@ -9,7 +9,7 @@
 ## 1. Context
 
 The Chrome extension (service worker, offscreen document, side panel, extension pages) and, from
-beta, a web app need to authenticate users with **Google sign-in** using only `openid email profile`
+alpha (D-07, 2026-11-05), the library web app need to authenticate users with **Google sign-in** using only `openid email profile`
 (PRD FR-ONB-02), call our REST API, and open a **session-scoped** WebSocket to the gateway. No vendor
 API key may reach the client. Refresh tokens must rotate with theft detection (ARCHITECTURE §13).
 
@@ -72,7 +72,7 @@ registered per extension ID (one for alpha, one for the store build).
 - The gateway checks `aud`, `exp`, `sid` matches the `hello.sessionId`, and that `jti` is unused
   (Redis, TTL = token lifetime).
 
-### 4.5 Web app (beta) and desktop app (Phase 2)
+### 4.5 Web app (from alpha, D-07) and desktop app (Phase 2)
 - Web app: same backend; refresh token in an `HttpOnly; Secure; SameSite=Lax` cookie scoped to
   the API path, access token in memory, CSRF token on state-changing requests.
 - Desktop app: same flow with a loopback redirect URI + PKCE; refresh token in the OS keychain.

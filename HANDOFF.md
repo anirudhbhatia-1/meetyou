@@ -6,8 +6,8 @@ pointer to where the full detail lives — the linked document stays the source 
 
 | Field | Value |
 |---|---|
-| Last updated | 2026-11-04 (S1-07 rebased on capture path & esbuild; ready to merge) |
-| Updated by | Gaurav (Google Antigravity) |
+| Last updated | 2026-11-05 (STT is Deepgram only; library is a web app from alpha) |
+| Updated by | Anirudh (Claude Code) |
 | Repository | [anirudhbhatia-1/meetyou](https://github.com/anirudhbhatia-1/meetyou) — branches `main`, `anirudh`, `feature/S1-07-meet-adapter-v0` |
 | Current stage | **Stage 1** in progress — S1-01, S1-02, S1-07 done; Anirudh's S1-03..S1-06 and S1-13 code in; Gaurav: S1-08, S1-09, S1-10 (§7) |
 
@@ -82,9 +82,10 @@ All dated 2026-10-28 unless noted.
 |---|---|---|
 | **D-01** | Hindi/Hinglish transcripts display in **Roman script** by default; always store the provider's original output (`raw_text`); Devanagari display later as a setting; mixed-script fallback if transliteration benchmarks poorly | AGENTS §9, PRD ML-03/04 |
 | **D-02** | Audio retention default **7 days**; user can choose "delete after notes" (only after successful processing) or 30 days; transcripts and notes stay until the user deletes them | AGENTS §9, PRD FR-SET-01 |
-| **D-03** (2026-11-01) | STT: **Google Cloud Speech-to-Text V2 Chirp 3** primary once it passes the benchmark gate (S1-14), **Deepgram Nova-3** fallback, **Sarvam dropped**, Gemini not used for STT | [ADR-0001](docs/adr/0001-stt-provider.md) |
+| **D-03** (2026-11-01, amended 2026-11-05) | STT: **Deepgram Nova-3 only** (live and post-meeting); **Google Chirp 3 dropped** (gate and S1-14 cancelled), **Sarvam dropped**, Gemini not used for STT; audio transcribed in the US | [ADR-0001](docs/adr/0001-stt-provider.md) |
 | **D-06** (2026-10-29) | Opus 24 kbps transport and storage | [ADR-0003](docs/adr/0003-audio-transport-format.md) |
 | **D-08** | Backend: **TypeScript/Node.js on Google Cloud Mumbai** (Cloud Run, Cloud SQL, Cloud Storage). ADR-0002 **Accepted 2026-11-01**; live checks in S1-11 | [ADR-0002](docs/adr/0002-backend-stack-and-hosting.md) |
+| **D-07** (2026-11-05) | Library is a **web app from alpha** (like Fireflies): sign in and see your own recordings, transcripts, summaries from any device; the extension records and links to it; ADR-0006 (hosting) moves to S4-09 | PRD FR-LIB-05, IMPLEMENTATION_PLAN S4-09 |
 | **D-12** (2026-11-01) | Record video of the meeting screen in Phase 1; setting on by default; same retention as audio; off when retention is "delete immediately" | [ADR-0011](docs/adr/0011-video-screen-recording.md) |
 
 ### 4.3 Architecture and engineering rules
@@ -137,11 +138,10 @@ All dated 2026-10-28 unless noted.
 
 | ID | Question | Status / next step | Owner of next step |
 |---|---|---|---|
-| D-03 gate | Chirp 3 must reach the ADR-0001 §6.2 targets on the 20 MUCS clips; else Deepgram is primary | S1-14, needs the Cloud project (S1-10) | Anirudh |
+| STT outage | With Deepgram as the only provider, what the product does during a Deepgram outage (audio is still stored) | Decide before beta (ADR-0001 §0) | Anirudh |
 | D-04 | LLM for summaries | Evaluation in S3-05 → ADR-0007; Gemini Flash is a candidate | Anirudh |
 | D-05 | Consent notice default mode | Proposed One click (used in DESIGN) — confirm | Both |
 | D-06 | ✅ Closed 2026-10-29: Opus 24 kbps ([ADR-0003](docs/adr/0003-audio-transport-format.md), accepted) | Re-check with chosen provider in S1-11 | Anirudh |
-| D-07 | Library surface in beta: extension page vs web app | ADR-0006 before beta | Gaurav |
 | D-09 | Product name | "Minutes" is a working name | Both |
 | D-10 | `me` lane follows Meet mute by default | Proposed On — confirm in M1 | Both |
 | D-11 | Hinglish note markers (`faisla:`, `kaam:`, `sawaal:`, `zaroori:`) | Decide by M2 | Both |
@@ -174,8 +174,8 @@ Stage 0 is complete (status table: IMPLEMENTATION_PLAN.md → "Stage 0 status").
 
 1. **Gaurav:** S1-01 extension skeleton (add `unlimitedStorage` to the manifest — PRD §18), S1-07
    Meet adapter, S1-10 staging infrastructure (the Cloud project also unblocks the STT gate).
-2. **Anirudh:** S1-02..S1-06 capture path, **S1-13 video capture spike** (ADR-0011 checks), **S1-14
-   ADR-0001 gate** with Google Chirp 3 (needs `GOOGLE_CLOUD_PROJECT` + ADC login in `.env.bench`).
+2. **Anirudh:** S1-02..S1-06 capture path, **S1-13 video capture spike** (ADR-0011 checks), S1-14 was
+   cancelled 2026-11-05 (Deepgram only, ADR-0001 §0).
 3. Record consented dogfooding meetings for benchmark Phases E–G (kit in `docs/benchmark/`).
 
 ## 8. Conventions for this file
@@ -191,6 +191,24 @@ Stage 0 is complete (status table: IMPLEMENTATION_PLAN.md → "Stage 0 status").
 ## 9. Session log
 
 Newest first. One entry per working session (either person).
+
+### 2026-11-05 — Anirudh (Claude Code): STT is Deepgram only
+**Decision (Anirudh):** we will not use Google Cloud Speech-to-Text (Chirp 3); **Deepgram Nova-3**
+is the only STT provider, live and post-meeting.
+- ADR-0001 amended (§0, status, §6.1, §6.2 cancelled, run log); ADR-0003 check 5 cancelled.
+- S1-14 cancelled; S2-03 builds the Deepgram adapter only.
+- AGENTS §9, PRD (D-03, cost ≈ $1.10 per meeting-hour [Verify]), ARCHITECTURE, SUBPROCESSORS
+  (Deepgram, United States), FEATURES, DESIGN, STT_PREFLIGHT and the benchmark plan updated.
+- The Google provider in `tools/stt-benchmark` stays as benchmark code; the product does not use it.
+- **For Gaurav (S1-10):** the GCP project is no longer needed for STT; ADR-0002 hosting (Cloud Run,
+  Cloud SQL, Cloud Storage in Mumbai) is unchanged.
+- **Open:** behaviour during a Deepgram outage (no second provider) — decide before beta.
+
+**Decision (Anirudh): D-07 closed — the library is a web app from alpha**, like Fireflies: users sign
+in and see their own recordings, transcripts, summaries and notes from any device. PRD FR-LIB-05,
+FEATURES, DESIGN, ARCHITECTURE, ADR-0002/0004 and AGENTS §2/§9 updated. **For Gaurav:** S4-09
+builds the library as a web app (sign-in per ADR-0004 §4.5, hosting per ADR-0006); S6-01 moved
+into it. Sharing with other attendees stays Phase 2; nothing is sent to attendees automatically.
 
 ### 2026-11-04 (later) — Anirudh (Claude Code): speaker names in the live transcript
 **Request (Anirudh):** show who spoke instead of "Me"/"Them".

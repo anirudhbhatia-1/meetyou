@@ -152,8 +152,8 @@ All Stage 0 work was done by Anirudh (Claude Code) on branch `anirudh`. Two prod
 | S0-07 | ✅ Done | Streaming harness; Phase B run (Deepgram 20, Gemini 20, Sarvam 19). **Google Chirp 3 provider added** (`provider: "google"`, 5-min rotation) |
 | S0-08 | ✅ Done | Normalizer + scorer, plus spelling-insensitive WER; `summarize`, `score --out` |
 | S0-09 | ✅ Done (partial phases) | Phase D (Opus) done → ADR-0003. Phases E–G need entities, multi-person meetings and summaries — moved to S1 dogfooding |
-| S0-10 | ➡️ Moved | Blind readability rating runs on Chirp 3 output after the gate (tool ready: `bench blind-samples`) |
-| S0-11 | ✅ Accepted with a gate | [ADR-0001](adr/0001-stt-provider.md): Google Chirp 3 primary if it passes the §6.2 gate (run before S2-03), else Deepgram; D-03 closed |
+| S0-10 | ➡️ Moved | Blind readability rating runs on Deepgram output during dogfooding (tool ready: `bench blind-samples`) |
+| S0-11 | ✅ Accepted | [ADR-0001](adr/0001-stt-provider.md): first Google Chirp 3 primary (gated); amended 2026-11-05 to **Deepgram Nova-3 only**, gate cancelled; D-03 closed |
 | S0-12 | ✅ Done | ADR-0002 checks 2, 3, 5 (estimate), 6. Confirm the estimate in the pricing calculator when provisioning (S1-10) |
 | S0-13 | ✅ Accepted, checks moved to S1-11 | [ADR-0002](adr/0002-backend-stack-and-hosting.md) accepted 2026-11-01; the Cloud Run 2-hour test and the `asia-south1` latency run need the staging project |
 | S0-14 | ✅ Accepted | ADR-0003, ADR-0004, ADR-0005 |
@@ -162,7 +162,7 @@ All Stage 0 work was done by Anirudh (Claude Code) on branch `anirudh`. Two prod
 | S0-17 | ✅ Done | Design tokens, fonts, icons |
 | S0-18 | ✅ Drafted | Legal drafts updated for video and the new sub-processors — legal review in S6-05 |
 
-**Carried into Stage 1 (Anirudh):** the ADR-0001 gate (needs the Cloud project from S1-10), the
+**Carried into Stage 1 (Anirudh):** the ADR-0001 gate (cancelled 2026-11-05, Deepgram only), the
 ADR-0011 verification checks (S1-13), the S0-13 live checks (S1-11), and Phases E–G on dogfooding
 recordings.
 
@@ -189,7 +189,7 @@ answer ARCHITECTURE §26.2.
 | S1-10 | **Staging infrastructure v0** (Terraform, `asia-south1`): Cloud Run services for gateway/API/workers, Cloud SQL, Cloud Storage bucket with lifecycle rule, Secret Manager, Redis | Gaurav | ADR-0002 | `terraform apply` creates staging from scratch |
 | S1-11 | **Measurements and long sessions:** CPU/memory, echo leakage on laptop speakers, 2-hour meeting through Cloud Run's 60-minute reconnect (after S2 sign-in, see S1-05), backlog catch-up speed per provider, gateway cost per session | Anirudh | S1-05 | §26.2 questions 2, 3, 5, 6 written up; ADR-0003 decided |
 | S1-13 | **Video capture spike** ([ADR-0011](adr/0011-video-screen-recording.md) §5): `MediaRecorder` on the tab video + WebAudio mix in the offscreen document, 10 s fragments to IndexedDB `video_buffer`, MIME support, hidden-tab rendering, CPU/battery with video on/off, audio-first uploader on a 2 Mbps link | Anirudh | S1-02, S1-04 | ADR-0011 checks 1–4 recorded; audio loss 0 with video on |
-| S1-14 | **ADR-0001 gate:** run `runs.google.json` on the 20 MUCS clips in the staging project; update ADR-0001 with Chirp 3 results (fall back to Deepgram if it misses) | Anirudh | S1-10 | ADR-0001 §6.2 filled |
+| S1-14 | ~~**ADR-0001 gate** with Google Chirp 3~~ — **cancelled 2026-11-05**: Deepgram is the only STT provider (ADR-0001 §0) | Anirudh | — | — |
 | S1-12 | **DOM signal reliability and overlay performance:** active-speaker accuracy on 2/4/6-person calls; glass `backdrop-filter` cost inside Meet | Gaurav | S1-08, S1-09 | §26.2 questions 4 and 8 written up |
 
 **Exit criteria (PRD M1):** a 60-minute Meet call recorded with no audio loss, with video on ·
@@ -210,7 +210,7 @@ tenant-isolated segments, visible through the API.
 |---|---|---|---|---|
 | S2-01 | **Database schema and migrations** (PRD §13) with row-level security keyed on workspace, data-access layer that refuses unscoped queries, cross-tenant tests | Anirudh | ADR-0002 | Migrations apply on staging; cross-tenant tests fail as expected |
 | S2-02 | **Auth service** (ADR-0004): Google ID token exchange, access tokens, rotating refresh tokens with reuse detection, session-scoped stream tokens, auth middleware package | Anirudh | S2-01 | Token tests pass; middleware published for the API |
-| S2-03 | **Provider layer** (ARCHITECTURE §7): STT streaming/batch, LLM, transliterator interfaces, capability descriptors, registry, enforced opt-outs, free-key guard by environment (free Gemini key only in `local`/`ci`), adapters for the ADR-0001 providers (Google Chirp 3, Deepgram backup) | Anirudh | ADR-0001 | Contract tests against each adapter |
+| S2-03 | **Provider layer** (ARCHITECTURE §7): STT streaming/batch, LLM, transliterator interfaces, capability descriptors, registry, enforced opt-outs, free-key guard by environment (free Gemini key only in `local`/`ci`), adapter for the ADR-0001 provider (Deepgram Nova-3, streaming and pre-recorded) | Anirudh | ADR-0001 | Contract tests against each adapter |
 | S2-04 | **Gateway, production version:** Redis session state, resume on any instance, per-lane STT sessions with keep-alive and rotation overlap, outage handling (degraded health, batch-later marking), glossary terms in session config | Anirudh | S1-05, S2-03 | Kill-an-instance test resumes with no loss |
 | S2-05 | **Transcript assembler:** session-clock mapping, Roman transliteration, canonical spelling normalization, ULID segment IDs, echo flags, `transcript.segment` push | Anirudh | S2-04, S0-03 | Segments stored with `text` + `raw_text`; echo test flags duplicates |
 | S2-06 | **Outbox, job queue, worker runtime, scheduler** (ADR-0005) with retries, backoff, dead-letter state | Anirudh | S2-01 | Crash-during-job test completes exactly once |
@@ -269,7 +269,7 @@ all summary, search, glossary, export endpoints live in staging.
 | S4-06 | **Client-side interim transliteration helper** and **notes sync client** (IndexedDB drafts, debounced PUT) packages | Anirudh | S2-05 | Packages published with tests |
 | S4-07 | **Consent chat notice:** DOM posting into Meet chat, failure fallback with copy, consent events to the stream | Gaurav | S1-07, S4-05 | Notice posts on a real call; failure path tested |
 | S4-08 | **Failure and edge states** (DESIGN §9): reconnecting, mic lost, silent lane, transcript delayed, error, crash recovery banner, session limit, second tab, stop and delete | Gaurav | S4-05 | Each state reproducible from mock stream scripts |
-| S4-09 | **Library app:** Home, Meetings (search, filters), Meeting detail (Notes with legend, anchored sections, decisions, open questions, unverified; Transcript with search, speaker rename, echo toggle; citation popover and card; audio player; rename; regenerate menu with version banner; inline edit; feedback) | Gaurav | S4-02, S3-08 | Matches DESIGN §10–§12 |
+| S4-09 | **Library app as a web app (D-07, 2026-11-05):** sign-in (ADR-0004 §4.5), hosting per ADR-0006; Home, Meetings (search, filters), Meeting detail (Notes with legend, anchored sections, decisions, open questions, unverified; Transcript with search, speaker rename, echo toggle; citation popover and card; audio player; rename; regenerate menu with version banner; inline edit; feedback) | Gaurav | S4-02, S3-08 | Matches DESIGN §10–§12 |
 | S4-10 | **Share sheet, export, delete with undo, consent-log sheet** (DESIGN §13) | Gaurav | S4-09 | Paste tests in Slack, WhatsApp, Gmail, Notion pass |
 | S4-11 | **Action items page and Home to-dos** (DESIGN §14) | Gaurav | S3-08 | Status persists; undo works |
 | S4-12 | **Settings** (DESIGN §15): recording, consent mode + message, language, show-Hindi-as, retention with effect sentence, export, sub-processors, analytics opt-out, vocabulary, account delete | Gaurav | S2-09, S3-10 | All settings persist and take effect |
@@ -309,7 +309,7 @@ checklist passes · no mocks in the production build.
 
 | ID | Task and approach | Owner | Depends on | Done when |
 |---|---|---|---|---|
-| S6-01 | **ADR-0006** library surface; if web app: deploy the library as a web app reusing the component library, auth bootstrapping, CDN hosting | Gaurav | S5 | Library available at the chosen surface |
+| S6-01 | ~~**ADR-0006** library surface~~ — **moved 2026-11-05**: D-07 decided (web app from alpha); ADR-0006 hosting and the web deploy happen with S4-09 | Gaurav | — | — |
 | S6-02 | **Security review:** tenancy, token theft/reuse, signed URLs, extension message validation, logging content checks, dependency scan, prompt-injection set | Anirudh | S5 | Findings fixed or accepted with owner and date |
 | S6-03 | **Performance tuning** to budgets (ARCHITECTURE §21): live latency, summary P95, extension CPU/memory | Anirudh | S5 | Budgets met on beta traffic |
 | S6-04 | **Cost optimisations** behind flags: silence gating on the `me` lane, Opus transport, batch-pass policy | Anirudh | S5-05 | Cost per meeting-hour ≤ target or plan to get there |

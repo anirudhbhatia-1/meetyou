@@ -574,7 +574,7 @@ show Hindi/Hinglish in Roman script by default.
 languages but code-switched Hinglish quality varies. Indian-language providers (e.g. Sarvam) offer
 native Roman (`translit`) and mixed-script (`codemix`) output modes.
 
-**Best way for us.** Google Chirp 3 (ADR-0001) returns Hindi in Devanagari, so the assembler
+**Best way for us.** When Deepgram (ADR-0001) returns Hindi in Devanagari, the assembler
 transliterates finals and interims to Roman and keeps the original as `raw_text`; English loanwords
 written in Devanagari are mapped back through the canonical list. Maintain a **canonical Hinglish spelling list** (from the benchmark) to
 normalize variants. Make search script-insensitive later (H2/H3).
@@ -889,7 +889,8 @@ folder is explicit. Folder-level permissions.
 **What.** List of all meetings with status; meeting detail page (summary, transcript, notes, audio,
 consent log).
 
-**Best way for us.** Extension full-page view in alpha; web app in beta (decision D-07). Filters by
+**Best way for us.** A web app from alpha (decision D-07, 2026-11-05): sign in with Google and see
+your meetings from any device; the extension links to it. Filters by
 date, participant, template.
 
 ---

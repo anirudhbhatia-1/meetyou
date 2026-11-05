@@ -87,9 +87,9 @@
                      ┌──────────┐ ┌─────────┐ ┌─────────┐ ┌───────────────────┐
                      │ STT      │ │ LLM     │ │ Google  │ │ Phase 2/3:        │
                      │ vendors  │ │ vendors │ │ OAuth   │ │ Calendar, Slack,  │
-                     │ (Google  │ │ (Gemini/│ │ (sign-  │ │ Notion, CRM,      │
-                     │ Chirp 3/ │ │ Claude/ │ │  in)    │ │ MCP clients,      │
-                     │ Deepgram)│ │ …)      │ │         │ │ payments, bot API │
+                     │ (Deepgram│ │ (Gemini/│ │ (sign-  │ │ Notion, CRM,      │
+                     │ Nova-3)  │ │ Claude/ │ │  in)    │ │ MCP clients,      │
+                     │          │ │ …)      │ │         │ │ payments, bot API │
                      └──────────┘ └─────────┘ └─────────┘ └───────────────────┘
 ```
 
@@ -409,7 +409,7 @@ EmbeddingProvider            // Phase 2
 
 ### 7.3 Provider registry and routing
 - Configuration selects providers per environment and, later, per workspace or language
-  (Phase 1: `streaming: google-chirp3`, `batch: google-chirp3`, fallback `deepgram-nova3` —
+  (Phase 1: `streaming: deepgram-nova3`, `batch: deepgram-nova3`, no fallback yet —
   [ADR-0001](adr/0001-stt-provider.md)).
 - Capability descriptors drive behaviour (rotation, keep-alive, whether batch diarization is needed),
   so swapping vendors does not change pipeline code.
@@ -679,8 +679,8 @@ A participant can say (or name themselves) "ignore previous instructions and…"
 
 ### 15.1 Data flow to sub-processors
 ```
-Extension ──audio──► Gateway ──audio──► STT vendor (Google Chirp 3 in us/eu multi-region, or
-                         │                Deepgram fallback; no training — enforced in adapter)
+Extension ──audio──► Gateway ──audio──► STT vendor (Deepgram Nova-3, United States;
+                         │                no training — mip_opt_out enforced in adapter)
                          └─► Object storage (encrypted, asia-south1, 7-day default retention)
 Extension ──video fragments (signed PUT)──► Object storage (asia-south1). Video never goes to STT
                                             or LLM vendors.
@@ -993,7 +993,7 @@ contracts. Changing them requires an ADR and a migration plan.
 | Job queue | Postgres-backed queue | Proposed | Fewer moving parts in Phase 1; revisit at scale |
 | Cache / pub-sub | Redis | Proposed | Gateway session state and fan-out |
 | Object storage | Cloud Storage (`asia-south1`), SSE | Selected (ADR-0002) | Standard, cheap, lifecycle rules |
-| STT | Google Cloud STT V2 Chirp 3, Deepgram Nova-3 fallback | **Decided (gated)** ([ADR-0001](adr/0001-stt-provider.md)) | Google library requested; Deepgram measured best on the benchmark |
+| STT | Deepgram Nova-3 only | **Decided** 2026-11-05 ([ADR-0001](adr/0001-stt-provider.md) §0) | Measured best on the benchmark; Google Chirp 3 dropped |
 | Video | Meet tab video via `MediaRecorder`, signed-URL fragment upload, ffmpeg remux worker | **Decided** ([ADR-0011](adr/0011-video-screen-recording.md)) | Screen replay in Phase 1 without hurting audio |
 | LLM | Decided by evaluation (D-04) | Open | Gemini Flash candidate; provider-swappable |
 | Hosting | Google Cloud, Mumbai (`asia-south1`): Cloud Run, Cloud SQL, Cloud Storage | **Selected** ([ADR-0002](adr/0002-backend-stack-and-hosting.md)) | India region; same cloud as Gemini billing; low ops |
@@ -1011,7 +1011,7 @@ contracts. Changing them requires an ADR and a migration plan.
 | [0003](adr/0003-audio-transport-format.md) | Audio transport — **Accepted:** Opus 24 kbps over the wire and in storage, decoded to PCM in the gateway | M1 |
 | [0004](adr/0004-auth-and-token-model.md) | Auth and token model — **Accepted:** launchWebAuthFlow + PKCE, our JWT access + rotating refresh + stream tokens | M1 |
 | [0005](adr/0005-job-queue-and-outbox.md) | Job queue and outbox — **Accepted:** graphile-worker with transactional `add_job` | M1 |
-| 0006 | Library surface: extension page vs web app (D-07) | M2 |
+| 0006 | Library web app: hosting, deploy, sign-in bootstrapping (D-07 decided 2026-11-05: web app from alpha) | Before S4-09 |
 | 0007 | LLM provider and prompt/version management | M2 |
 | 0008 | Desktop app approach (native vs cross-platform; build vs SDK) | Phase 2 |
 | 0009 | Retrieval design (chunking, embeddings, hybrid ranking) | Phase 2 |

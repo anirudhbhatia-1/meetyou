@@ -175,7 +175,7 @@ Selected by the team on 2026-10-28.
 | Redis | Start with a low-cost option (serverless Redis or smallest Memorystore); it holds no system-of-record data |
 | Object storage | Cloud Storage, one bucket per environment, uniform access, lifecycle rule as retention backstop |
 | Secrets | Secret Manager; vendor keys per environment |
-| Web app (beta) | Static hosting / CDN (Cloud Run, Firebase Hosting, or Vercel — decide in ADR-0006) |
+| Web app (from alpha, D-07 2026-11-05) | Static hosting / CDN (Cloud Run, Firebase Hosting, or Vercel — decide in ADR-0006) |
 | Environments | Separate Google Cloud **projects** for staging and production |
 | IaC | Terraform/OpenTofu for all of the above |
 

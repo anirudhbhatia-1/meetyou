@@ -413,7 +413,7 @@ was said.
 | FR-LIB-02 | Meeting page: summary, full transcript, notes, audio player (if retained), consent log. | P0 | — |
 | FR-LIB-03 | Keyword search across titles, notes, summaries, and transcripts. | P1 | Results within 1 s for a library of 500 meetings. |
 | FR-LIB-04 | Rename a meeting. | P1 | — |
-| FR-LIB-05 | Library is accessible as a full-page view (extension page in alpha; web app in beta — decision D-07). | P0 | — |
+| FR-LIB-05 | Library is a **web app** from alpha (decision D-07, 2026-11-05): after Google sign-in, users see their own recordings, transcripts, summaries and notes from any device. The extension records and shows the live transcript; it links to the web app. | P0 | Signed in on a second device, the user sees the same meetings; never another user's meetings without a share |
 | FR-LIB-06 | Action items page: every action item from the user's meetings, filter Open / Done / All, mark done or not done with undo, link to the source meeting. Home shows the user's own open items. Lightweight version of FEATURES H4, pulled into Phase 1 (DESIGN §14). | P1 | Status persists across devices; count in the sidebar matches open items. |
 
 ### 9.13 Sharing and export (`EXP`)
@@ -545,8 +545,8 @@ was said.
                                        ▼
 ┌──────────────────────────────────── Backend ─────────────────────────────────────┐
 │  API gateway / auth  ──  Session & streaming relay  ──  STT provider interface   │
-│                                   │                       (Google Chirp 3 /      │
-│                                   │                        Deepgram fallback)    │
+│                                   │                       (Deepgram Nova-3)      │
+│                                   │                                              │
 │                                   ▼                                              │
 │                        Transcript assembler (segments, lanes, speakers)          │
 │                                   │                                              │
@@ -878,7 +878,7 @@ Cost per meeting-hour (STT + LLM + storage + infra), by provider and language.
 ### 20.1 Unit cost estimate per meeting-hour [Hypothesis — replace with benchmark data]
 | Item | Estimate |
 |---|---|
-| Streaming STT, two lanes | Google Chirp 3 ≈ USD 0.016/min per lane [Verify] → **≈ USD 1.92** if both lanes stream the whole hour; lower with `me`-lane silence/mute gating (measure). This is above the ≤ USD 1.00 target — ADR-0001 §7 |
+| Streaming STT, two lanes | Deepgram Nova-3 multilingual ≈ USD 0.0092/min per lane [Verify] → **≈ USD 1.10** if both lanes stream the whole hour; lower with `me`-lane silence/mute gating (measure). Slightly above the ≤ USD 1.00 target — ADR-0001 §0 |
 | Optional batch re-transcription | ~USD 0.30–0.60 |
 | LLM summary (~15k input tokens) | A few cents on a low-cost model |
 | Audio storage (~30 MB, 30 days) | Negligible |
@@ -920,11 +920,11 @@ Phase 2 planning starts after M3 data is available.
 |---|---|---|---|---|
 | D-01 | Hindi/Hinglish transcript script | **Decided 2026-10-28:** Roman display by default; store provider original; Devanagari setting later; mixed-script fallback if transliteration benchmarks poorly | Team | ✅ Closed |
 | D-02 | Default audio retention | **Decided 2026-10-28:** 7 days default; user can pick immediate (after successful processing) or 30 days; audio only | Team | ✅ Closed |
-| D-03 | STT provider | **Decided 2026-11-01** ([ADR-0001](adr/0001-stt-provider.md)): Google Cloud STT V2 Chirp 3 primary once it passes the benchmark gate; Deepgram Nova-3 fallback; Sarvam dropped | Team | ✅ Closed (gate pending) |
+| D-03 | STT provider | **Decided 2026-11-01** ([ADR-0001](adr/0001-stt-provider.md)): first Google Chirp 3 primary (gated); **amended 2026-11-05: Deepgram Nova-3 only**, Chirp 3 and Sarvam dropped | Team | ✅ Closed |
 | D-04 | LLM provider for summaries | Decided by evaluation (14.6) | Team | M2 |
 | D-05 | Consent notice default mode | One-click (proposed) / automatic / off | Team | M1 |
 | D-06 | Stream raw PCM or compressed audio to the relay | **Decided 2026-10-29:** Opus 24 kbps ([ADR-0003](adr/0003-audio-transport-format.md)) | Team | ✅ Closed |
-| D-07 | Library surface in beta | Extension page / web app | Team | M2 |
+| D-07 | Library surface | **Decided 2026-11-05 (Anirudh): web app from alpha**, like Fireflies — sign in and see your meetings from any device; hosting in ADR-0006 | Team | ✅ Closed |
 | D-08 | Backend stack and hosting region | **Option B selected 2026-10-28** ([ADR-0002](adr/0002-backend-stack-and-hosting.md)): TypeScript/Node on Google Cloud Mumbai (Cloud Run, Cloud SQL, Cloud Storage); **Accepted 2026-11-01**, live checks in S1-11 | Team | ✅ Closed |
 | D-09 | Product name and branding | — | Team | M3 |
 | D-10 | Whether `me` lane should follow Meet mute by default | On (proposed) / off | Team | M1 |

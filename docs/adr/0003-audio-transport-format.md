@@ -52,9 +52,7 @@ Decided by Anirudh during S1-11. Superseding "decoded to PCM16 in the gateway":
   ~150-line muxer, byte-identical to ffmpeg's `OpusHead` page in tests) and
   - stores each 10 s chunk as a standalone `.opus` file (ARCHITECTURE §11.4 layout);
   - streams Ogg Opus to the STT provider: Deepgram reads the container header, so `encoding` and
-    `sample_rate` are omitted; Google V2 lists `OGG_OPUS` (explicit, 8–48 kHz, or auto-detect)
-    but does not state streaming support — **[Verify] in S1-14**; if Chirp 3 streaming refuses it,
-    decode for Google only.
+    `sample_rate` are omitted (Google Chirp 3 was dropped 2026-11-05, ADR-0001 §0).
 - **Why:** no decoder dependency, less gateway CPU, and the stored files are directly playable and
   usable by batch STT. A future gateway-side VAD (§6.4 silence gating) would need decoding; it
   stays an optional optimization.
@@ -77,5 +75,5 @@ Decided by Anirudh during S1-11. Superseding "decoded to PCM16 in the gateway":
 | 2 | Encoder CPU and battery impact in the extension (S1-11) | Anirudh |
 | 3 | ~~Gateway decode CPU per session~~ — no decode since §3.1; gateway CPU per session measured locally (§4), staging pending | Anirudh |
 | 4 | Deepgram accepts the gateway's Ogg Opus stream — **done 2026-11-04**: 60 s MUCS clip streamed as our Ogg, transcripts returned | Anirudh |
-| 5 | Google Chirp 3 streaming accepts `OGG_OPUS` (S1-14) | Anirudh |
+| 5 | ~~Google Chirp 3 streaming accepts `OGG_OPUS`~~ — cancelled 2026-11-05, Google dropped (ADR-0001 §0) | Anirudh |
 | 6 | WebCodecs Opus encodes in the offscreen document — **done 2026-11-04** (Anirudh's Chrome, M4 Mac): 48.5 s Meet recording, both lanes Opus, 485 frames each, no loss, ~0.1 MB stored, live Deepgram transcripts | Anirudh |

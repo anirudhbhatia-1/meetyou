@@ -80,7 +80,7 @@
 | **Consent notice** | Content script posts into **Meet's own chat** | Meet chat | Disclosure to participants (C3) — no UI of ours in chat | 1 |
 | **Side panel** | Side panel page, **tab-specific** to the Meet tab | Chrome side panel | Live transcript, notes, recording controls, processing, ready | 1 |
 | **Onboarding** | Extension page | New tab on install | Sign-in, mic permission, preferences, consent acknowledgement | 1 |
-| **Library app** (Home, Meetings, Meeting detail, Action items, Settings) | Extension pages in alpha → web app in beta (D-07) | Full tab | Review, verify, share, manage data | 1 |
+| **Library app** (Home, Meetings, Meeting detail, Action items, Settings) | Web app from alpha (D-07, 2026-11-05) | Full tab | Review, verify, share, manage data | 1 |
 | **Chrome notification** | Service worker | OS notification | "Notes ready: {title}" | 1 (needs `notifications` permission — §19) |
 | Offscreen document | Offscreen document | — | No UI (capture only) | 1 |
 | Desktop window, web sharing pages, admin | Phase 2/3 | — | §22 | 2/3 |
@@ -427,7 +427,7 @@ Recording options card (above) · **Post and start** (primary) · **Skip** (seco
   - **Interim** text (from `transcript.interim`) shows in `muted` italic and is replaced in place by
     the final segment (`transcript.segment`) in `ink` (FR-LIV-02).
   - **Script consistency:** if the provider's interim text arrives in Devanagari while finals are
-    shown in Roman (e.g. Chirp 3 `hi-IN` output, transliterated by the assembler — ADR-0001 §7),
+    shown in Roman (e.g. Devanagari Hindi from the STT provider, transliterated by the assembler — ADR-0001 §0),
     transliterate interim text to Roman on the client before display, so lines never flip script.
   - Unknown remote speakers show as "Speaker 1, 2…" until named (D5).
   - Empty: "Listening… the transcript appears as people speak."

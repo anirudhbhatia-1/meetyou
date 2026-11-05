@@ -3,7 +3,7 @@
 | Field | Value |
 |---|---|
 | Purpose | Complete the provider pre-flight checklist ([STT_BENCHMARK_PLAN.md §2.3](STT_BENCHMARK_PLAN.md)) before any audio is sent |
-| Providers | Sarvam AI (dropped 2026-11-01), Deepgram, Google Gemini; Google Cloud Speech-to-Text Chirp 3 added 2026-11-01 (§5a) |
+| Providers | Sarvam AI (dropped 2026-11-01), Deepgram, Google Gemini; Google Cloud Speech-to-Text Chirp 3 added 2026-11-01, dropped 2026-11-05 (§5a) |
 | Researched | 2026-10-28, from vendor docs and pages (sources at the end) |
 | Status | Benchmarked on public data 2026-10-29 (results in [ADR-0001](adr/0001-stt-provider.md)) |
 
@@ -197,7 +197,9 @@ No provider is ruled out. All three go into Phase A of the benchmark.
 
 ---
 
-## 5a. Google Cloud Speech-to-Text V2 (Chirp 3) — added 2026-11-01
+## 5a. Google Cloud Speech-to-Text V2 (Chirp 3) — added 2026-11-01, dropped 2026-11-05
+
+> Not used by the product since 2026-11-05 (ADR-0001 §0). Kept as research.
 
 - **Streaming:** `StreamingRecognize`, ≤ 5 minutes per stream → rotate. 300 concurrent streams per
   region. Requests ≤ 25 KB. **[Docs]**

@@ -4,7 +4,7 @@
 |---|---|
 | Purpose | Choose the speech-to-text (STT) provider(s) for Phase 1 using our own Hinglish data |
 | Decision informed | **D-03** (STT provider). Also feeds D-01 fallback (transliteration quality), D-06 (PCM vs Opus input), and the cost model (PRD §20) |
-| Status | Run on the public MUCS 2021 set (Phases A, B, D) 2026-10-29; Google Chirp 3 gate pending (S1-14); Phases E–G on dogfooding recordings — see [ADR-0001](adr/0001-stt-provider.md) |
+| Status | Run on the public MUCS 2021 set (Phases A, B, D) 2026-10-29; Google Chirp 3 gate cancelled 2026-11-05 (Deepgram only); Phases E–G on dogfooding recordings — see [ADR-0001](adr/0001-stt-provider.md) |
 | Last updated | 2026-11-01 |
 | Related | [PRD §15](PRD.md), [AGENTS.md](../AGENTS.md) |
 

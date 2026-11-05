@@ -48,7 +48,8 @@ reference, not code to ship). This section is the short version.
 - Live notepad: the user's own notes act as **anchors** for the AI summary.
 - Post-meeting summary, decisions, and action items, each **citing transcript segments**.
 - Recording-consent notice posted in Meet chat when recording starts.
-- Library with search, export, delete (with undo), and a lightweight action-items list (open/done).
+- Library **web app** (D-07): sign in and see your own recordings, transcripts, and summaries from
+  any device; search, export, delete (with undo), and a lightweight action-items list (open/done).
 - Languages: English, Hindi, Hinglish (code-switching within a sentence).
 
 ### Phase 2
@@ -224,11 +225,11 @@ Work like a careful senior engineer pairing with the developer.
   [ADR-0005](docs/adr/0005-job-queue-and-outbox.md) graphile-worker with transactional job creation.
 
 - **2026-11-01 — Stage 0 closed:**
-  - [ADR-0001](docs/adr/0001-stt-provider.md) **STT (D-03):** Google Cloud Speech-to-Text V2
-    **Chirp 3** primary (Google library `@google-cloud/speech`), gated on the benchmark (§6.2, run in
-    S1-14); **Deepgram Nova-3** fallback; **Sarvam dropped**; Gemini not used for STT. Free Gemini
-    keys only for public/synthetic benchmark data, never user meetings.
-  - **Deepgram Nova-3 is the STT backup.** The **free Gemini key is for development and testing
+  - [ADR-0001](docs/adr/0001-stt-provider.md) **STT (D-03):** first accepted with Google Chirp 3
+    primary (gated) and Deepgram fallback — **superseded 2026-11-05, see below**. **Sarvam dropped**;
+    Gemini not used for STT. Free Gemini keys only for public/synthetic benchmark data, never user
+    meetings.
+  - The **free Gemini key is for development and testing
     only**: synthetic audio/transcripts, public benchmark data, local and CI. Never real meetings
     (the developers' own included); staging and production refuse free keys.
   - [ADR-0002](docs/adr/0002-backend-stack-and-hosting.md) **accepted** — Google Cloud Mumbai
@@ -236,6 +237,13 @@ Work like a careful senior engineer pairing with the developer.
   - [ADR-0011](docs/adr/0011-video-screen-recording.md) **video:** Meet tab video recorded with
     audio (setting on by default), fragment upload at lowest priority, MP4 playback with
     click-to-seek, same retention as audio.
+
+- **2026-11-05 — STT is Deepgram only (Anirudh):** **Deepgram Nova-3** is the only STT provider,
+  live and post-meeting. **Google Chirp 3 is dropped**; the ADR-0001 gate and S1-14 are cancelled.
+  Audio is transcribed in the US (ADR-0001 §0). The provider interface stays.
+- **2026-11-05 — D-07 library is a web app from alpha (Anirudh):** recordings, transcripts,
+  summaries and notes live on our backend; users sign in on the web app (like Fireflies) and see
+  their own meetings from any device. The extension records and links to it. Hosting in ADR-0006.
 
 ### Open (do not assume an answer)
 - LLM for summaries (D-04, ADR-0007). Gemini Flash is a candidate — paid tier only for user data.
