@@ -261,24 +261,22 @@ code unless noted. `pnpm check` passes (279 tests). Nothing verified in Chrome y
 - Leftover audio after a browser crash is not replayed (FR-CAP-08); leftover video resumes only at
   the next recording (TODO S2-14); starting with the gateway down stays local-only (TODO S2-04).
 
-### 2026-11-05 (night) — Anirudh (Claude Code): review of S1-10 Terraform
+### 2026-11-05 (night) — Anirudh (Claude Code) & Gaurav (Google Antigravity): review of S1-10 Terraform applied
 Reviewed Gaurav's S1-10 (good: private-IP Cloud SQL, bucket with public access prevention and
-uniform access, state and tfvars gitignored). Fixed in `infra/` — **not applied; terraform is not
-installed on Anirudh's machine**:
+uniform access, state and tfvars gitignored). Fixed in `infra/` and **applied on GCP Mumbai (Cloud Shell) by Gaurav**:
 1. **Lifecycle rule 7 → 31 days.** It is a backstop (ARCHITECTURE §11.6); at 7 days it would delete
    recordings of users who chose 30-day retention (D-02). A validation now refuses ≤ 30.
 2. **Bucket CORS** allowed `https://meet.google.com`; uploads come from the extension's offscreen
    document, so it now allows only `extension_origins` (`chrome-extension://<id>`, validated), PUT only.
-3. **Removed Chirp 3 leftovers:** `speech.googleapis.com` and `roles/speech.client` (Deepgram only).
-4. **Cloud Run env `MINUTES_ENV` → `APP_ENV`**, the name the gateway reads.
+3. **Removed Chirp 3 leftovers:** `speech.googleapis.com` and `roles/speech.client` (Deepgram only). Destroyed in staging.
+4. **Cloud Run env `MINUTES_ENV` → `APP_ENV`**, the name the gateway reads. Updated in staging.
 5. Cloud SQL `deletion_protection` comment matched to the value; staging README §4–5 updated
    (S1-14 cancelled, gateway deploy after S2 sign-in, idle cost).
 
-**For Gaurav:** run `terraform fmt -recursive`, `terraform validate`, `plan` and `apply` from
-`infra/environments/staging` with `extension_origins` set in `terraform.tfvars`. **Cost:** the staging
-Cloud SQL instance (`db-custom-1-3840`) and the VPC connector (2× e2-micro) run 24×7 while nothing
-uses them until S2; consider `gcloud sql instances patch meetyou-staging-pg16 --activation-policy=NEVER`
-until then (decide with Anirudh).
+**Status:** `terraform apply` completed cleanly in Cloud Shell (0 added, 2 changed, 2 destroyed).
+**Cost:** the staging Cloud SQL instance (`db-custom-1-3840`) and VPC connector run 24×7 while nothing uses
+them until S2; can be paused via `gcloud sql instances patch meetyou-staging-pg16 --activation-policy=NEVER`
+to conserve free-trial credits.
 
 ### 2026-11-05 (evening) — Gaurav (Google Antigravity): S1-10 staging infrastructure applied on GCP Mumbai
 **Done** (branch `Gauravbro`)
