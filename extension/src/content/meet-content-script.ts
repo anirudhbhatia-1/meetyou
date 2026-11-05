@@ -14,15 +14,23 @@ import {
 } from '../adapters/meet/health.ts';
 import { extractMeetingMetadata, type MeetingMetadata } from '../adapters/meet/metadata.ts';
 
+let stopObserving: (() => void) | null = null;
+
 /**
  * Best effort: after an extension reload this page keeps the old content script, whose runtime
- * is gone. `sendMessage` then throws or rejects; neither may surface as an unhandled error.
+ * is gone (`chrome.runtime.id` becomes undefined). It then stops observing instead of running a
+ * dead observer for the rest of the call; the Meet tab needs a reload to get the new script.
  */
 function notifyExtension(message: unknown): void {
+  if (chrome.runtime.id === undefined) {
+    stopObserving?.();
+    stopObserving = null;
+    return;
+  }
   try {
     chrome.runtime.sendMessage(message).catch(() => undefined);
   } catch {
-    // Extension context invalidated.
+    // Extension context invalidated between the check and the call.
   }
 }
 
@@ -47,14 +55,9 @@ function broadcastState(
   notifyExtension({ type: 'meet.state-changed', snapshot, metadata, healthReport });
 }
 
-// 1. Initial detection on script load
-const initialSnapshot = detectCallState(document, window.location.href);
-const initialMetadata = extractMeetingMetadata(document, window.location.href);
-const initialHealth = generateSelectorHealthReport(document, initialSnapshot.state);
-broadcastState(initialSnapshot, initialMetadata, initialHealth);
-
-// 2. Continuous DOM observer for state changes
-const stopObserving = observeCallState(document, (snapshot) => {
+// Detection on load and on every change: `observeCallState` evaluates immediately, so the first
+// state is broadcast exactly once.
+stopObserving = observeCallState(document, (snapshot) => {
   const metadata = extractMeetingMetadata(document, window.location.href);
   const healthReport = generateSelectorHealthReport(document, snapshot.state);
   broadcastState(snapshot, metadata, healthReport);
@@ -76,5 +79,5 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
 });
 
 window.addEventListener('beforeunload', () => {
-  stopObserving();
+  stopObserving?.();
 });

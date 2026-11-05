@@ -108,6 +108,8 @@ export function parseDeepgramMessage(raw: string): SttResult | null {
   };
 }
 
+const HANDSHAKE_TIMEOUT_MS = 10_000;
+
 export function deepgramProvider(apiKey: string): SttProvider {
   return {
     name: 'deepgram',
@@ -119,6 +121,8 @@ export function deepgramProvider(apiKey: string): SttProvider {
     ): Promise<SttStream> {
       const ws = new WebSocket(deepgramStreamUrl(input, options.diarize === true), {
         headers: { Authorization: `Token ${apiKey}` },
+        // A stalled handshake would otherwise leave the lane opening forever and block `end`.
+        handshakeTimeout: HANDSHAKE_TIMEOUT_MS,
       });
       await new Promise<void>((resolve, reject) => {
         ws.once('open', () => resolve());

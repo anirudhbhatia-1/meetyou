@@ -13,10 +13,18 @@ import { CaptureStartError } from './capture.ts';
 import { putFragment, signDevVideoFragments } from './dev-gateway.ts';
 import { openMinutesDb } from './idb.ts';
 import { startRecorder, type Recorder } from './recorder.ts';
-import { IdbFragmentQueue, VideoUploader } from './video-uploader.ts';
+import {
+  IdbFragmentQueue,
+  pruneStaleFragments,
+  VideoUploader,
+  VIDEO_RETENTION_MS,
+} from './video-uploader.ts';
 
 let recorder: Recorder | null = null;
 let uploader: Promise<VideoUploader | null> | null = null;
+/** Stopped recordings still sending buffered audio (FR-CAP-07); the document stays open for them. */
+const drains = new Set<Promise<void>>();
+let videoIdle = true;
 let idleReported = false;
 
 /** Logs carry IDs, counts and error names only (AGENTS §7), never transcript text. */
@@ -83,9 +91,8 @@ function videoUploader(): Promise<VideoUploader | null> {
         isUploadable: (sessionId) => sessionId.startsWith('ses_'),
         onProgress: reportUpload,
         onIdle() {
-          if (recorder !== null || idleReported) return;
-          idleReported = true;
-          notifyBackground({ target: 'background', type: 'capture.upload_idle' });
+          videoIdle = true;
+          reportIdleIfDone();
         },
         onError: logError,
       }),
@@ -97,6 +104,23 @@ function videoUploader(): Promise<VideoUploader | null> {
   return uploader;
 }
 
+/** Tells the service worker it may close the document: no recording, audio drain or video left. */
+function reportIdleIfDone(): void {
+  if (recorder !== null || drains.size > 0 || !videoIdle || idleReported) return;
+  idleReported = true;
+  notifyBackground({ target: 'background', type: 'capture.upload_idle' });
+}
+
+/** Stops a recording and keeps its audio drain alive until the buffered frames are acknowledged. */
+async function stopRecorder(current: Recorder): Promise<void> {
+  const { drained } = await current.stop();
+  drains.add(drained);
+  void drained.finally(() => {
+    drains.delete(drained);
+    reportIdleIfDone();
+  });
+}
+
 function reportUpload(progress: { pending: number; uploaded: number }): void {
   recorder?.setUploadBacklog(progress.pending);
   notifySidePanel({ target: 'sidepanel', type: 'video.upload', ...progress });
@@ -105,6 +129,7 @@ function reportUpload(progress: { pending: number; uploaded: number }): void {
 /** A fragment was written: wake the uploader and re-check the data-saver backlog. */
 async function onVideoFragment(): Promise<void> {
   idleReported = false;
+  videoIdle = false;
   const current = await videoUploader();
   if (current === null) return;
   current.kick();
@@ -113,8 +138,9 @@ async function onVideoFragment(): Promise<void> {
 
 async function start(streamId: string, recordVideo: boolean): Promise<CaptureStartResult> {
   if (recorder !== null) {
-    await recorder.stop();
+    const previous = recorder;
     recorder = null;
+    await stopRecorder(previous);
   }
   try {
     recorder = await startRecorder({
@@ -155,16 +181,23 @@ async function start(streamId: string, recordVideo: boolean): Promise<CaptureSta
   }
 }
 
-/** Stops capture; the reply says whether video is still uploading (the document must stay open). */
+/**
+ * Stops capture. The reply says whether buffered audio or video is still going to the gateway, in
+ * which case the document must stay open until `capture.upload_idle`.
+ */
 async function stop(): Promise<CaptureStopReply> {
   const current = recorder;
   recorder = null;
-  await current?.stop();
-  const videos = await videoUploader();
-  if (videos === null) return { ok: true, uploading: false };
   idleReported = false;
-  videos.kick();
-  return { ok: true, uploading: (await videos.pending()) > 0 };
+  if (current !== null) await stopRecorder(current);
+  const videos = await videoUploader();
+  let videoPending = 0;
+  if (videos !== null) {
+    videoIdle = false;
+    videos.kick();
+    videoPending = await videos.pending();
+  }
+  return { ok: true, uploading: drains.size > 0 || videoPending > 0 };
 }
 
 chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
@@ -199,5 +232,16 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
   }
 });
 
-// Resume fragments left by an earlier recording (e.g. the browser closed mid-upload).
+// Resume fragments left by an earlier recording (e.g. the browser closed mid-upload). This runs
+// when the document opens, i.e. at the next recording start.
+// TODO(S2-14): resume after a browser restart without waiting for a recording (ADR-0011 §3.3).
 void videoUploader().then((current) => current?.kick());
+
+// Video that never uploads (no gateway, or a session the gateway lost) is kept no longer than
+// recordings are retained by default (D-02), so `video_buffer` cannot grow without bound.
+void openMinutesDb()
+  .then((db) => pruneStaleFragments(db, Date.now() - VIDEO_RETENTION_MS).finally(() => db.close()))
+  .then((pruned) => {
+    if (pruned > 0) console.info('offscreen: stale video fragments deleted', pruned);
+  })
+  .catch((error: unknown) => logError('video prune failed', error));

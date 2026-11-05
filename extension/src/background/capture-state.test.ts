@@ -54,8 +54,26 @@ describe('nextCaptureState', () => {
   });
 
   it('returns to idle after a local-only recording', () => {
-    const rec = recording('off');
+    const local: CaptureEvent = {
+      type: 'started',
+      sessionId: 'local_01JC0000000000000000000000',
+      lanes: both,
+      micError: null,
+      link: 'off',
+      video: 'recording',
+    };
+    const rec = run(
+      IDLE_CAPTURE,
+      { type: 'start_requested', tabId: 7, meetingCode: null, at: 1 },
+      local,
+    );
     expect(run(rec, { type: 'stop_requested' }, { type: 'stopped' })).toEqual(IDLE_CAPTURE);
+  });
+
+  it('still processes a streamed recording whose link was refused before stop', () => {
+    const rec = recording('off');
+    const processing = run(rec, { type: 'stop_requested' }, { type: 'stopped' });
+    expect(processing).toMatchObject({ status: 'processing', sessionId: 's1' });
   });
 
   it('ignores a second start while one is in progress or recording', () => {

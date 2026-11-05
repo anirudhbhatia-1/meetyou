@@ -1,6 +1,7 @@
 declare namespace chrome {
   namespace runtime {
-    const id: string;
+    /** Undefined in a content script whose extension was reloaded (context invalidated). */
+    const id: string | undefined;
     const onInstalled: { addListener(callback: (details: { reason: string }) => void): void };
     const onStartup: { addListener(callback: () => void): void };
     function getURL(path: string): string;

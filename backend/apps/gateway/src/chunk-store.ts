@@ -1,3 +1,4 @@
+import { randomBytes } from 'node:crypto';
 import { mkdir, open, readdir, readFile, rename } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 
@@ -141,8 +142,13 @@ export class LocalChunkStore implements ChunkStore {
   }
 }
 
+/**
+ * Write to a unique temp file, fsync it, rename it into place, then fsync the directory so the
+ * rename itself survives a power loss (the `.json` manifest is the commit marker behind an ack).
+ * Unique temp names keep concurrent writers of one path (usage.json, a retried PUT) apart.
+ */
 async function writeDurably(path: string, bytes: Uint8Array): Promise<void> {
-  const tmp = `${path}.tmp`;
+  const tmp = `${path}.${randomBytes(6).toString('hex')}.tmp`;
   const handle = await open(tmp, 'w');
   try {
     await handle.writeFile(bytes);
@@ -151,6 +157,12 @@ async function writeDurably(path: string, bytes: Uint8Array): Promise<void> {
     await handle.close();
   }
   await rename(tmp, path);
+  const dir = await open(dirname(path), 'r');
+  try {
+    await dir.sync();
+  } finally {
+    await dir.close();
+  }
 }
 
 /** In-memory store for tests. */

@@ -85,6 +85,8 @@ export class StreamClient {
   #pingTimer: unknown = null;
   #waiters: (() => boolean)[] = [];
   #endSent = false;
+  /** Pause/resume while offline, sent after the next `ready` so pause gaps stay known (§5.5). */
+  #pendingControls: ClientMessage[] = [];
 
   constructor(options: StreamClientOptions) {
     this.#o = options;
@@ -116,13 +118,20 @@ export class StreamClient {
   }
 
   control(action: 'pause' | 'resume' | 'end', at: number): void {
-    this.#sendJson({ type: 'control', action, at });
+    const message: ClientMessage = { type: 'control', action, at };
+    if (!this.#online && action !== 'end') {
+      this.#pendingControls.push(message);
+      return;
+    }
+    this.#sendJson(message);
   }
 
   /**
-   * Ends the stream: waits until every written frame has been sent, sends `end` (the gateway then
-   * flushes its last chunk), and waits for the acks. Both waits share `timeoutMs`. Frames still
-   * unacknowledged stay in the store for recovery (FR-CAP-08).
+   * Ends the stream: keeps reconnecting while the link is down, sends every written frame, sends
+   * `end` (the gateway then flushes its last chunk), and waits for the acks, all within
+   * `timeoutMs`. A drop after `end` reconnects and ends again, so buffered audio is not abandoned
+   * because the network was down at the moment the user stopped (FR-CAP-07). Frames still
+   * unacknowledged at the deadline stay in the store for recovery (FR-CAP-08).
    */
   async stop(at: number, timeoutMs = 10_000): Promise<{ unacked: number }> {
     let timedOut = false;
@@ -130,11 +139,15 @@ export class StreamClient {
       timedOut = true;
       this.#wake();
     }, timeoutMs);
-    await this.#waitUntil(() => timedOut || !this.#online || this.#allSent());
-    if (this.#online && !timedOut) {
-      this.#endSent = true;
-      this.control('end', at);
-      await this.#waitUntil(() => timedOut || this.#allAcked());
+    const done = () => timedOut || this.#stopped;
+    while (!done() && !this.#allAcked()) {
+      await this.#waitUntil(() => done() || (this.#online && this.#allSent()));
+      if (done()) break;
+      if (!this.#endSent) {
+        this.#endSent = true;
+        this.control('end', at);
+      }
+      await this.#waitUntil(() => done() || this.#allAcked() || !this.#online);
     }
     this.#timers.clearTimeout(timer);
     this.#stopped = true;
@@ -209,8 +222,12 @@ export class StreamClient {
       this.#online = false;
       this.#timers.clearTimeout(this.#pingTimer);
       this.#wake();
-      // After `end` the gateway closes the session; a reconnect would be refused.
-      if (!this.#endSent) this.#scheduleReconnect();
+      // After a completed `end` the gateway closes the session and a reconnect would be refused;
+      // a drop before every frame was acknowledged reconnects and ends again.
+      if (!this.#endSent || !this.#allAcked()) {
+        this.#endSent = false;
+        this.#scheduleReconnect();
+      }
     };
   }
 
@@ -248,6 +265,7 @@ export class StreamClient {
         }
         this.#o.onLink('online');
         this.#schedulePing();
+        for (const message of this.#pendingControls.splice(0)) this.#sendJson(message);
         for (const lane of LANES) void this.#pump(lane);
         break;
       case 'ack':
@@ -257,6 +275,7 @@ export class StreamClient {
         this.#o.onError?.(`gateway error ${parsed.code}`, parsed.retryable);
         if (!parsed.retryable) {
           this.#stopped = true;
+          this.#wake();
           this.#socket?.close(1000);
           this.#o.onLink('off');
         }

@@ -173,6 +173,8 @@ startStop.addEventListener('click', () => {
     send('recording.stop');
   } else {
     transcript.replaceChildren();
+    interim.me.textContent = '';
+    interim.them.textContent = '';
     send('recording.start');
   }
 });
@@ -236,6 +238,8 @@ async function videoRows(): Promise<VideoFragmentRow[]> {
 }
 
 let videoUrls: string[] = [];
+/** Fragments still waiting to upload; the local copy is the only one until they are sent. */
+let uploadPending = 0;
 
 /**
  * Lists every part of the newest recording as a download link. Pause/resume starts a new part, so
@@ -260,10 +264,13 @@ async function showLastVideo(): Promise<void> {
     );
     videoUrls.push(url);
     const ext = type === 'video/mp4' ? 'mp4' : 'webm';
+    // Uploaded fragments are pruned locally; without fragment 0 (the container header) the
+    // remainder does not play. `check-session --join` rebuilds uploaded parts on the gateway.
+    const partial = part.fragments[0]?.index !== 0 ? ' — partly uploaded, will not play' : '';
     const link = el('a', {
       href: url,
       download: `minutes-part${i + 1}-${part.partId}.${ext}`,
-      textContent: `Part ${i + 1} — from ${formatMs(part.startMs)} (${part.fragments.length} × 10 s)`,
+      textContent: `Part ${i + 1} — from ${formatMs(part.startMs)} (${part.fragments.length} × 10 s)${partial}`,
     });
     const item = el('li');
     item.append(link);
@@ -292,6 +299,10 @@ download.addEventListener('click', () => {
 
 clearVideo.addEventListener('click', () => {
   if (isLive(current)) return;
+  if (uploadPending > 0) {
+    status.textContent = 'Video is still uploading; delete it after the upload finishes.';
+    return;
+  }
   // Developer control; S4 replaces it with the DESIGN.md confirmation dialog.
   if (!confirm('Delete all video stored on this computer?')) return;
   deleteLocalVideo().catch((error: unknown) => console.error('sidepanel: delete failed', error));
@@ -318,6 +329,7 @@ chrome.runtime.onMessage.addListener((message, sender) => {
   } else if (parsed?.type === 'transcript') {
     showTranscript(parsed.final, parsed.lane, parsed.text, parsed.startMs, parsed.speaker);
   } else if (parsed?.type === 'video.upload') {
+    uploadPending = parsed.pending;
     uploadLine.textContent = uploadLabel(parsed.pending, parsed.uploaded);
   }
   return false;

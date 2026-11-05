@@ -69,10 +69,22 @@ describe('dev video upload (ADR-0011 §3.3)', () => {
 
   it('answers the CORS preflight the extension sends before a JSON POST or a PUT', async () => {
     const { base } = await start(new MemoryChunkStore());
-    const res = await fetch(`${base}/v1/dev/video/x`, { method: 'OPTIONS' });
+    const origin = 'chrome-extension://abcdefghijklmnop';
+    const res = await fetch(`${base}/v1/dev/video/x`, { method: 'OPTIONS', headers: { origin } });
     expect(res.status).toBe(204);
+    expect(res.headers.get('access-control-allow-origin')).toBe(origin);
     expect(res.headers.get('access-control-allow-methods')).toContain('PUT');
     expect(res.headers.get('access-control-allow-headers')).toContain('content-type');
+  });
+
+  it('refuses web pages: only the extension and origin-less tools may use dev endpoints', async () => {
+    const { base } = await start(new MemoryChunkStore());
+    const res = await fetch(`${base}/v1/dev/sessions`, {
+      method: 'POST',
+      headers: { origin: 'https://evil.example' },
+    });
+    expect(res.status).toBe(403);
+    expect(res.headers.get('access-control-allow-origin')).toBeNull();
   });
 
   it('refuses unknown sessions, bad requests, wrong types, unknown URLs and oversized bodies', async () => {

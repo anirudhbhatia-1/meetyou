@@ -2,7 +2,7 @@ import { newUlid, packOpusFrame, type AudioFormat, type ServerMessage } from '@m
 
 import type { Lane, LaneFlags, StreamLink, VideoStatus } from '../messages.ts';
 import { startCapture, type CaptureSession } from './capture.ts';
-import { createDevSession, devStreamToken } from './dev-gateway.ts';
+import { createDevSessionWithRetry, devStreamToken } from './dev-gateway.ts';
 import { IdbFrameStore } from './frame-store.ts';
 import { openMinutesDb } from './idb.ts';
 import { createLaneEncoder, type LaneEncoder } from './opus-encoder.ts';
@@ -16,6 +16,9 @@ import {
   type VideoQuality,
 } from './video-recorder.ts';
 import { AUDIO_BACKLOG_LIMIT_MS } from './video-uploader.ts';
+
+/** FR-CAP-07: a network loss of up to 10 minutes loses no audio, including one that spans Stop. */
+export const DRAIN_TIMEOUT_MS = 10 * 60_000;
 
 export interface RecorderEvents {
   onTabEnded(): void;
@@ -41,13 +44,21 @@ export interface Recorder {
   setUploadBacklog(fragments: number): void;
   pause(): Promise<void>;
   resume(): void;
-  stop(): Promise<void>;
+  /**
+   * Stops capture now. `drained` settles once the buffered audio reached the gateway (or the
+   * deadline passed); the offscreen document stays open until then.
+   */
+  stop(): Promise<{ drained: Promise<void> }>;
 }
 
 /**
  * One recording in the offscreen document: capture → per-lane sequence numbers → IndexedDB
  * (write first) → stream client, plus the video part recorder. Pausing drops frames while the
  * session clock keeps running (ARCHITECTURE §5.5) and closes the video part.
+ *
+ * Capture starts before the gateway session is created: the tab stream ID expires within seconds,
+ * so a slow gateway must not sit between the service worker's request and `getUserMedia`. Frames
+ * captured meanwhile wait in memory and are written once the session exists.
  */
 export async function startRecorder(options: {
   streamId: string;
@@ -62,18 +73,10 @@ export async function startRecorder(options: {
 
   let sessionId = `local_${newUlid()}`;
   let streamUrl: string | null = null;
-  if (options.gatewayUrl !== '') {
-    try {
-      const session = await createDevSession(options.gatewayUrl);
-      sessionId = session.sessionId;
-      streamUrl = session.streamUrl;
-    } catch (error: unknown) {
-      // Recording still captures locally; the panel shows the link as off.
-      events.onError('gateway session failed', error);
-    }
-  }
-
-  const store = streamUrl === null ? null : new IdbFrameStore(db, sessionId);
+  let store: IdbFrameStore | null = null;
+  /** True until the gateway session is known; frames wait in `early` meanwhile. */
+  let sessionPending = options.gatewayUrl !== '';
+  const early: { lane: Lane; payload: Uint8Array; captureMs: number }[] = [];
   const nextSeq: Record<Lane, number> = { me: 0, them: 0 };
   const writes: Record<Lane, Promise<void>> = { me: Promise.resolve(), them: Promise.resolve() };
   let paused = false;
@@ -82,11 +85,15 @@ export async function startRecorder(options: {
 
   /** Write first (FR-CAP-07), then tell the stream client; per-lane order is kept by chaining. */
   const enqueueFrame = (lane: Lane, payload: Uint8Array, captureMs: number): void => {
-    if (store === null) return;
+    if (store === null) {
+      if (sessionPending) early.push({ lane, payload, captureMs });
+      return;
+    }
+    const target = store;
     const seq = nextSeq[lane]++;
     writes[lane] = writes[lane].then(async () => {
       try {
-        await store.put({ lane, seq, captureMs, payload });
+        await target.put({ lane, seq, captureMs, payload });
         client?.frameWritten(lane, seq);
       } catch (error: unknown) {
         events.onError('audio buffer write failed', error);
@@ -96,7 +103,7 @@ export async function startRecorder(options: {
 
   // Opus when streaming and this Chrome can encode it (ADR-0003); PCM16 otherwise.
   const encoders: Partial<Record<Lane, LaneEncoder>> = {};
-  if (store !== null && options.preferredCodec === 'opus') {
+  if (sessionPending && options.preferredCodec === 'opus') {
     for (const lane of ['me', 'them'] as const) {
       const encoder = await createLaneEncoder({
         onFrame: (group) => enqueueFrame(lane, packOpusFrame(group.packets), group.captureMs),
@@ -114,25 +121,59 @@ export async function startRecorder(options: {
   const format: AudioFormat = encoders.me !== undefined ? OPUS_FORMAT : PCM16_FORMAT;
   console.info('offscreen: audio codec', format.codec);
 
-  const capture: CaptureSession = await startCapture({
-    streamId: options.streamId,
-    video: options.recordVideo,
-    workletUrl: options.workletUrl,
-    callbacks: {
-      onFrame(lane, pcm, captureMs) {
-        if (paused || store === null) return;
-        const encoder = encoders[lane];
-        if (encoder !== undefined) {
-          encoder.encode(pcm, captureMs);
-        } else {
-          enqueueFrame(lane, new Uint8Array(pcm.buffer, pcm.byteOffset, pcm.byteLength), captureMs);
-        }
+  const closeEncoders = (): void => {
+    for (const encoder of Object.values(encoders)) encoder.close();
+    delete encoders.me;
+    delete encoders.them;
+  };
+
+  let capture: CaptureSession;
+  try {
+    capture = await startCapture({
+      streamId: options.streamId,
+      video: options.recordVideo,
+      workletUrl: options.workletUrl,
+      callbacks: {
+        onFrame(lane, pcm, captureMs) {
+          if (paused || (store === null && !sessionPending)) return;
+          const encoder = encoders[lane];
+          if (encoder !== undefined) {
+            encoder.encode(pcm, captureMs);
+          } else {
+            enqueueFrame(
+              lane,
+              new Uint8Array(pcm.buffer, pcm.byteOffset, pcm.byteLength),
+              captureMs,
+            );
+          }
+        },
+        onTabEnded: events.onTabEnded,
+        onMicLost: events.onMicLost,
+        onLevels: events.onLevels,
       },
-      onTabEnded: events.onTabEnded,
-      onMicLost: events.onMicLost,
-      onLevels: events.onLevels,
-    },
-  });
+    });
+  } catch (error: unknown) {
+    closeEncoders();
+    db.close();
+    throw error;
+  }
+
+  if (options.gatewayUrl !== '') {
+    const session = await createDevSessionWithRetry(options.gatewayUrl, events.onError);
+    if (session !== null) {
+      sessionId = session.sessionId;
+      streamUrl = session.streamUrl;
+      store = new IdbFrameStore(db, sessionId);
+    }
+  }
+  sessionPending = false;
+  if (store === null) {
+    // No gateway: the recording stays local-only and the panel shows the link as off.
+    early.length = 0;
+    closeEncoders();
+  } else {
+    for (const frame of early.splice(0)) enqueueFrame(frame.lane, frame.payload, frame.captureMs);
+  }
 
   if (store !== null && streamUrl !== null && options.gatewayUrl !== '') {
     const baseUrl = options.gatewayUrl;
@@ -222,7 +263,8 @@ export async function startRecorder(options: {
     },
     video,
     audioClear() {
-      if (client === null) return true;
+      // `off` with a client means the gateway refused the stream for good; video need not wait.
+      if (client === null || link === 'off') return true;
       return link === 'online' && client.backlogMs() <= AUDIO_BACKLOG_LIMIT_MS;
     },
     setUploadBacklog(fragments) {
@@ -260,11 +302,18 @@ export async function startRecorder(options: {
         encoder.close();
       }
       await Promise.all([writes.me, writes.them]);
-      if (client !== null) {
-        const { unacked } = await client.stop(at);
-        if (unacked > 0) console.warn('offscreen: frames left unacknowledged', unacked);
+      const streaming = client;
+      if (streaming === null) {
+        db.close();
+        return { drained: Promise.resolve() };
       }
-      db.close();
+      const drained = streaming
+        .stop(at, DRAIN_TIMEOUT_MS)
+        .then(({ unacked }) => {
+          if (unacked > 0) console.warn('offscreen: frames left unacknowledged', unacked);
+        })
+        .finally(() => db.close());
+      return { drained };
     },
   };
 }

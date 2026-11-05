@@ -8,7 +8,8 @@ resource "google_storage_bucket" "audio_chunks" {
   uniform_bucket_level_access = true
   public_access_prevention    = "enforced"
 
-  # Retention Policy (D-02): Raw audio and video fragments deleted after N days
+  # Backstop only (ARCHITECTURE §11.6): the retention job deletes per the user's choice (D-02:
+  # immediately, 7 days by default, or 30 days); this rule catches what a failed job leaves behind.
   lifecycle_rule {
     action {
       type = "Delete"
@@ -18,12 +19,16 @@ resource "google_storage_bucket" "audio_chunks" {
     }
   }
 
-  # CORS configuration for signed PUT uploads from client surfaces (ADR-0011 video chunks)
-  cors {
-    origin          = ["https://meet.google.com"]
-    method          = ["PUT", "GET", "OPTIONS"]
-    response_header = ["*"]
-    max_age_seconds = 3600
+  # Signed PUT uploads of video fragments come from the extension's offscreen document, so only
+  # the extension origin is allowed, never the Meet page (ADR-0011 §3.3). Empty list = no CORS.
+  dynamic "cors" {
+    for_each = length(var.upload_origins) > 0 ? [1] : []
+    content {
+      origin          = var.upload_origins
+      method          = ["PUT"]
+      response_header = ["Content-Type"]
+      max_age_seconds = 3600
+    }
   }
 
   labels = {

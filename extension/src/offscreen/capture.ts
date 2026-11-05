@@ -146,6 +146,7 @@ export async function startCapture(options: {
 
     const levels: Record<Lane, number | null> = { me: null, them: SILENCE_DBFS };
     const nodes: Partial<Record<Lane, AudioWorkletNode>> = {};
+    const sources: Partial<Record<Lane, MediaStreamAudioSourceNode>> = {};
     const addLane = (lane: Lane, stream: MediaStream): void => {
       const node = new AudioWorkletNode(ctx, 'pcm-framer', {
         numberOfInputs: 1,
@@ -163,9 +164,11 @@ export async function startCapture(options: {
           captureMsFor(event.data.startFrame, sessionStartFrame),
         );
       };
-      ctx.createMediaStreamSource(stream).connect(node);
+      const source = ctx.createMediaStreamSource(stream);
+      source.connect(node);
       node.connect(sink);
       nodes[lane] = node;
+      sources[lane] = source;
     };
     addLane('them', tab);
     if (mic !== null) addLane('me', mic);
@@ -176,8 +179,14 @@ export async function startCapture(options: {
     mic?.getAudioTracks()[0]?.addEventListener(
       'ended',
       () => {
-        nodes.me?.disconnect();
+        // Detach the whole lane, so no silent `me` frames are stored or sent to STT afterwards.
+        sources.me?.disconnect();
+        if (nodes.me !== undefined) {
+          nodes.me.port.onmessage = null;
+          nodes.me.disconnect();
+        }
         nodes.me = undefined;
+        sources.me = undefined;
         levels.me = null;
         callbacks.onMicLost();
       },
