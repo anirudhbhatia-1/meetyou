@@ -52,9 +52,9 @@
 | Shared contracts | **Anirudh** | Event schema, WebSocket protocol, REST DTOs, summary schema (`shared/`) |
 | Security review | **Anirudh** | Threat model checks, tenancy tests, prompt-injection tests |
 | Meet adapter (DOM) | **Gaurav** | Call detection, metadata, active-speaker and mute signals, chat notice, selector health |
-| Extension shell and UI | **Gaurav** | Manifest, build, side panel UI, Meet overlay UI, onboarding, badge, notifications |
-| Library app | **Gaurav** | Home, Meetings, Meeting detail, Share, Action items, Settings |
-| Design system | **Gaurav** | Tokens, components, dark mode, accessibility |
+| Extension shell and UI | **Anirudh** (since 2026-11-05) | Manifest, build, side panel UI, Meet overlay UI, onboarding, badge, notifications |
+| Library app | **Anirudh** (since 2026-11-05) | Home, Meetings, Meeting detail, Share, Action items, Settings (web app, D-07) |
+| Design system | **Anirudh** (since 2026-11-05) | Tokens, components, dark mode, accessibility (sources: DESIGN.md + the Claude Code design, AGENTS §2) |
 | REST API endpoints | **Gaurav** | CRUD endpoints, search, export, action items, glossary, settings |
 | Data lifecycle jobs | **Gaurav** | Retention, deletion with grace and restore, export archives |
 | Infrastructure and delivery | **Gaurav** | Terraform, Google Cloud environments, CI/CD, observability setup |
@@ -70,8 +70,8 @@ and breaking changes need an ADR (AGENTS.md §3, ARCHITECTURE §24.3).
 ## 2. Working agreement
 
 1. **Contracts first.** Anirudh publishes `shared/` schemas (and fixture data) before the code that
-   uses them, so Gaurav's UI and endpoints can proceed in parallel against mocks.
-2. **Mocks over waiting.** Gaurav builds UI against a mock API and a **recorded session stream**
+   uses them, so the UI and Gaurav's endpoints can proceed in parallel against mocks.
+2. **Mocks over waiting.** The UI is built against a mock API and a **recorded session stream**
    (fixture replay of real WebSocket messages) until the real services are ready.
 3. **One owner per task**, named in this plan. Help is welcome; ownership does not move without an
    update to this file.
@@ -261,23 +261,23 @@ all summary, search, glossary, export endpoints live in staging.
 ### Tasks
 | ID | Task and approach | Owner | Depends on | Done when |
 |---|---|---|---|---|
-| S4-01 | **Mock layer:** mock API from `shared/` schemas and a session-stream replayer using S2-13 fixtures (interim/final/health/speaker events) | Gaurav | S0-16 (S2-13 later) | UI runs fully offline against mocks |
-| S4-02 | **Component library** (DESIGN §6) with light/dark tokens, focus states, reduced motion/transparency | Gaurav | S0-17 | Storybook-style catalogue reviewed against DESIGN §24 |
-| S4-03 | **Onboarding** (DESIGN §7): welcome, Google sign-in, mic permission with denied path, preferences, consent acknowledgement | Gaurav | S4-02, S2-02 | Under 60 s; consent ack stored |
-| S4-04 | **Meet overlay UI** (DESIGN §8.2–§8.4): prompt and draggable recording pill in Shadow DOM, never covering Meet controls | Gaurav | S1-09, S4-02 | Works across Meet layouts (grid, spotlight, side panels open) |
-| S4-05 | **Side panel** (DESIGN §8.5–§8.7): all states, transcript list with interim replacement, notes composer with tags and typed markers, offline drafts, lane meters, jump to live, processing steps, ready, too short, failed | Gaurav | S4-01, S1-06 | All states reachable with mock streams |
+| S4-01 | **Mock layer:** mock API from `shared/` schemas and a session-stream replayer using S2-13 fixtures (interim/final/health/speaker events) | Anirudh | S0-16 (S2-13 later) | UI runs fully offline against mocks |
+| S4-02 | **Component library** (DESIGN §6) with light/dark tokens, focus states, reduced motion/transparency | Anirudh | S0-17 | Storybook-style catalogue reviewed against DESIGN §24 |
+| S4-03 | **Onboarding** (DESIGN §7): welcome, Google sign-in, mic permission with denied path, preferences, consent acknowledgement | Anirudh | S4-02, S2-02 | Under 60 s; consent ack stored |
+| S4-04 | **Meet overlay UI** (DESIGN §8.2–§8.4): prompt and draggable recording pill in Shadow DOM, never covering Meet controls | Anirudh | S1-09, S4-02 | Works across Meet layouts (grid, spotlight, side panels open) |
+| S4-05 | **Side panel** (DESIGN §8.5–§8.7): all states, transcript list with interim replacement, notes composer with tags and typed markers, offline drafts, lane meters, jump to live, processing steps, ready, too short, failed | Anirudh | S4-01, S1-06 | All states reachable with mock streams |
 | S4-06 | **Client-side interim transliteration helper** and **notes sync client** (IndexedDB drafts, debounced PUT) packages | Anirudh | S2-05 | Packages published with tests |
 | S4-07 | **Consent chat notice:** DOM posting into Meet chat, failure fallback with copy, consent events to the stream | Gaurav | S1-07, S4-05 | Notice posts on a real call; failure path tested |
-| S4-08 | **Failure and edge states** (DESIGN §9): reconnecting, mic lost, silent lane, transcript delayed, error, crash recovery banner, session limit, second tab, stop and delete | Gaurav | S4-05 | Each state reproducible from mock stream scripts |
-| S4-09 | **Library app as a web app (D-07, 2026-11-05):** sign-in (ADR-0004 §4.5), hosting per ADR-0006; Home, Meetings (search, filters), Meeting detail (Notes with legend, anchored sections, decisions, open questions, unverified; Transcript with search, speaker rename, echo toggle; citation popover and card; audio player; rename; regenerate menu with version banner; inline edit; feedback) | Gaurav | S4-02, S3-08 | Matches DESIGN §10–§12 |
-| S4-10 | **Share sheet, export, delete with undo, consent-log sheet** (DESIGN §13) | Gaurav | S4-09 | Paste tests in Slack, WhatsApp, Gmail, Notion pass |
-| S4-11 | **Action items page and Home to-dos** (DESIGN §14) | Gaurav | S3-08 | Status persists; undo works |
-| S4-12 | **Settings** (DESIGN §15): recording, consent mode + message, language, show-Hindi-as, retention with effect sentence, export, sub-processors, analytics opt-out, vocabulary, account delete | Gaurav | S2-09, S3-10 | All settings persist and take effect |
-| S4-13 | **Badge and notifications:** toolbar badge states from the state machine, Chrome notifications for notes ready and export ready, keyboard shortcuts | Gaurav | S1-06 | Badge mirrors every state; shortcuts work |
-| S4-14 | **Wire UI to real services** (replace mocks), including SSE processing progress | Gaurav | S2-12, S3-03 | Mocks removed from production build |
-| S4-15 | **Product analytics events** (typed IDs/counts/enums only; opt-out honoured) | Gaurav | S4-14 | Event schema reviewed; no content fields |
-| S4-17 | **Video UI** (DESIGN, ADR-0011): video toggle + quality in the pre-recording sheet, side-panel video state and "Uploading video — N%", meeting-view player above the transcript with click-to-seek from segments and citations, settings rows | Gaurav | S4-05, S4-09, S2-14 | Seek from any segment lands within ±0.5 s; states covered in design QA |
-| S4-16 | **Accessibility and design QA** (DESIGN §20, §24) across all screens, light and dark, 320–480 px side panel | Gaurav | S4-14 | Checklist passes |
+| S4-08 | **Failure and edge states** (DESIGN §9): reconnecting, mic lost, silent lane, transcript delayed, error, crash recovery banner, session limit, second tab, stop and delete | Anirudh | S4-05 | Each state reproducible from mock stream scripts |
+| S4-09 | **Library app as a web app (D-07, 2026-11-05):** sign-in (ADR-0004 §4.5), hosting per ADR-0006; Home, Meetings (search, filters), Meeting detail (Notes with legend, anchored sections, decisions, open questions, unverified; Transcript with search, speaker rename, echo toggle; citation popover and card; audio player; rename; regenerate menu with version banner; inline edit; feedback) | Anirudh | S4-02, S3-08 | Matches DESIGN §10–§12 |
+| S4-10 | **Share sheet, export, delete with undo, consent-log sheet** (DESIGN §13) | Anirudh | S4-09 | Paste tests in Slack, WhatsApp, Gmail, Notion pass |
+| S4-11 | **Action items page and Home to-dos** (DESIGN §14) | Anirudh | S3-08 | Status persists; undo works |
+| S4-12 | **Settings** (DESIGN §15): recording, consent mode + message, language, show-Hindi-as, retention with effect sentence, export, sub-processors, analytics opt-out, vocabulary, account delete | Anirudh | S2-09, S3-10 | All settings persist and take effect |
+| S4-13 | **Badge and notifications:** toolbar badge states from the state machine, Chrome notifications for notes ready and export ready, keyboard shortcuts | Anirudh | S1-06 | Badge mirrors every state; shortcuts work |
+| S4-14 | **Wire UI to real services** (replace mocks), including SSE processing progress | Anirudh | S2-12, S3-03 | Mocks removed from production build |
+| S4-15 | **Product analytics events** (typed IDs/counts/enums only; opt-out honoured) | Anirudh | S4-14 | Event schema reviewed; no content fields |
+| S4-17 | **Video UI** (DESIGN, ADR-0011): video toggle + quality in the pre-recording sheet, side-panel video state and "Uploading video — N%", meeting-view player above the transcript with click-to-seek from segments and citations, settings rows | Anirudh | S4-05, S4-09, S2-14 | Seek from any segment lands within ±0.5 s; states covered in design QA |
+| S4-16 | **Accessibility and design QA** (DESIGN §20, §24) across all screens, light and dark, 320–480 px side panel | Anirudh | S4-14 | Checklist passes |
 
 **Exit criteria:** every Phase 1 screen and state in DESIGN.md implemented and wired · design QA
 checklist passes · no mocks in the production build.
@@ -294,7 +294,7 @@ checklist passes · no mocks in the production build.
 | S5-01 | **Alpha distribution:** signed unpacked build or trusted-tester listing; update channel | Gaurav | S4-14 | Both machines on the alpha build |
 | S5-02 | **Failure drills:** network drop, gateway instance kill, STT provider outage simulation, LLM outage, browser crash recovery | Anirudh | S4-08 | Each drill ends with no data loss and correct UI state |
 | S5-03 | **Capture, pipeline, and quality fixes** from dogfooding; quality metrics review against PRD §11.3 | Anirudh | S5-01 | P0 issues in owned areas closed |
-| S5-04 | **UI and endpoint fixes** from dogfooding; usability notes | Gaurav | S5-01 | P0 issues in owned areas closed |
+| S5-04 | **Endpoint fixes** from dogfooding (UI fixes and usability notes: Anirudh, since 2026-11-05) | Gaurav | S5-01 | P0 issues in owned areas closed |
 | S5-05 | **Cost per meeting-hour review** from usage records vs PRD §20 target | Anirudh | S2-07 | Report in docs; levers prioritised |
 | S5-06 | **Operational dashboards review** (health, latency, selector health, retention job) | Gaurav | S2-11 | Alerts tuned; no noisy alerts |
 
@@ -398,17 +398,17 @@ beta data; ADRs listed must be accepted first.
 | From → To | What | Needed by | Mock until ready |
 |---|---|---|---|
 | Anirudh → Gaurav | `shared/` contracts v0 (events, WS protocol, DTOs, summary schema) | S1-07, S2-08, S4-01 | — (first deliverable) |
-| Anirudh → Gaurav | Recording state machine API (state + transitions) | S4-05, S4-13 | Mock state publisher |
 | Anirudh → Gaurav | Auth middleware package | S2-08 | Stub verifying fixed test tokens |
-| Anirudh → Gaurav | Synthetic fixtures + recorded session streams | S4-01, S2-12 | Hand-written mock messages |
+| Anirudh → Gaurav | Synthetic fixtures + recorded session streams | S2-12 | Hand-written mock messages |
 | Anirudh → Gaurav | Normalizer package (Hinglish spelling, Roman) | S3-09 | Lowercase-only stub |
-| Anirudh → Gaurav | Interim transliteration helper + notes sync client | S4-05 | Pass-through stub |
 | Anirudh → Gaurav | Session creation logic for `/sessions` | S2-09 | Fake session IDs |
 | Anirudh → Gaurav | Provider capability descriptors (glossary limits) | S3-10 | Fixed limit of 50 terms |
 | Gaurav → Anirudh | Extension skeleton and build | S1-02, S1-06 | — |
 | Gaurav → Anirudh | Meet adapter events (`speaker.active`, participants, mute, meeting ended) | S1-04, S3-04 | Fixture event script |
 | Gaurav → Anirudh | Staging infrastructure (Cloud Run, Cloud SQL, Storage, Redis, secrets) | S1-05, S2-01 | Local emulators |
 | Gaurav → Anirudh | API scaffold conventions (errors, idempotency, pagination) | S3-03 SSE endpoint | — |
+| Gaurav → Anirudh | REST endpoints the UI uses (meetings, notes, summary, action items, search, settings, export) | S4-14 | Mock API (S4-01) |
+| Gaurav → Anirudh | Consent chat notice in Meet (S4-07) | S4-05 | Copy-to-clipboard fallback |
 | Gaurav → Anirudh | Benchmark recordings, references (clips 1–10), batch results | S0-08, S0-09 | — |
 
 ---
