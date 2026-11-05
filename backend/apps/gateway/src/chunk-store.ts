@@ -22,6 +22,15 @@ export interface AudioChunk {
   codec: 'pcm16' | 'opus';
 }
 
+/** One 10 s video fragment (ADR-0011 §3.3), stored until `video.finalize` (S2-14). */
+export interface VideoFragment {
+  workspaceId: string;
+  meetingId: string;
+  partId: string;
+  index: number;
+  bytes: Uint8Array;
+}
+
 /**
  * Durable audio chunks (ARCHITECTURE §6.1 step 2). `put` resolves only once the chunk survives a
  * crash, because the gateway acknowledges frames on that promise (§5.3).
@@ -32,6 +41,8 @@ export interface ChunkStore {
   durableUpTo(workspaceId: string, meetingId: string): Promise<Record<Lane, number>>;
   /** Usage counts for cost tracking (AGENTS §3 rule 10); overwrites the previous snapshot. */
   putUsage(usage: SessionUsage): Promise<void>;
+  /** Overwrites the same fragment on a retry (idempotent, like a signed PUT to Cloud Storage). */
+  putVideoFragment(fragment: VideoFragment): Promise<void>;
 }
 
 const Manifest = z.object({
@@ -75,6 +86,20 @@ export class LocalChunkStore implements ChunkStore {
     const path = join(this.#meetingDir(usage.workspaceId, usage.sessionId), 'usage.json');
     await mkdir(dirname(path), { recursive: true });
     await writeDurably(path, new TextEncoder().encode(JSON.stringify(usage, null, 2)));
+  }
+
+  async putVideoFragment(fragment: VideoFragment): Promise<void> {
+    if (!ID.test(fragment.partId) || !Number.isInteger(fragment.index) || fragment.index < 0) {
+      throw new Error('invalid video fragment id');
+    }
+    const path = join(
+      this.#meetingDir(fragment.workspaceId, fragment.meetingId),
+      'video',
+      fragment.partId,
+      `${fragment.index}.frag`,
+    );
+    await mkdir(dirname(path), { recursive: true });
+    await writeDurably(path, fragment.bytes);
   }
 
   async put(chunk: AudioChunk): Promise<void> {
@@ -132,6 +157,13 @@ async function writeDurably(path: string, bytes: Uint8Array): Promise<void> {
 export class MemoryChunkStore implements ChunkStore {
   readonly chunks: AudioChunk[] = [];
   readonly usage = new Map<string, SessionUsage>();
+  readonly videoFragments = new Map<string, VideoFragment>();
+
+  putVideoFragment(fragment: VideoFragment): Promise<void> {
+    const key = `${fragment.meetingId}/${fragment.partId}/${fragment.index}`;
+    this.videoFragments.set(key, fragment);
+    return Promise.resolve();
+  }
 
   putUsage(usage: SessionUsage): Promise<void> {
     this.usage.set(usage.sessionId, usage);

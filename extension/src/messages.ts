@@ -20,7 +20,9 @@ export type BackgroundMessage =
   | { target: 'background'; type: 'capture.tab_ended' }
   | { target: 'background'; type: 'capture.mic_lost' }
   | { target: 'background'; type: 'capture.link'; link: StreamLink }
-  | { target: 'background'; type: 'capture.video'; video: VideoStatus };
+  | { target: 'background'; type: 'capture.video'; video: VideoStatus }
+  /** Every uploadable video fragment is uploaded; the offscreen document may close (ADR-0011). */
+  | { target: 'background'; type: 'capture.upload_idle' };
 
 export type OffscreenMessage =
   | { target: 'offscreen'; type: 'capture.start'; streamId: string; recordVideo: boolean }
@@ -41,7 +43,9 @@ export type SidePanelMessage =
       startMs: number;
       /** Diarized cluster of a `them` segment (e.g. "spk_2"), null when unknown. */
       speaker: string | null;
-    };
+    }
+  /** Video fragment upload (ADR-0011 §3.3): fragments left, and uploaded since the uploader started. */
+  | { target: 'sidepanel'; type: 'video.upload'; pending: number; uploaded: number };
 
 /** Offscreen reply to `capture.start`. `micError` is the DOMException name when the mic failed. */
 export type CaptureStartResult =
@@ -54,6 +58,12 @@ export type CaptureStartResult =
       video: VideoStatus;
     }
   | { ok: false; reason: CaptureFailure };
+
+/** Offscreen reply to `capture.stop`: `uploading` keeps the document open for the video upload. */
+export interface CaptureStopReply {
+  ok: boolean;
+  uploading: boolean;
+}
 
 /** Offscreen reply to `capture.status`, used to reconcile after a service-worker restart. */
 export interface CaptureStatusReply {
@@ -110,6 +120,7 @@ const SIMPLE_BACKGROUND = new Set<string>([
   'recording.resume',
   'capture.tab_ended',
   'capture.mic_lost',
+  'capture.upload_idle',
 ]);
 
 export function parseBackgroundMessage(message: unknown): BackgroundMessage | null {
@@ -185,7 +196,24 @@ export function parseSidePanelMessage(message: unknown): SidePanelMessage | null
       speaker: message.speaker,
     };
   }
+  if (message.type === 'video.upload' && isCount(message.pending) && isCount(message.uploaded)) {
+    return {
+      target: 'sidepanel',
+      type: 'video.upload',
+      pending: message.pending,
+      uploaded: message.uploaded,
+    };
+  }
   return null;
+}
+
+function isCount(value: unknown): value is number {
+  return typeof value === 'number' && Number.isInteger(value) && value >= 0;
+}
+
+export function parseCaptureStopReply(value: unknown): CaptureStopReply | null {
+  if (!isRecord(value) || typeof value.ok !== 'boolean') return null;
+  return { ok: value.ok, uploading: value.uploading === true };
 }
 
 export function isLaneFlags(value: unknown): value is LaneFlags {

@@ -1,15 +1,17 @@
-import { readdir, readFile } from 'node:fs/promises';
+import { readdir, readFile, stat, writeFile } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
 import process from 'node:process';
 
 import type { ChunkFrame } from './chunk-store.ts';
-import { checkLane } from './session-check.ts';
+import { checkLane, checkVideoPart, videoExtension } from './session-check.ts';
 
 /**
  * Loss check for a recorded session from the local chunk store (S1-11 / M1 exit). Prints counts
  * only. Usage (repo root):
- *   node backend/apps/gateway/src/check-session.ts [sessionId] [--data-dir DIR] [--workspace dev]
- * Without a session ID it checks the most recently written session.
+ *   node backend/apps/gateway/src/check-session.ts [sessionId] [--data-dir DIR] [--workspace dev] [--join]
+ * Without a session ID it checks the most recently written session. `--join` concatenates each
+ * video part's fragments into `video/{partId}.mp4` (or `.webm`) next to them, for playback checks;
+ * one MediaRecorder run's fragments form a valid file (ADR-0011 §3.4). The files stay in `.data`.
  */
 const args = process.argv.slice(2);
 const flag = (name: string, fallback: string) => {
@@ -46,7 +48,43 @@ async function laneFrames(sessionId: string, lane: 'me' | 'them'): Promise<Chunk
   return frames;
 }
 
-const positional = args.filter((a, i) => !a.startsWith('--') && !args[i - 1]?.startsWith('--'));
+async function checkVideo(sessionId: string, join_: boolean): Promise<number> {
+  const videoDir = join(meetingsDir, sessionId, 'video');
+  let parts: string[];
+  try {
+    parts = (await readdir(videoDir)).filter((n) => n.startsWith('vp_') && !n.includes('.'));
+  } catch {
+    console.log('  video: none uploaded');
+    return 0;
+  }
+  let missing = 0;
+  for (const partId of parts.sort()) {
+    const dir = join(videoDir, partId);
+    const names = (await readdir(dir)).filter((n) => /^\d+\.frag$/.test(n));
+    const indices = names.map((n) => Number.parseInt(n, 10)).sort((a, b) => a - b);
+    const report = checkVideoPart(indices);
+    missing += report.missingIndices.length;
+    let bytes = 0;
+    for (const n of names) bytes += (await stat(join(dir, n))).size;
+    console.log(
+      `  video ${partId} fragments=${report.fragments} missing=${report.missingIndices.length}` +
+        ` size=${(bytes / 1e6).toFixed(1)} MB`,
+    );
+    if (join_ && indices.length > 0) {
+      const chunks = await Promise.all(indices.map((i) => readFile(join(dir, `${i}.frag`))));
+      const file = Buffer.concat(chunks);
+      const out = join(videoDir, `${partId}.${videoExtension(file.subarray(0, 8))}`);
+      await writeFile(out, file);
+      console.log(`       joined → ${out}`);
+    }
+  }
+  return missing;
+}
+
+const VALUE_FLAGS = new Set(['--data-dir', '--workspace']);
+const positional = args.filter(
+  (a, i) => !a.startsWith('--') && !VALUE_FLAGS.has(args[i - 1] ?? ''),
+);
 const sessionId = positional[0] ?? (await latestSession());
 const minutes = (ms: number) => (ms / 60_000).toFixed(2);
 
@@ -87,5 +125,7 @@ try {
 } catch {
   console.log('  usage: none written yet');
 }
+const videoMissing = await checkVideo(sessionId, args.includes('--join'));
 console.log(lost === 0 ? 'RESULT: no audio loss' : `RESULT: ${lost} frames missing`);
-process.exitCode = lost === 0 ? 0 : 1;
+if (videoMissing > 0) console.log(`RESULT: ${videoMissing} video fragments missing`);
+process.exitCode = lost === 0 && videoMissing === 0 ? 0 : 1;

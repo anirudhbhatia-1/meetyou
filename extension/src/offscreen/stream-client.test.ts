@@ -202,6 +202,20 @@ describe('StreamClient', () => {
     expect(links.at(-1)).toBe('off');
   });
 
+  it('reports unsent audio as backlog, which holds back video uploads', async () => {
+    const { gateway, timers, client, write } = setup();
+    client.start();
+    await settle();
+    await write(3);
+    expect(client.backlogMs()).toBe(0);
+    gateway.drop();
+    await write(60); // 6 s recorded while offline
+    expect(client.backlogMs()).toBe(6000);
+    timers.runPending();
+    await settle();
+    expect(client.backlogMs()).toBe(0);
+  });
+
   it('keeps unacknowledged frames when the stream ends without acks', async () => {
     const { store, gateway, timers, client, write } = setup();
     client.start();
