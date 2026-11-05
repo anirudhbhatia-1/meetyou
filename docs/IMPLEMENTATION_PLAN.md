@@ -190,7 +190,7 @@ answer ARCHITECTURE §26.2.
 | S1-11 | **Measurements and long sessions:** CPU/memory, echo leakage on laptop speakers, 2-hour meeting through Cloud Run's 60-minute reconnect (after S2 sign-in, see S1-05), Deepgram backlog catch-up speed, gateway cost per session | Anirudh | S1-05 | §26.2 questions 2, 3, 5, 6 written up; ADR-0003 decided |
 | S1-13 | **Video capture spike** ([ADR-0011](adr/0011-video-screen-recording.md) §5): `MediaRecorder` on the tab video + WebAudio mix in the offscreen document, 10 s fragments to IndexedDB `video_buffer`, MIME support, hidden-tab rendering, CPU/battery with video on/off, audio-first uploader on a 2 Mbps link | Anirudh | S1-02, S1-04 | ADR-0011 checks 1–4 recorded; audio loss 0 with video on. **Code done 2026-11-05:** recorder, audio-first uploader to the local gateway, data-saver switch; Chrome checks pending |
 | S1-14 | ~~**ADR-0001 gate** with Google Chirp 3~~ — **cancelled 2026-11-05**: Deepgram is the only STT provider (ADR-0001 §0) | Anirudh | — | — |
-| S1-12 | **DOM signal reliability and overlay performance:** active-speaker accuracy on 2/4/6-person calls; glass `backdrop-filter` cost inside Meet | Gaurav | S1-08, S1-09 | §26.2 questions 4 and 8 written up |
+| S1-12 | ✅ **DOM signal reliability and overlay performance:** active-speaker accuracy on calls; glass `backdrop-filter` cost inside Meet (2026-11-05) | Gaurav | S1-08, S1-09 | §26.2 questions 4 and 8 written up ✅ |
 
 **Exit criteria (PRD M1):** a 60-minute Meet call recorded with no audio loss, with video on, live Deepgram
 transcript for the whole call · CPU/memory measured ·

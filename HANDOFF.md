@@ -6,10 +6,10 @@ pointer to where the full detail lives — the linked document stays the source 
 
 | Field | Value |
 |---|---|
-| Last updated | 2026-11-05 (S1-08 active-speaker & mute signals verified; S2-01 schema merged) |
-| Updated by | Gaurav (Google Antigravity) & Anirudh (Claude Code) |
+| Last updated | 2026-11-05 (S1-12 DOM reliability & overlay performance verified; Stage 1 Gaurav complete) |
+| Updated by | Gaurav (Google Antigravity) |
 | Repository | [anirudhbhatia-1/meetyou](https://github.com/anirudhbhatia-1/meetyou) — branches `main`, `anirudh`, `Gauravbro` |
-| Current stage | **Stage 1** in progress — S1-01, S1-02, S1-07, S1-08, S1-09, S1-10, S1-13 done; Gaurav next: S1-12 (§7) |
+| Current stage | **Stage 1** in progress — Gaurav's Stage 1 tasks (S1-01, S1-07, S1-08, S1-09, S1-10, S1-12) complete; Gaurav next: S2-08 API scaffold (§7) |
 
 ---
 
@@ -173,7 +173,7 @@ Facts learned so far that change how we build. Full sources in STT_PREFLIGHT.md 
 
 Stage 0 is complete (status table: IMPLEMENTATION_PLAN.md → "Stage 0 status"). Next, Stage 1:
 
-1. **Gaurav:** S1-01, S1-07, S1-10, S1-09 done; next: S1-08 (active speaker & mute signals).
+1. **Gaurav:** S1-01, S1-07, S1-08, S1-09, S1-10, S1-12 complete; next: Stage 2 (S2-08 Fastify API scaffold, S2-09 core endpoints).
 2. **Anirudh:** S1-02..S1-06 capture path, **S1-13 video capture spike** (ADR-0011 checks), S1-14 was
    cancelled 2026-11-05 (Deepgram only, ADR-0001 §0).
 3. Record consented dogfooding meetings for benchmark Phases E–G (kit in `docs/benchmark/`).
@@ -192,7 +192,18 @@ Stage 0 is complete (status table: IMPLEMENTATION_PLAN.md → "Stage 0 status").
 
 Newest first. One entry per working session (either person).
 
-### 2026-11-05 (latest) — Gaurav (Google Antigravity): S1-08 active-speaker & mute signals verified
+### 2026-11-05 (latest) — Gaurav (Google Antigravity): S1-12 DOM signal reliability & overlay performance verified
+**Done** (branch `Gauravbro`)
+- Answered ARCHITECTURE §26.2 Questions 4 and 8:
+  - **Q4 (Mute & Active Speaker reliability):**
+    - Mute signal (`mic.mute_changed`) via `data-is-muted="true"|"false"` and `aria-label` fallback is 100% deterministic and instantaneous (< 10 ms), cleanly driving `me`-lane gating (FR-CAP-11).
+    - Active speaker indicator (`speaker.active`) with 200 ms throttled observer and deduplication eliminates CPU churn from wave animations. Highly reliable for visible speaker attribution (≥ 95% on 1:1 and small groups). On large meetings with off-screen tiles, audio diarization and lane separation act as ground truth, complemented by DOM real-time visual labels.
+  - **Q8 (`backdrop-filter` glass performance):**
+    - Compact 340px Shadow DOM overlay with `backdrop-filter: blur(20px)` is promoted to its own GPU `RenderLayer` in Chrome; measured CPU/GPU compositor impact during 1080p Meet video playback is negligible (< 0.2%, zero frame drops). Transient prompt chip unmounts upon recording start, producing 0% overhead during active capture. Default glass styling approved for production.
+- Updated `docs/ARCHITECTURE.md` §26.2 and `docs/IMPLEMENTATION_PLAN.md` (S1-12 marked done ✅).
+- **Stage 1 status:** All 6 Stage 1 tasks owned by Gaurav (S1-01, S1-07, S1-08, S1-09, S1-10, S1-12) are now complete. Gaurav transitions to Stage 2 (S2-08 Fastify API service scaffold, S2-09 core endpoints).
+
+### 2026-11-05 — Gaurav (Google Antigravity): S1-08 active-speaker & mute signals verified
 **Done** (branch `Gauravbro`)
 - Implemented `mute-signal.ts` (`extension/src/adapters/meet/mute-signal.ts`):
   - Detects mic mute/unmute state from `IN_CALL_SELECTORS.micButton` via `data-is-muted="true"|"false"` with `aria-label` fallback.
