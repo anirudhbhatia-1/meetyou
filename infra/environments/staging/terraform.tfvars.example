@@ -1,0 +1,6 @@
+# Example staging variables. Copy to terraform.tfvars (gitignored).
+project_id    = "your-gcp-staging-project-id"
+region        = "asia-south1"
+db_password   = "replace-with-a-secure-random-staging-db-password"
+gateway_image = "gcr.io/google-samples/hello-app:1.0"
+

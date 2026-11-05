@@ -8,8 +8,8 @@ pointer to where the full detail lives — the linked document stays the source 
 |---|---|
 | Last updated | 2026-11-05 (STT is Deepgram only; library is a web app from alpha) |
 | Updated by | Anirudh (Claude Code) |
-| Repository | [anirudhbhatia-1/meetyou](https://github.com/anirudhbhatia-1/meetyou) — branches `main`, `anirudh`, `feature/S1-07-meet-adapter-v0` |
-| Current stage | **Stage 1** in progress — S1-01, S1-02, S1-07 done; Anirudh's S1-03..S1-06 and S1-13 code in; Gaurav: S1-08, S1-09, S1-10 (§7) |
+| Repository | [anirudhbhatia-1/meetyou](https://github.com/anirudhbhatia-1/meetyou) — branches `main`, `anirudh`, `Gauravbro` |
+| Current stage | **Stage 1** in progress — S1-01, S1-02, S1-07 done; Anirudh's S1-03..S1-06 and S1-13 code in; Gaurav: S1-08, S1-09, S1-10 scaffolded (§7) |
 
 ---
 
@@ -351,6 +351,19 @@ code can import `@meetyou/contracts` and zod); build the S1-05 gateway **locally
 `web_accessible_resources` entry are no longer needed — the content script can import the
 adapter modules directly and esbuild bundles it as a classic script. Also: no participant names
 or titles in console logs (AGENTS §7).
+
+### 2026-11-04 (later) — Gaurav (Google Antigravity): S1-10 staging infrastructure scaffolded
+**Done** (branch `Gauravbro`)
+- S1-07 merged into `main` via PR #2 (`99271df`). Local `main` and `Gauravbro` fast-forwarded and synchronized.
+- Scaffolded modular Terraform infrastructure for staging in `infra/` targeting region `asia-south1` (Mumbai) per ADR-0002:
+  - `modules/storage`: Regional Cloud Storage bucket for audio/video chunks with mandatory automated 7-day retention deletion rule (D-02) and CORS for client uploads.
+  - `modules/secrets`: Google Secret Manager declarations for DB passwords, JWT signing keys, and Deepgram API keys with IAM access for Cloud Run.
+  - `modules/vpc`: VPC network, subnets, and Serverless VPC Access connector (`meetyou-staging-vpc-con`) for secure internal communication.
+  - `modules/cloud-sql`: PostgreSQL 16 instance with private IP only (no public exposure), 10 GB SSD, automated backups, and database `meetyou_staging`.
+  - `modules/cloud-run`: Realtime Gateway service on Cloud Run v2 with 60-min WebSocket request timeout, session affinity, VPC connector attachment, and least-privilege service account.
+  - `environments/staging`: Root configuration wiring all modules, enabling all 8 required GCP APIs, with `terraform.tfvars.example` and setup runbook.
+  - Updated `.gitignore` to strictly safeguard Terraform state and secret variable files.
+- Ready to execute `terraform apply` once a GCP staging project ID is designated, unblocking S1-14 (Chirp 3 gate) and S1-05 (Cloud gateway).
 
 ### 2026-11-04 — Gaurav (Google Antigravity): S1-07 rebase on capture path & esbuild
 **Done** (branch `feature/S1-07-meet-adapter-v0`)
