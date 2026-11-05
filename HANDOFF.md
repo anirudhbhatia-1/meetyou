@@ -6,10 +6,10 @@ pointer to where the full detail lives — the linked document stays the source 
 
 | Field | Value |
 |---|---|
-| Last updated | 2026-11-05 (Deepgram only; library web app from alpha; UI design sources fixed) |
-| Updated by | Anirudh (Claude Code) |
+| Last updated | 2026-11-05 (S1-10 staging infrastructure applied live on GCP Mumbai; S1-07 done) |
+| Updated by | Gaurav (Google Antigravity) |
 | Repository | [anirudhbhatia-1/meetyou](https://github.com/anirudhbhatia-1/meetyou) — branches `main`, `anirudh`, `Gauravbro` |
-| Current stage | **Stage 1** in progress — S1-01, S1-02, S1-07 done; Anirudh's S1-03..S1-06 and S1-13 code in; Gaurav: S1-08, S1-09, S1-10 scaffolded (§7) |
+| Current stage | **Stage 1** in progress — S1-01, S1-02, S1-07, S1-10 done; Anirudh's S1-03..S1-06 and S1-13 code in; Gaurav next: S1-09, S1-08 (§7) |
 
 ---
 
@@ -172,8 +172,7 @@ Facts learned so far that change how we build. Full sources in STT_PREFLIGHT.md 
 
 Stage 0 is complete (status table: IMPLEMENTATION_PLAN.md → "Stage 0 status"). Next, Stage 1:
 
-1. **Gaurav:** S1-01 extension skeleton (add `unlimitedStorage` to the manifest — PRD §18), S1-07
-   Meet adapter, S1-10 staging infrastructure (the Cloud project also unblocks the STT gate).
+1. **Gaurav:** S1-01, S1-07, S1-10 done; next: S1-09 (prompt chip in Shadow DOM) and S1-08 (active speaker & mute signals).
 2. **Anirudh:** S1-02..S1-06 capture path, **S1-13 video capture spike** (ADR-0011 checks), S1-14 was
    cancelled 2026-11-05 (Deepgram only, ADR-0001 §0).
 3. Record consented dogfooding meetings for benchmark Phases E–G (kit in `docs/benchmark/`).
@@ -191,6 +190,17 @@ Stage 0 is complete (status table: IMPLEMENTATION_PLAN.md → "Stage 0 status").
 ## 9. Session log
 
 Newest first. One entry per working session (either person).
+
+### 2026-11-05 (evening) — Gaurav (Google Antigravity): S1-10 staging infrastructure applied on GCP Mumbai
+**Done** (branch `Gauravbro`)
+- Fully provisioned staging infrastructure on Google Cloud `asia-south1` (Mumbai) in project `project-7ddc1bbe-aea4-44f7-bd0` using Terraform:
+  - **Storage:** GCS bucket `meetyou-audio-chunks-staging-project-7ddc1bbe-aea4-44f7-bd0` with automated 7-day retention deletion lifecycle rule (D-02) and Meet CORS.
+  - **Networking:** VPC `meetyou-staging-vpc`, subnet `meetyou-staging-subnet` (`10.10.0.0/24`), private IP range allocation for SQL peering (`10.254.0.3`), and Serverless VPC Access connector `meetyou-staging-vpc-con` (`10.10.8.0/28`).
+  - **Database:** Cloud SQL PostgreSQL 16 instance `meetyou-staging-pg16` (`ENTERPRISE` edition, `db-custom-1-3840`, 10 GB SSD, private IP only, daily automated backups) with database `meetyou_staging` and user `meetyou_app`.
+  - **Security:** Secret Manager secrets for DB password, JWT signing key, and Deepgram API key with IAM accessor roles bound to the gateway service account `meetyou-staging-gateway-sa@project-7ddc1bbe-aea4-44f7-bd0.iam.gserviceaccount.com`.
+  - **Compute:** Cloud Run v2 service `meetyou-staging-gateway` deployed at `https://meetyou-staging-gateway-7oflznia2a-el.a.run.app` with 60-min WebSocket request timeout, session affinity, zero idle instances (min 0, max 3), and private VPC egress.
+- Fixed Cloud Run v2 reserved `PORT` environment error and Cloud SQL `ENTERPRISE` edition specification in Terraform modules.
+- S1-10 exit criteria satisfied: `terraform apply` creates staging infrastructure from scratch.
 
 ### 2026-11-05 (later) — Anirudh (Claude Code): UI design sources
 **Decision (Anirudh):** all UI work uses only `docs/DESIGN.md`, the Claude Code design artifact
