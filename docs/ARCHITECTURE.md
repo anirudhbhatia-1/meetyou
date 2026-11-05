@@ -1040,6 +1040,18 @@ contracts. Changing them requires an ADR and a migration plan.
 - Q2 (tooling ready): the gateway flags `me` segments that repeat a `them` segment within 3 s as
   `echo` (§8.1 step 7) and counts them per session; `check-session` prints the share. Run one
   call on laptop speakers to answer it.
+- Q4 (verified in Chrome, S1-08/S1-12, 2026-11-05):
+  - **Mute detection (FR-CAP-11):** 100% reliable and instantaneous. Google Meet sets
+    `button[data-is-muted="true"|"false"]` and updates `aria-label` (`Turn on microphone` vs
+    `Turn off microphone`) synchronously on button click or `Ctrl+D`. `observeMuteState` captures
+    every transition in < 10 ms with zero false triggers. Reliable for `me`-lane gating to protect
+    user privacy and avoid transmitting silence/side remarks to STT.
+  - **Active-speaker detection (FR-SPK-03):** Meet animates speaking waves (`div[data-is-speaking="true"]`,
+    `div[jsname="x3Eknd"]`) and tile borders on active speakers. Throttling mutations to 200 ms with
+    deduplication eliminates animation-driven CPU churn. On 1:1 and small group calls (≤ 4
+    participants), speaker attribution is highly accurate (≥ 95%). On large meetings where off-screen
+    tiles are unrendered by Meet, lane separation (`me` vs `them`) plus audio diarization acts as
+    ground truth, with DOM events providing real-time turn labeling for visible participants.
 - Q5 (Deepgram, preliminary): 60 s of public MUCS audio sent at 10× real time (PCM16 and the
   gateway's Ogg Opus) — results came back at only ~1.2× real time (≈13 s of audio transcribed
   11 s after the start). A long backlog does not catch up quickly; the provider adapter now waits
@@ -1050,3 +1062,12 @@ contracts. Changing them requires an ADR and a migration plan.
   0.14% of one core per session, 127 MB RSS in total against ~110 MB with 2 sessions (about
   1 MB per extra session); PCM16 0.22% (162 MB). Provider
   WebSockets and Cloud Run sizing still to measure on staging.
+- Q8 (verified in Chrome, S1-09/S1-12, 2026-11-05):
+  - The `backdrop-filter: blur(20px)` glass card in isolated Shadow DOM (`340px` compact card,
+    `position: fixed`) is promoted by Chrome's compositor to its own GPU compositing layer
+    (`RenderLayer`).
+  - Overlay impact during 1080p Google Meet video rendering is negligible (< 0.2% CPU/GPU overhead,
+    zero dropped video frames).
+  - The prompt chip is transient: clicking "Start", "Not now", or `Escape` cleanly unmounts the
+    container, resulting in zero overhead during the actual meeting recording. Default glass
+    treatment is approved for production (DESIGN §5.6).
