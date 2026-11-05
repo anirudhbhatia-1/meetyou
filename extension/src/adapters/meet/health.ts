@@ -18,6 +18,7 @@ import {
   MEET_SELECTORS_VERSION,
   METADATA_SELECTORS,
   PARTICIPANT_SELECTORS,
+  SPEAKER_SELECTORS,
   queryWithFallbacks,
   type SelectorDescriptor,
 } from './selectors.ts';
@@ -114,6 +115,7 @@ function getDescriptorsForContext(context: HealthContext): Record<string, Select
         ...IN_CALL_SELECTORS,
         ...METADATA_SELECTORS,
         ...PARTICIPANT_SELECTORS,
+        ...SPEAKER_SELECTORS,
       };
     case 'lobby':
       return {

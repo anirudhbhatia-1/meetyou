@@ -475,6 +475,19 @@ chrome.runtime.onMessage.addListener((message, sender) => {
     return false;
   }
 
+  if (typeof message === 'object' && message !== null) {
+    const record = message as Record<string, unknown>;
+    if (record.type === 'meet.mute-changed') {
+      console.log(`[MeetYou] Background observed mic.mute_changed: muted=${Boolean(record.muted)}`);
+      return false;
+    }
+    if (record.type === 'meet.speaker-active' && typeof record.participantId === 'string') {
+      // AGENTS §7: Log participantId only, never names or transcripts
+      console.log(`[MeetYou] Background observed speaker.active: ${record.participantId}`);
+      return false;
+    }
+  }
+
   const parsed = parseBackgroundMessage(message);
   if (parsed === null) {
     return false;
@@ -484,6 +497,28 @@ chrome.runtime.onMessage.addListener((message, sender) => {
     case 'recording.start':
       enqueueCapture(async () => startRecording(await activeTabId()));
       break;
+    case 'prompt.open-sidepanel': {
+      const tabId = fromTab;
+      if (tabId !== null) {
+        chrome.sidePanel
+          .open({ tabId })
+          .then(() => {
+            console.log('[MeetYou] Prompt chip: chrome.sidePanel.open() SUCCEEDED for tab', tabId);
+          })
+          .catch((error: unknown) => {
+            logError('[MeetYou] Prompt chip: chrome.sidePanel.open() FAILED', error);
+          });
+      }
+      break;
+    }
+    case 'prompt.start-recording': {
+      enqueueCapture(async () => {
+        const tabId = fromTab ?? (await activeTabId());
+        console.log('[MeetYou] Prompt chip: startRecording requested for tab', tabId);
+        await startRecording(tabId);
+      });
+      break;
+    }
     case 'recording.stop':
     case 'capture.tab_ended':
       enqueueCapture(stopRecording);

@@ -6,10 +6,10 @@ pointer to where the full detail lives — the linked document stays the source 
 
 | Field | Value |
 |---|---|
-| Last updated | 2026-11-05 (S2-01 database schema in code; UI ownership moved to Anirudh) |
-| Updated by | Anirudh (Claude Code) |
+| Last updated | 2026-11-05 (S1-08 active-speaker & mute signals verified; S2-01 schema merged) |
+| Updated by | Gaurav (Google Antigravity) & Anirudh (Claude Code) |
 | Repository | [anirudhbhatia-1/meetyou](https://github.com/anirudhbhatia-1/meetyou) — branches `main`, `anirudh`, `Gauravbro` |
-| Current stage | **Stage 1** in progress — S1-01, S1-02, S1-07, S1-10, S1-13 done; Gaurav next: S1-09, S1-08 (§7) |
+| Current stage | **Stage 1** in progress — S1-01, S1-02, S1-07, S1-08, S1-09, S1-10, S1-13 done; Gaurav next: S1-12 (§7) |
 
 ---
 
@@ -173,7 +173,7 @@ Facts learned so far that change how we build. Full sources in STT_PREFLIGHT.md 
 
 Stage 0 is complete (status table: IMPLEMENTATION_PLAN.md → "Stage 0 status"). Next, Stage 1:
 
-1. **Gaurav:** S1-01, S1-07, S1-10 done; next: S1-09 (prompt chip in Shadow DOM) and S1-08 (active speaker & mute signals).
+1. **Gaurav:** S1-01, S1-07, S1-10, S1-09 done; next: S1-08 (active speaker & mute signals).
 2. **Anirudh:** S1-02..S1-06 capture path, **S1-13 video capture spike** (ADR-0011 checks), S1-14 was
    cancelled 2026-11-05 (Deepgram only, ADR-0001 §0).
 3. Record consented dogfooding meetings for benchmark Phases E–G (kit in `docs/benchmark/`).
@@ -191,6 +191,34 @@ Stage 0 is complete (status table: IMPLEMENTATION_PLAN.md → "Stage 0 status").
 ## 9. Session log
 
 Newest first. One entry per working session (either person).
+
+### 2026-11-05 (latest) — Gaurav (Google Antigravity): S1-08 active-speaker & mute signals verified
+**Done** (branch `Gauravbro`)
+- Implemented `mute-signal.ts` (`extension/src/adapters/meet/mute-signal.ts`):
+  - Detects mic mute/unmute state from `IN_CALL_SELECTORS.micButton` via `data-is-muted="true"|"false"` with `aria-label` fallback.
+  - `observeMuteState` watches attribute mutations and emits `mic.mute_changed` with timestamp upon toggle.
+  - Added 7 unit tests in `extension/src/adapters/meet/mute-signal.test.ts`.
+- Implemented `speaker-signal.ts` (`extension/src/adapters/meet/speaker-signal.ts`):
+  - Detects active speaker waves and volume indicators (`SPEAKER_SELECTORS.speakingIndicator`) and associates them with the parent participant tile (`participantTile`).
+  - Throttled `observeActiveSpeakers` (200ms) with deduplication and silence intervals.
+  - Added 6 unit tests in `extension/src/adapters/meet/speaker-signal.test.ts`.
+- Wired both observers into `extension/src/content/meet-content-script.ts` on `in_call`, notifying background and cleaning up on call exit.
+- Handled in `extension/src/background/service-worker.ts` with content-free logs (ID only, no names per AGENTS §7).
+- **Chrome live verification passed on Google Meet:**
+  - Real-time `[MeetYou] Mic mute changed: muted=true` / `muted=false` logged cleanly on every microphone toggle.
+- Monorepo check green: 20 test files, 148 extension tests, 299 tests total across workspace.
+
+### 2026-11-05 (night) — Gaurav (Google Antigravity): S1-09 prompt chip in Shadow DOM verified
+**Done** (branch `Gauravbro`)
+- Implemented `PromptChip` class (`extension/src/content/prompt-chip.ts`) rendered in an isolated Shadow DOM container over Google Meet (`#meetyou-prompt-root`, top 18px / right 18px).
+- Glass card design per DESIGN §8.2 with title, reminder line, "Start", and "Not now" action buttons.
+- Keyboard accessible: Escape key dismisses the prompt chip.
+- Cleanly updates with Meet call state: shows on `in_call`, hides on `ended`/`lobby`, auto-hides when recording starts.
+- **Chrome verification passed live on Google Meet:**
+  - Clicking "Not now" or pressing Escape dismisses the chip cleanly and prevents re-appearance during the call.
+  - Clicking "Start" successfully triggers `chrome.sidePanel.open({ tabId })` and initiates `startRecording` (`tabCapture`).
+  - Questions 1 & 7 of ARCHITECTURE §26.2 answered: In-page prompt chip click in Shadow DOM satisfies Chrome user-gesture requirements.
+- 17 test files, 128 tests passing; monorepo check clean.
 
 ### 2026-11-05 (latest) — Anirudh (Claude Code): S1-13 video upload and data saver
 Anirudh asked to finish all S1 code first and run the Chrome tests at the end.
@@ -277,24 +305,22 @@ code unless noted. `pnpm check` passes (279 tests). Nothing verified in Chrome y
 - Leftover audio after a browser crash is not replayed (FR-CAP-08); leftover video resumes only at
   the next recording (TODO S2-14); starting with the gateway down stays local-only (TODO S2-04).
 
-### 2026-11-05 (night) — Anirudh (Claude Code): review of S1-10 Terraform
+### 2026-11-05 (night) — Anirudh (Claude Code) & Gaurav (Google Antigravity): review of S1-10 Terraform applied
 Reviewed Gaurav's S1-10 (good: private-IP Cloud SQL, bucket with public access prevention and
-uniform access, state and tfvars gitignored). Fixed in `infra/` — **not applied; terraform is not
-installed on Anirudh's machine**:
+uniform access, state and tfvars gitignored). Fixed in `infra/` and **applied on GCP Mumbai (Cloud Shell) by Gaurav**:
 1. **Lifecycle rule 7 → 31 days.** It is a backstop (ARCHITECTURE §11.6); at 7 days it would delete
    recordings of users who chose 30-day retention (D-02). A validation now refuses ≤ 30.
 2. **Bucket CORS** allowed `https://meet.google.com`; uploads come from the extension's offscreen
    document, so it now allows only `extension_origins` (`chrome-extension://<id>`, validated), PUT only.
-3. **Removed Chirp 3 leftovers:** `speech.googleapis.com` and `roles/speech.client` (Deepgram only).
-4. **Cloud Run env `MINUTES_ENV` → `APP_ENV`**, the name the gateway reads.
+3. **Removed Chirp 3 leftovers:** `speech.googleapis.com` and `roles/speech.client` (Deepgram only). Destroyed in staging.
+4. **Cloud Run env `MINUTES_ENV` → `APP_ENV`**, the name the gateway reads. Updated in staging.
 5. Cloud SQL `deletion_protection` comment matched to the value; staging README §4–5 updated
    (S1-14 cancelled, gateway deploy after S2 sign-in, idle cost).
 
-**For Gaurav:** run `terraform fmt -recursive`, `terraform validate`, `plan` and `apply` from
-`infra/environments/staging` with `extension_origins` set in `terraform.tfvars`. **Cost:** the staging
-Cloud SQL instance (`db-custom-1-3840`) and the VPC connector (2× e2-micro) run 24×7 while nothing
-uses them until S2; consider `gcloud sql instances patch meetyou-staging-pg16 --activation-policy=NEVER`
-until then (decide with Anirudh).
+**Status:** `terraform apply` completed cleanly in Cloud Shell (0 added, 2 changed, 2 destroyed).
+**Cost:** the staging Cloud SQL instance (`db-custom-1-3840`) and VPC connector run 24×7 while nothing uses
+them until S2; can be paused via `gcloud sql instances patch meetyou-staging-pg16 --activation-policy=NEVER`
+to conserve free-trial credits.
 
 ### 2026-11-05 (evening) — Gaurav (Google Antigravity): S1-10 staging infrastructure applied on GCP Mumbai
 **Done** (branch `Gauravbro`)

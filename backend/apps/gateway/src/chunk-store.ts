@@ -157,11 +157,18 @@ async function writeDurably(path: string, bytes: Uint8Array): Promise<void> {
     await handle.close();
   }
   await rename(tmp, path);
-  const dir = await open(dirname(path), 'r');
-  try {
-    await dir.sync();
-  } finally {
-    await dir.close();
+  // On POSIX, fsync the directory to persist the rename. On Windows, directory fsync throws EPERM.
+  if (process.platform !== 'win32') {
+    try {
+      const dir = await open(dirname(path), 'r');
+      try {
+        await dir.sync();
+      } finally {
+        await dir.close();
+      }
+    } catch {
+      // Best-effort directory sync across filesystems.
+    }
   }
 }
 

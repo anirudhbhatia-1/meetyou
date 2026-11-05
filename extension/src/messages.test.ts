@@ -20,6 +20,11 @@ describe('message parsers', () => {
     expect(parseSidePanelMessage(start)).toBeNull();
     expect(parseBackgroundMessage({ target: 'background', type: 'recording.delete' })).toBeNull();
     expect(parseBackgroundMessage('offscreen.ensure')).toBeNull();
+
+    const promptStart = { target: 'background', type: 'prompt.start-recording' };
+    expect(parseBackgroundMessage(promptStart)).toEqual(promptStart);
+    const promptOpen = { target: 'background', type: 'prompt.open-sidepanel' };
+    expect(parseBackgroundMessage(promptOpen)).toEqual(promptOpen);
   });
 
   it('validates link and video values', () => {

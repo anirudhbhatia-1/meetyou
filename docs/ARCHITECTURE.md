@@ -1032,10 +1032,11 @@ contracts. Changing them requires an ADR and a migration plan.
    use the solid fallback inside Meet (DESIGN §5.6).
 
 **Findings so far (S1, 2026-11-03/04; update as checks complete)**
-- Q1 (partial): a side-panel button counts only after a real toolbar click on the tab. With
-  `openPanelOnActionClick` the browser opens the panel and capture is refused; opening it from
-  `action.onClicked` with `sidePanel.open()` grants capture (verified in Chrome). The keyboard
-  shortcut also invokes. In-page chip: S1-09.
+- Q1 & Q7 (verified in Chrome, S1-09, 2026-11-05): The in-page prompt chip in Shadow DOM
+  successfully satisfies user-gesture requirements. Clicking "Start" on the prompt chip opens the
+  side panel via `sidePanel.open({ tabId })` and initiates `startRecording` (`tabCapture`).
+  Toolbar icon click and keyboard shortcut (Alt+Shift+R) also invoke capture. Clicking "Not now" or
+  pressing Escape dismisses the prompt cleanly for the call session.
 - Q2 (tooling ready): the gateway flags `me` segments that repeat a `them` segment within 3 s as
   `echo` (§8.1 step 7) and counts them per session; `check-session` prints the share. Run one
   call on laptop speakers to answer it.
