@@ -36,7 +36,10 @@ Full product requirements, with requirement IDs to reference in code, tests, and
 [docs/PRD.md](docs/PRD.md). Every feature end to end, with workflows and the recommended way to
 build it: [docs/FEATURES.md](docs/FEATURES.md). Every screen, component, token, state, and string
 of the UI: [docs/DESIGN.md](docs/DESIGN.md) (follow it for all UI work; the prototype HTML is a
-reference, not code to ship). This section is the short version.
+reference, not code to ship). **UI design sources are only** DESIGN.md, the Claude Code design
+artifact [Minutes app design](https://claude.ai/artifact/P9CqMCqH5VSaRBkRMSczsn), and the handoff
+files it lists: no other design sources or UI kits (Anirudh, 2026-11-05). This section is the
+short version.
 
 ### Phase 1 — Google Meet Chrome extension (current target)
 - Chrome Manifest V3 extension, **no meeting bot**.

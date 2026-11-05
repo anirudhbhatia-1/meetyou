@@ -6,7 +6,7 @@ pointer to where the full detail lives — the linked document stays the source 
 
 | Field | Value |
 |---|---|
-| Last updated | 2026-11-05 (STT is Deepgram only; library is a web app from alpha) |
+| Last updated | 2026-11-05 (Deepgram only; library web app from alpha; UI design sources fixed) |
 | Updated by | Anirudh (Claude Code) |
 | Repository | [anirudhbhatia-1/meetyou](https://github.com/anirudhbhatia-1/meetyou) — branches `main`, `anirudh`, `Gauravbro` |
 | Current stage | **Stage 1** in progress — S1-01, S1-02, S1-07 done; Anirudh's S1-03..S1-06 and S1-13 code in; Gaurav: S1-08, S1-09, S1-10 scaffolded (§7) |
@@ -191,6 +191,13 @@ Stage 0 is complete (status table: IMPLEMENTATION_PLAN.md → "Stage 0 status").
 ## 9. Session log
 
 Newest first. One entry per working session (either person).
+
+### 2026-11-05 (later) — Anirudh (Claude Code): UI design sources
+**Decision (Anirudh):** all UI work uses only `docs/DESIGN.md`, the Claude Code design artifact
+[Minutes app design](https://claude.ai/artifact/P9CqMCqH5VSaRBkRMSczsn), and the handoff files in
+`~/design_handoff_minutes_app/`. No other design sources, UI kits, or invented styles; DESIGN.md
+wins on conflicts. Recorded in DESIGN.md (Design source row) and AGENTS §2. **For Gaurav:** applies
+to S4 screens and the library web app (S4-09).
 
 ### 2026-11-05 — Anirudh (Claude Code): STT is Deepgram only
 **Decision (Anirudh):** we will not use Google Cloud Speech-to-Text (Chirp 3); **Deepgram Nova-3**

@@ -4,8 +4,8 @@
 |---|---|
 | Purpose | Single source of truth for every surface, screen, component, state, token, and string of the product UI — mapped to requirements, features, and architecture |
 | Status | Draft for implementation. Visual design is high fidelity; items marked **[SPEC]** are specified here but were not built in the prototype |
-| Last updated | 2026-11-01 (video recording, ADR-0011) |
-| Design source | Handoff package `~/design_handoff_minutes_app/` — `Minutes App v2.dc.html` (clickable prototype), `support.js` (prototype runtime), `DESIGN.md` (handoff spec). This document supersedes the handoff spec for this repository |
+| Last updated | 2026-11-05 (design sources fixed: Claude Code design artifact + design files) |
+| Design source | **Only these (Anirudh, 2026-11-05):** (1) this document; (2) the Claude Code design artifact [Minutes app design](https://claude.ai/artifact/P9CqMCqH5VSaRBkRMSczsn) (bundled clickable prototype); (3) the handoff package `~/design_handoff_minutes_app/` — `Minutes App v2.dc.html` (clickable prototype), `support.js` (prototype runtime), `DESIGN.md` (handoff spec). No other design sources, UI kits, or invented styles. This document supersedes the artifact and the handoff spec for this repository |
 | Related | [PRD.md](PRD.md) · [FEATURES.md](FEATURES.md) · [ARCHITECTURE.md](ARCHITECTURE.md) · [ADR-0011](adr/0011-video-screen-recording.md) (video) · [AGENTS.md](../AGENTS.md) |
 
 > **Rules for builders (human or agent).**
