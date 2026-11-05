@@ -59,7 +59,7 @@ Constraints from the architecture and PRD:
 | Runtime | **Node.js, current LTS** | Bun, Deno | Most mature for production WebSockets and vendor SDKs |
 | HTTP framework | **Fastify** (proposed) | Express, Hono, NestJS | Fast, schema-friendly, good plugin ecosystem; NestJS is heavier than we need |
 | WebSocket server | **`ws`** library on the gateway | Socket.IO, uWebSockets.js | Plain, standard WebSocket protocol (ARCHITECTURE §5); Socket.IO adds its own protocol |
-| Database access | **Type-safe SQL query builder** (Kysely or Drizzle) | Prisma, raw SQL | We need per-transaction `SET LOCAL` for row-level security and control over queries; full ORMs make that awkward |
+| Database access | **Kysely** (decided 2026-11-05, S2-01) with the `pg` driver; tests on PGlite (in-process Postgres) | Drizzle, Prisma, raw SQL | We need per-transaction `SET LOCAL` for row-level security and control over queries; full ORMs make that awkward |
 | Migrations | SQL migrations, versioned in `backend/packages/db` | — | Reviewable, tool-agnostic |
 | Validation / contracts | **zod** schemas in `shared/` | JSON Schema only | Same schemas validate on extension and backend; JSON Schema generated for the LLM output |
 | Job queue | Postgres-backed queue (pg-boss or graphile-worker) | Redis queues, cloud task queues | Fewer moving parts; transactional outbox in the same DB — **decided in ADR-0005** |

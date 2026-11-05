@@ -6,8 +6,8 @@ pointer to where the full detail lives — the linked document stays the source 
 
 | Field | Value |
 |---|---|
-| Last updated | 2026-11-05 (S1-08 active-speaker & mute signals implemented & live verified) |
-| Updated by | Gaurav (Google Antigravity) |
+| Last updated | 2026-11-05 (S1-08 active-speaker & mute signals verified; S2-01 schema merged) |
+| Updated by | Gaurav (Google Antigravity) & Anirudh (Claude Code) |
 | Repository | [anirudhbhatia-1/meetyou](https://github.com/anirudhbhatia-1/meetyou) — branches `main`, `anirudh`, `Gauravbro` |
 | Current stage | **Stage 1** in progress — S1-01, S1-02, S1-07, S1-08, S1-09, S1-10, S1-13 done; Gaurav next: S1-12 (§7) |
 
@@ -86,6 +86,7 @@ All dated 2026-10-28 unless noted.
 | **D-06** (2026-10-29) | Opus 24 kbps transport and storage | [ADR-0003](docs/adr/0003-audio-transport-format.md) |
 | **D-08** | Backend: **TypeScript/Node.js on Google Cloud Mumbai** (Cloud Run, Cloud SQL, Cloud Storage). ADR-0002 **Accepted 2026-11-01**; live checks in S1-11 | [ADR-0002](docs/adr/0002-backend-stack-and-hosting.md) |
 | **D-07** (2026-11-05) | Library is a **web app from alpha** (like Fireflies): sign in and see your own recordings, transcripts, summaries from any device; the extension records and links to it; ADR-0006 (hosting) moves to S4-09 | PRD FR-LIB-05, IMPLEMENTATION_PLAN S4-09 |
+| **UI owner** (2026-11-05) | **Anirudh builds all Phase 1 UI**: side panel, Meet overlay, onboarding, library web app, settings, action items, design system and components (S4-01..S4-17 except S4-07). Gaurav keeps the Meet adapter (incl. the S4-07 chat notice), API endpoints, data lifecycle, infra/CI/CD and launch documents | IMPLEMENTATION_PLAN §1.1, Stage 4 |
 | **D-12** (2026-11-01) | Record video of the meeting screen in Phase 1; setting on by default; same retention as audio; off when retention is "delete immediately" | [ADR-0011](docs/adr/0011-video-screen-recording.md) |
 
 ### 4.3 Architecture and engineering rules
@@ -236,6 +237,33 @@ Anirudh asked to finish all S1 code first and run the Chrome tests at the end.
   8 MB cap, idempotent), stored per ARCHITECTURE §11.4; `check-session` lists video parts and
   missing fragments, `--join` writes a playable file. 20 new tests; `pnpm check` passes (267 tests).
 - **Not done:** all Chrome checks (ADR-0011 1–4, 60-min run); server finalize stays S2-14.
+
+### 2026-11-05 (night) — Anirudh (Claude Code): S2-01 database schema
+**Decisions (Anirudh):** **Kysely** for queries (with `pg`), **PGlite** (in-process Postgres, npm
+dev dependency) for tests. Versions pinned to releases at least two weeks old: kysely 0.29.7,
+pg 8.23.1, @electric-sql/pglite 0.5.10. A spike confirmed PGlite enforces RLS for a non-superuser.
+- `backend/packages/db`: `migrations/0001_init.sql` with every PRD §13 table plus `video_assets`
+  (ADR-0011) and `meetings.session_id` (StartSessionResponse has both IDs); text + CHECK for value
+  sets matching `shared/contracts`; `updated_at` triggers.
+- **Tenancy:** forced RLS on every table keyed on `app.workspace_id`; `Db.inWorkspace()` is the only
+  query path and sets it per transaction; children reference `(meeting_id, workspace_id)` so they
+  cannot point at another workspace. `users` has no workspace_id: visible only to its own sign-in.
+  `app_sign_in_google_user()` creates user + personal workspace + owner membership + settings.
+- Tests (9, PGlite, as a non-superuser role like Cloud SQL's `meetyou_app`): cross-tenant
+  read/write/update/delete and foreign-key attempts fail; nothing is visible without a workspace;
+  sign-in is idempotent. `pnpm check` passes (288 tests).
+- `migrate-cli.ts` applies migrations with `DATABASE_URL`. **Not applied to staging yet** (Cloud SQL
+  is private-IP only; needs a Cloud Run job or the proxy from inside the VPC — S2-12).
+- **For Gaurav (S2-09):** query through `Db.inWorkspace`; never connect as a superuser or a
+  `BYPASSRLS` role. Open: the retention scheduler's cross-workspace path (S2-10).
+
+### 2026-11-05 (latest) — Anirudh (Claude Code): UI ownership
+**Decision (Anirudh):** Anirudh builds the UI, not Gaurav. Recorded in IMPLEMENTATION_PLAN §1.1
+(Extension shell and UI, Library app, Design system → Anirudh), §2 working agreement, Stage 4 (all
+tasks except S4-07 → Anirudh), S5-04 and the §14 hand-offs (new: Gaurav → Anirudh REST endpoints for
+S4-14 and the S4-07 chat notice). Gaurav's other areas stay as they are. Phase 2/3 UI tasks (S8, S9)
+were not changed. **For Gaurav:** S4-01/S4-02/S4-09 are no longer yours; after S1-08, S1-09 and
+S1-12 your next tasks are S2-08..S2-12 and S4-07.
 
 ### 2026-11-05 (late night) — Anirudh (Claude Code): full code review and fixes
 Three parallel reviews (extension capture, gateway + contracts, Meet adapter + side panel); every
