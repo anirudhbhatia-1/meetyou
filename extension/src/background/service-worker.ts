@@ -475,6 +475,19 @@ chrome.runtime.onMessage.addListener((message, sender) => {
     return false;
   }
 
+  if (typeof message === 'object' && message !== null) {
+    const record = message as Record<string, unknown>;
+    if (record.type === 'meet.mute-changed') {
+      console.log(`[MeetYou] Background observed mic.mute_changed: muted=${Boolean(record.muted)}`);
+      return false;
+    }
+    if (record.type === 'meet.speaker-active' && typeof record.participantId === 'string') {
+      // AGENTS §7: Log participantId only, never names or transcripts
+      console.log(`[MeetYou] Background observed speaker.active: ${record.participantId}`);
+      return false;
+    }
+  }
+
   const parsed = parseBackgroundMessage(message);
   if (parsed === null) {
     return false;

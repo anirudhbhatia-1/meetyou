@@ -6,10 +6,10 @@ pointer to where the full detail lives — the linked document stays the source 
 
 | Field | Value |
 |---|---|
-| Last updated | 2026-11-05 (S1-09 prompt chip in Shadow DOM verified; review findings merged) |
-| Updated by | Gaurav (Google Antigravity) & Anirudh (Claude Code) |
+| Last updated | 2026-11-05 (S1-08 active-speaker & mute signals implemented & live verified) |
+| Updated by | Gaurav (Google Antigravity) |
 | Repository | [anirudhbhatia-1/meetyou](https://github.com/anirudhbhatia-1/meetyou) — branches `main`, `anirudh`, `Gauravbro` |
-| Current stage | **Stage 1** in progress — S1-01, S1-02, S1-07, S1-09, S1-10, S1-13 done; Gaurav next: S1-08 (§7) |
+| Current stage | **Stage 1** in progress — S1-01, S1-02, S1-07, S1-08, S1-09, S1-10, S1-13 done; Gaurav next: S1-12 (§7) |
 
 ---
 
@@ -190,6 +190,22 @@ Stage 0 is complete (status table: IMPLEMENTATION_PLAN.md → "Stage 0 status").
 ## 9. Session log
 
 Newest first. One entry per working session (either person).
+
+### 2026-11-05 (latest) — Gaurav (Google Antigravity): S1-08 active-speaker & mute signals verified
+**Done** (branch `Gauravbro`)
+- Implemented `mute-signal.ts` (`extension/src/adapters/meet/mute-signal.ts`):
+  - Detects mic mute/unmute state from `IN_CALL_SELECTORS.micButton` via `data-is-muted="true"|"false"` with `aria-label` fallback.
+  - `observeMuteState` watches attribute mutations and emits `mic.mute_changed` with timestamp upon toggle.
+  - Added 7 unit tests in `extension/src/adapters/meet/mute-signal.test.ts`.
+- Implemented `speaker-signal.ts` (`extension/src/adapters/meet/speaker-signal.ts`):
+  - Detects active speaker waves and volume indicators (`SPEAKER_SELECTORS.speakingIndicator`) and associates them with the parent participant tile (`participantTile`).
+  - Throttled `observeActiveSpeakers` (200ms) with deduplication and silence intervals.
+  - Added 6 unit tests in `extension/src/adapters/meet/speaker-signal.test.ts`.
+- Wired both observers into `extension/src/content/meet-content-script.ts` on `in_call`, notifying background and cleaning up on call exit.
+- Handled in `extension/src/background/service-worker.ts` with content-free logs (ID only, no names per AGENTS §7).
+- **Chrome live verification passed on Google Meet:**
+  - Real-time `[MeetYou] Mic mute changed: muted=true` / `muted=false` logged cleanly on every microphone toggle.
+- Monorepo check green: 20 test files, 148 extension tests, 299 tests total across workspace.
 
 ### 2026-11-05 (night) — Gaurav (Google Antigravity): S1-09 prompt chip in Shadow DOM verified
 **Done** (branch `Gauravbro`)

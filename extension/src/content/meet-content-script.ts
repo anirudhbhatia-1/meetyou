@@ -13,9 +13,13 @@ import {
   type SelectorHealthReport,
 } from '../adapters/meet/health.ts';
 import { extractMeetingMetadata, type MeetingMetadata } from '../adapters/meet/metadata.ts';
+import { detectMuteState, observeMuteState } from '../adapters/meet/mute-signal.ts';
+import { observeActiveSpeakers } from '../adapters/meet/speaker-signal.ts';
 import { PromptChip } from './prompt-chip.ts';
 
 let stopObserving: (() => void) | null = null;
+let stopMuteObserving: (() => void) | null = null;
+let stopSpeakerObserving: (() => void) | null = null;
 
 /**
  * Best effort: after an extension reload this page keeps the old content script, whose runtime
@@ -26,6 +30,10 @@ function notifyExtension(message: unknown): void {
   if (chrome.runtime.id === undefined) {
     stopObserving?.();
     stopObserving = null;
+    stopMuteObserving?.();
+    stopMuteObserving = null;
+    stopSpeakerObserving?.();
+    stopSpeakerObserving = null;
     return;
   }
   try {
@@ -49,6 +57,37 @@ const promptChip = new PromptChip(document, {
   },
 });
 
+function updateSignalObservers(state: string): void {
+  if (state === 'in_call') {
+    if (stopMuteObserving === null) {
+      stopMuteObserving = observeMuteState(document, (event) => {
+        console.log(`[MeetYou] Mic mute changed: muted=${event.muted}`);
+        notifyExtension({ type: 'meet.mute-changed', muted: event.muted, at: event.at });
+      });
+    }
+    if (stopSpeakerObserving === null) {
+      stopSpeakerObserving = observeActiveSpeakers(document, (event) => {
+        // AGENTS §7: Do not log participant names; log ID only.
+        console.log(
+          `[MeetYou] Active speaker: ${event.speaker.participantId} (self=${event.speaker.isSelf})`,
+        );
+        notifyExtension({
+          type: 'meet.speaker-active',
+          participantId: event.speaker.participantId,
+          displayName: event.speaker.displayName,
+          isSelf: event.speaker.isSelf,
+          at: event.at,
+        });
+      });
+    }
+  } else {
+    stopMuteObserving?.();
+    stopMuteObserving = null;
+    stopSpeakerObserving?.();
+    stopSpeakerObserving = null;
+  }
+}
+
 function broadcastState(
   snapshot: ReturnType<typeof detectCallState>,
   metadata: MeetingMetadata,
@@ -67,6 +106,9 @@ function broadcastState(
 
   // Update prompt chip visibility based on call state (DESIGN §8.2)
   promptChip.updateCallState(snapshot.state);
+
+  // Activate or teardown DOM signal observers for mute and active speaker (S1-08)
+  updateSignalObservers(snapshot.state);
 
   notifyExtension({ type: 'meet.state-changed', snapshot, metadata, healthReport });
 }
@@ -91,7 +133,8 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
     const current = detectCallState(document, window.location.href);
     const metadata = extractMeetingMetadata(document, window.location.href);
     const healthReport = generateSelectorHealthReport(document, current.state);
-    sendResponse({ snapshot: current, metadata, healthReport });
+    const muteState = detectMuteState(document);
+    sendResponse({ snapshot: current, metadata, healthReport, muteState });
   } else if (
     message.target === 'content' &&
     message.type === 'recording.state' &&
@@ -103,5 +146,7 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
 
 window.addEventListener('beforeunload', () => {
   promptChip.unmount();
+  stopMuteObserving?.();
+  stopSpeakerObserving?.();
   stopObserving?.();
 });

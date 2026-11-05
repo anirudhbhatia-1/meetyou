@@ -9,7 +9,7 @@
  * fallbacks and version tags. DOM text read from Meet is untrusted input.
  */
 
-export const MEET_SELECTORS_VERSION = '2026-11-03';
+export const MEET_SELECTORS_VERSION = '2026-11-05';
 
 export interface SelectorDescriptor {
   readonly id: string;
@@ -165,6 +165,36 @@ export const PARTICIPANT_SELECTORS = {
     selectors: [
       'div[role="list"][aria-label*="Participants" i] [role="listitem"]',
       'div[role="tabpanel"][aria-label*="People" i] [role="listitem"]',
+    ],
+    required: false,
+  },
+} as const satisfies Record<string, SelectorDescriptor>;
+
+/**
+ * Active Speaker Indicators (S1-08)
+ * Used to detect which participant is actively talking.
+ */
+export const SPEAKER_SELECTORS = {
+  speakingIndicator: {
+    id: 'speaker.active-indicator',
+    description: 'Visual speaking wave or volume meter indicator on a participant tile',
+    selectors: [
+      'div[data-is-speaking="true"]',
+      'div[jsname="x3Eknd"]',
+      'div[data-active-speaker="true"]',
+      'div[aria-label*="speaking" i]',
+      'div[data-tile-speaker="true"]',
+    ],
+    required: false,
+  },
+  participantTile: {
+    id: 'speaker.participant-tile',
+    description: 'Video or avatar tile container for an individual participant',
+    selectors: [
+      'div[data-participant-id]',
+      'div[data-requested-participant-id]',
+      'div[jscontroller="e6S21b"]',
+      'div[data-allocation-id]',
     ],
     required: false,
   },

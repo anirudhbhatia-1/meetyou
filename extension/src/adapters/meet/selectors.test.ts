@@ -7,6 +7,7 @@ import {
   MEET_SELECTORS_VERSION,
   METADATA_SELECTORS,
   PARTICIPANT_SELECTORS,
+  SPEAKER_SELECTORS,
   matchesAny,
   queryWithFallbacks,
   type SelectorDescriptor,
@@ -14,7 +15,7 @@ import {
 
 describe('selectors module', () => {
   it('has a valid version tag', () => {
-    expect(MEET_SELECTORS_VERSION).toBe('2026-11-03');
+    expect(MEET_SELECTORS_VERSION).toBe('2026-11-05');
   });
 
   it('defines valid selector descriptors across all categories', () => {
@@ -24,6 +25,7 @@ describe('selectors module', () => {
       ...Object.values(CALL_ENDED_SELECTORS),
       ...Object.values(METADATA_SELECTORS),
       ...Object.values(PARTICIPANT_SELECTORS),
+      ...Object.values(SPEAKER_SELECTORS),
     ];
 
     for (const descriptor of allDescriptors) {
