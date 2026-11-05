@@ -15,14 +15,41 @@ export type DevSession = z.infer<typeof DevSession>;
 
 const DevToken = z.object({ streamToken: z.string().min(1) });
 
+/** A hung gateway must not hold recording start, stop or uploads forever. */
+export const REQUEST_TIMEOUT_MS = 5_000;
+
 async function postJson(url: string): Promise<unknown> {
-  const response = await fetch(url, { method: 'POST' });
+  const response = await fetch(url, {
+    method: 'POST',
+    signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+  });
   if (!response.ok) throw new Error(`HTTP ${response.status}`);
   return response.json();
 }
 
 export async function createDevSession(baseUrl: string): Promise<DevSession> {
   return DevSession.parse(await postJson(new URL('/v1/dev/sessions', baseUrl).href));
+}
+
+/**
+ * Up to three attempts, each bounded by REQUEST_TIMEOUT_MS, so a slow or briefly unreachable
+ * gateway does not turn the whole recording local-only. Null when every attempt failed.
+ * TODO(S2-04): start offline and create the session later (audio is captured meanwhile).
+ */
+export async function createDevSessionWithRetry(
+  baseUrl: string,
+  onError: (context: string, error: unknown) => void,
+  attempts = 3,
+): Promise<DevSession | null> {
+  for (let attempt = 1; attempt <= attempts; attempt++) {
+    try {
+      return await createDevSession(baseUrl);
+    } catch (error: unknown) {
+      onError(`gateway session attempt ${attempt} failed`, error);
+      if (attempt < attempts) await new Promise((resolve) => setTimeout(resolve, 1_000));
+    }
+  }
+  return null;
 }
 
 export async function devStreamToken(baseUrl: string, sessionId: string): Promise<string> {
@@ -60,6 +87,7 @@ export async function signDevVideoFragments(
     method: 'POST',
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify({ partId, indices, contentType }),
+    signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
   });
   if (response.status === 404) throw new UploadRejected(sessionId);
   if (!response.ok) throw new Error(`HTTP ${response.status}`);
@@ -73,6 +101,8 @@ export async function putFragment(url: string, blob: Blob, contentType: string):
     method: 'PUT',
     headers: { 'content-type': contentType },
     body: blob,
+    // A 10 s fragment is ~1.3 MB; a minute covers a slow (~200 kbps) link.
+    signal: AbortSignal.timeout(60_000),
   });
   if (!response.ok) throw new Error(`HTTP ${response.status}`);
 }

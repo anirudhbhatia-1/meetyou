@@ -5,13 +5,6 @@ resource "google_service_account" "gateway_sa" {
   project      = var.project_id
 }
 
-# Grant Speech-to-Text client role for Chirp 3 live transcription (ADR-0001)
-resource "google_project_iam_member" "speech_client" {
-  project = var.project_id
-  role    = "roles/speech.client"
-  member  = "serviceAccount:${google_service_account.gateway_sa.email}"
-}
-
 # Grant Cloud SQL client role for private DB access
 resource "google_project_iam_member" "sql_client" {
   project = var.project_id
@@ -52,8 +45,9 @@ resource "google_cloud_run_v2_service" "gateway" {
         }
       }
 
+      # The gateway reads APP_ENV; it refuses to start outside local/ci until S2 sign-in exists.
       env {
-        name  = "MINUTES_ENV"
+        name  = "APP_ENV"
         value = var.environment
       }
 

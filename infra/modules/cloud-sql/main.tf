@@ -4,7 +4,7 @@ resource "google_sql_database_instance" "postgres" {
   region           = var.region
   database_version = var.database_version
 
-  # Do not allow deletion without explicit terraform flag override
+  # Off in staging so the environment can be rebuilt from scratch; production sets it to true.
   deletion_protection = false
 
   depends_on = [var.vpc_peering_dependency]

@@ -209,10 +209,10 @@ export function observeCallState(
 
   // Watch DOM mutations if MutationObserver is supported
   if (typeof MutationObserver !== 'undefined') {
+    // Throttle, not a trailing debounce: Meet mutates the DOM continuously during a call (speaking
+    // indicators, captions), and a timer re-armed on every mutation would never fire (FR-DET-01/05).
     observer = new MutationObserver(() => {
-      if (timeoutId !== null) {
-        clearTimeout(timeoutId);
-      }
+      if (timeoutId !== null) return;
       timeoutId = setTimeout(() => {
         timeoutId = null;
         evaluate();

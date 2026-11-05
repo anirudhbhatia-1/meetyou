@@ -346,6 +346,8 @@ async function stopIfCallLeft(tabId: number, reported: MeetCallState): Promise<v
     console.info(`call: ${reported} ignored (not joined since recording started)`);
     return;
   }
+  // The check outlives its recording if that one stops meanwhile; it must not stop the next one.
+  const startedAt = state.startedAt;
   const delays = reported === 'ended' ? ENDED_CONFIRM_MS : LEFT_CONFIRM_MS;
   console.info(`call: ${reported}; confirming at ${delays.join('/')} ms before stopping`);
   let waited = 0;
@@ -359,7 +361,9 @@ async function stopIfCallLeft(tabId: number, reported: MeetCallState): Promise<v
     }
   }
   console.info('call: left; stopping recording');
-  enqueueCapture(() => stopIfCapturing(tabId));
+  enqueueCapture(async () => {
+    if ((await loadCaptureState()).startedAt === startedAt) await stopIfCapturing(tabId);
+  });
 }
 
 /**

@@ -122,6 +122,16 @@ describe('detectCallState', () => {
     expect(detectCallState(container, 'https://meet.google.com/abc-defg-hij').state).toBe('lobby');
   });
 
+  it('does not take the in-call home link for an ended call when the Leave button is missing', () => {
+    const container = createMockContainer(['a[href="/"]']);
+    expect(detectCallState(container, 'https://meet.google.com/abc-defg-hij').state).toBe('lobby');
+  });
+
+  it('does not take the pre-call mic toggle for a joined call while waiting to be admitted', () => {
+    const container = createMockContainer(['div[data-is-muted]']);
+    expect(detectCallState(container, 'https://meet.google.com/abc-defg-hij').state).toBe('lobby');
+  });
+
   it('stays in_call when an ended-screen fallback also matches on the call page', () => {
     const container = createMockContainer(['button[aria-label*="Leave call" i]', 'a[href="/"]']);
     const result = detectCallState(container, 'https://meet.google.com/abc-defg-hij');
@@ -145,5 +155,44 @@ describe('observeCallState', () => {
     expect(onChange).toHaveBeenCalledWith(expect.objectContaining({ state: 'home' }), 'not_meet');
 
     cleanup();
+  });
+
+  it('re-evaluates while the DOM mutates non-stop (a trailing debounce would never fire)', () => {
+    vi.useFakeTimers();
+    let mutate: () => void = () => undefined;
+    vi.stubGlobal(
+      'MutationObserver',
+      class {
+        constructor(callback: () => void) {
+          mutate = callback;
+        }
+        observe(): void {}
+        disconnect(): void {}
+      },
+    );
+    let present: string[] = [];
+    const container = {
+      querySelector: (selector: string) => (present.includes(selector) ? {} : null),
+      querySelectorAll: () => [],
+    } as unknown as Node & ParentNode;
+    const onChange = vi.fn();
+    try {
+      const cleanup = observeCallState(container, onChange, {
+        getUrl: () => 'https://meet.google.com/abc-defg-hij',
+      });
+      present = ['button[aria-label*="Leave call" i]'];
+      for (let i = 0; i < 20; i++) {
+        mutate(); // speaking indicators, captions: a mutation every 100 ms
+        vi.advanceTimersByTime(100);
+      }
+      expect(onChange).toHaveBeenLastCalledWith(
+        expect.objectContaining({ state: 'in_call' }),
+        'lobby',
+      );
+      cleanup();
+    } finally {
+      vi.unstubAllGlobals();
+      vi.useRealTimers();
+    }
   });
 });

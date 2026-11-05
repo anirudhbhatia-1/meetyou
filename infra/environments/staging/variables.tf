@@ -15,6 +15,12 @@ variable "db_password" {
   sensitive   = true
 }
 
+variable "extension_origins" {
+  description = "Extension origin(s) allowed to upload video fragments, e.g. [\"chrome-extension://<id>\"]. An unpacked build's ID depends on its folder unless the manifest has a `key`."
+  type        = list(string)
+  default     = []
+}
+
 variable "gateway_image" {
   description = "Docker image for the gateway Cloud Run service."
   type        = string

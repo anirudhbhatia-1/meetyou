@@ -123,12 +123,14 @@ function getDescriptorsForContext(context: HealthContext): Record<string, Select
       return {
         ...CALL_ENDED_SELECTORS,
       };
-    default:
-      return {
-        ...IN_CALL_SELECTORS,
-        ...LOBBY_SELECTORS,
-        ...CALL_ENDED_SELECTORS,
-      };
+    default: {
+      // Home or unknown page: probe everything for telemetry, but nothing is required here, so the
+      // report is not "broken" just because in-call controls are absent.
+      const all = { ...IN_CALL_SELECTORS, ...LOBBY_SELECTORS, ...CALL_ENDED_SELECTORS };
+      return Object.fromEntries(
+        Object.entries(all).map(([key, descriptor]) => [key, { ...descriptor, required: false }]),
+      );
+    }
   }
 }
 

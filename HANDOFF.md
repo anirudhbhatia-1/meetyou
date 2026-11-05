@@ -6,8 +6,8 @@ pointer to where the full detail lives — the linked document stays the source 
 
 | Field | Value |
 |---|---|
-| Last updated | 2026-11-05 (S1-09 prompt chip in Shadow DOM verified in Chrome; S1-10 done) |
-| Updated by | Gaurav (Google Antigravity) |
+| Last updated | 2026-11-05 (S1-09 prompt chip in Shadow DOM verified; review findings merged) |
+| Updated by | Gaurav (Google Antigravity) & Anirudh (Claude Code) |
 | Repository | [anirudhbhatia-1/meetyou](https://github.com/anirudhbhatia-1/meetyou) — branches `main`, `anirudh`, `Gauravbro` |
 | Current stage | **Stage 1** in progress — S1-01, S1-02, S1-07, S1-09, S1-10, S1-13 done; Gaurav next: S1-08 (§7) |
 
@@ -220,6 +220,65 @@ Anirudh asked to finish all S1 code first and run the Chrome tests at the end.
   8 MB cap, idempotent), stored per ARCHITECTURE §11.4; `check-session` lists video parts and
   missing fragments, `--join` writes a playable file. 20 new tests; `pnpm check` passes (267 tests).
 - **Not done:** all Chrome checks (ADR-0011 1–4, 60-min run); server finalize stays S2-14.
+
+### 2026-11-05 (late night) — Anirudh (Claude Code): full code review and fixes
+Three parallel reviews (extension capture, gateway + contracts, Meet adapter + side panel); every
+finding was checked against the code before fixing. Each fix below has a test that fails on the old
+code unless noted. `pnpm check` passes (279 tests). Nothing verified in Chrome yet.
+
+**Gateway**
+- A failed chunk write no longer lets a later chunk's ack cover the lost frames: the lane stops
+  writing/acking until the client reconnects and replays; `end` after a failed write returns a
+  retryable error instead of ending the session.
+- A malformed upgrade request no longer crashes the process; dev endpoints and the WebSocket
+  accept only `chrome-extension://` origins or none (CLI/tests), not web pages.
+- Provider streams close 60 s after the client disappears (they reopen on the next frame); an
+  unexpected provider close backs off 5 s instead of reopening every frame; Deepgram handshake
+  times out after 10 s; the STT queue is capped; ended sessions are evicted; `close()` closes STT.
+- Durable writes fsync the directory and use unique temp names (no test: needs a crash);
+  Ogg pre-skip only on a lane's first chunk/stream (no test).
+
+**Extension**
+- Stop during a network outage keeps reconnecting (up to 10 min, FR-CAP-07) and delivers the
+  buffered audio in the background; the offscreen document stays open until it is acknowledged.
+  Pause/resume sent while offline are queued until `ready`.
+- Capture starts before the dev session is created (the stream ID expires in seconds); frames wait
+  in memory; session creation retries 3× with 5 s timeouts; all dev-gateway fetches time out.
+- A failed Opus encoder restarts (up to 5 times) instead of silencing the lane; a lost mic detaches
+  its whole lane; `local_…` video older than 7 days is pruned; a refused stream still ends in
+  `processing`; the delayed left-call check cannot stop a newer recording.
+- Manifest: removed unused `identity` and `notifications` (AGENTS §10 minimum permissions). **Add
+  `identity` back in S2-02** and `notifications` with O1.
+- Meet adapter: dropped `a[href="/"]` (false `ended` → stop after 3 s) and `div[data-is-muted]`
+  (lobby read as in_call) fallbacks; mutation observer throttles instead of a debounce that never
+  fires during a busy call; health is not "broken" on home/lobby; content script stops after an
+  extension reload and broadcasts the first state once. Side panel status shows only its own tab;
+  interim lines clear on Start; local video cannot be deleted while it is still uploading.
+
+**Open (not fixed)**
+- 1:1 naming uses visible tiles, so a group call with one visible remote tile gets that name;
+  `data-self-name` semantics are unverified. Both need the Meet DOM dump (S1-12).
+- Leftover audio after a browser crash is not replayed (FR-CAP-08); leftover video resumes only at
+  the next recording (TODO S2-14); starting with the gateway down stays local-only (TODO S2-04).
+
+### 2026-11-05 (night) — Anirudh (Claude Code): review of S1-10 Terraform
+Reviewed Gaurav's S1-10 (good: private-IP Cloud SQL, bucket with public access prevention and
+uniform access, state and tfvars gitignored). Fixed in `infra/` — **not applied; terraform is not
+installed on Anirudh's machine**:
+1. **Lifecycle rule 7 → 31 days.** It is a backstop (ARCHITECTURE §11.6); at 7 days it would delete
+   recordings of users who chose 30-day retention (D-02). A validation now refuses ≤ 30.
+2. **Bucket CORS** allowed `https://meet.google.com`; uploads come from the extension's offscreen
+   document, so it now allows only `extension_origins` (`chrome-extension://<id>`, validated), PUT only.
+3. **Removed Chirp 3 leftovers:** `speech.googleapis.com` and `roles/speech.client` (Deepgram only).
+4. **Cloud Run env `MINUTES_ENV` → `APP_ENV`**, the name the gateway reads.
+5. Cloud SQL `deletion_protection` comment matched to the value; staging README §4–5 updated
+   (S1-14 cancelled, gateway deploy after S2 sign-in, idle cost).
+
+**For Gaurav:** run `terraform fmt -recursive`, `terraform validate`, `plan` and `apply` from
+`infra/environments/staging` with `extension_origins` set in `terraform.tfvars`. **Cost:** the staging
+Cloud SQL instance (`db-custom-1-3840`) and the VPC connector (2× e2-micro) run 24×7 while nothing
+uses them until S2; consider `gcloud sql instances patch meetyou-staging-pg16 --activation-policy=NEVER`
+until then (decide with Anirudh).
 
 ### 2026-11-05 (evening) — Gaurav (Google Antigravity): S1-10 staging infrastructure applied on GCP Mumbai
 **Done** (branch `Gauravbro`)

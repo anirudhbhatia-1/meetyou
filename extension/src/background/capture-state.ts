@@ -180,7 +180,9 @@ export function nextCaptureState(state: CaptureState, event: CaptureEvent): Capt
       return { ...state, status: 'stopping' };
     case 'stopped':
       if (state.status !== 'stopping') return state;
-      if (state.link === 'off' || state.sessionId === null) return IDLE_CAPTURE;
+      // Only a recording that never had a gateway session (`local_…`, recorder.ts) has nothing to
+      // process; one whose link dropped or was refused still streamed audio.
+      if (state.sessionId === null || state.sessionId.startsWith('local_')) return IDLE_CAPTURE;
       return {
         ...state,
         status: 'processing',

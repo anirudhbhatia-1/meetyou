@@ -37,15 +37,28 @@ export interface Gateway {
   close(): Promise<void>;
 }
 
-// Local dev only: the extension origin is chrome-extension://<id>, which varies per install.
-const DEV_CORS = {
-  'access-control-allow-origin': '*',
-  'access-control-allow-methods': 'POST, PUT',
-  'access-control-allow-headers': 'content-type',
-};
+/**
+ * Dev endpoints answer only the extension (`chrome-extension://<id>`, which varies per install)
+ * and origin-less tools (CLI scripts, tests). A web page the developer visits must not be able to
+ * create sessions or write to the local disk.
+ */
+export function allowedOrigin(origin: string | undefined): boolean {
+  return origin === undefined || origin.startsWith('chrome-extension://');
+}
 
-function json(res: ServerResponse, status: number, body: unknown): void {
-  res.writeHead(status, { 'content-type': 'application/json', ...DEV_CORS });
+function devCors(req: IncomingMessage): Record<string, string> {
+  const origin = req.headers.origin;
+  if (origin === undefined || !allowedOrigin(origin)) return {};
+  return {
+    'access-control-allow-origin': origin,
+    'access-control-allow-methods': 'POST, PUT',
+    'access-control-allow-headers': 'content-type',
+    vary: 'Origin',
+  };
+}
+
+function json(req: IncomingMessage, res: ServerResponse, status: number, body: unknown): void {
+  res.writeHead(status, { 'content-type': 'application/json', ...devCors(req) });
   res.end(JSON.stringify(body));
 }
 
@@ -124,7 +137,7 @@ export function createGateway(options: GatewayOptions): Gateway {
       };
     });
     log('video.signed', { sessionId, partId, fragments: fragments.length });
-    json(res, 201, { fragments });
+    json(req, res, 201, { fragments });
   };
 
   /** The PUT a signed URL allows: one fragment, its content type, bounded size, idempotent. */
@@ -149,18 +162,19 @@ export function createGateway(options: GatewayOptions): Gateway {
       index: upload.index,
       bytes: bytes.length,
     });
-    json(res, 200, { ok: true });
+    json(req, res, 200, { ok: true });
   };
 
   const handle = async (req: IncomingMessage, res: ServerResponse): Promise<void> => {
     const url = new URL(req.url ?? '/', 'http://gateway');
     if (req.method === 'GET' && url.pathname === '/healthz') {
-      json(res, 200, { ok: true });
+      json(req, res, 200, { ok: true });
       return;
     }
     if (!options.devEndpoints) throw new HttpError(404, 'not_found');
+    if (!allowedOrigin(req.headers.origin)) throw new HttpError(403, 'origin_not_allowed');
     if (req.method === 'OPTIONS') {
-      res.writeHead(204, DEV_CORS);
+      res.writeHead(204, devCors(req));
       res.end();
       return;
     }
@@ -179,17 +193,23 @@ export function createGateway(options: GatewayOptions): Gateway {
       const sessionId = `ses_${newUlid()}`;
       sessions.set(
         sessionId,
-        new StreamSession({ sessionId, workspaceId, store: options.store, stt: options.stt }),
+        new StreamSession({
+          sessionId,
+          workspaceId,
+          store: options.store,
+          stt: options.stt,
+          onEnded: () => sessions.delete(sessionId),
+        }),
       );
       const host = req.headers.host ?? 'localhost';
       log('session.created', { sessionId });
-      json(res, 201, { sessionId, streamUrl: `ws://${host}/v1/stream` });
+      json(req, res, 201, { sessionId, streamUrl: `ws://${host}/v1/stream` });
       return;
     }
     const match = /^\/v1\/dev\/sessions\/([A-Za-z0-9_]+)\/stream-token$/.exec(url.pathname);
     const sessionId = match?.[1];
     if (sessionId !== undefined && sessions.has(sessionId)) {
-      json(res, 201, { streamToken: tokens.issue(sessionId) });
+      json(req, res, 201, { streamToken: tokens.issue(sessionId) });
       return;
     }
     throw new HttpError(404, 'not_found');
@@ -198,18 +218,24 @@ export function createGateway(options: GatewayOptions): Gateway {
   const server = createServer((req: IncomingMessage, res: ServerResponse) => {
     handle(req, res).catch((error: unknown) => {
       if (error instanceof HttpError) {
-        json(res, error.status, { error: error.message });
+        json(req, res, error.status, { error: error.message });
         return;
       }
       log('http.error', { code: errorCode(error) });
-      json(res, 500, { error: 'internal' });
+      json(req, res, 500, { error: 'internal' });
     });
   });
 
   server.on('upgrade', (req: IncomingMessage, socket: Duplex, head: Buffer) => {
-    const url = new URL(req.url ?? '/', 'http://gateway');
-    if (url.pathname !== '/v1/stream') {
+    // Parsed defensively: an exception in this listener would crash the process and every session.
+    const path = (req.url ?? '/').split('?')[0];
+    if (path !== '/v1/stream') {
       reject(socket, 404, 'Not Found');
+      return;
+    }
+    if (!allowedOrigin(req.headers.origin)) {
+      log('stream.origin_rejected', {});
+      reject(socket, 403, 'Forbidden');
       return;
     }
     const token = tokenFromProtocols(req.headers['sec-websocket-protocol']);
@@ -229,11 +255,11 @@ export function createGateway(options: GatewayOptions): Gateway {
   return {
     server,
     sessions,
-    close: () =>
-      new Promise<void>((resolve) => {
-        for (const client of wss.clients) client.terminate();
-        wss.close();
-        server.close(() => resolve());
-      }),
+    close: async () => {
+      for (const client of wss.clients) client.terminate();
+      wss.close();
+      await Promise.all([...sessions.values()].map((s) => s.shutdown()));
+      await new Promise<void>((resolve) => server.close(() => resolve()));
+    },
   };
 }

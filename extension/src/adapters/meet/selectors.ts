@@ -33,6 +33,8 @@ export const LOBBY_SELECTORS = {
   joinButton: {
     id: 'lobby.join-button',
     description: 'Join now or Ask to join button in pre-call screen',
+    // Gone while waiting to be admitted after "Ask to join", so its absence is not a breakage.
+    required: false,
     selectors: [
       'button[jsname="Qx7uuf"]',
       'button[aria-label*="Join now" i]',
@@ -66,11 +68,9 @@ export const IN_CALL_SELECTORS = {
   controlBar: {
     id: 'in-call.control-bar',
     description: 'Bottom media control bar in active call',
-    selectors: [
-      'div[role="region"][aria-label*="Call controls" i]',
-      'div[jscontroller="kAPstf"]',
-      'div[data-is-muted]',
-    ],
+    // No `div[data-is-muted]` fallback: the pre-call mic toggle carries it too, so a user waiting
+    // to be admitted would read as in_call (FR-DET-01: never in the lobby).
+    selectors: ['div[role="region"][aria-label*="Call controls" i]', 'div[jscontroller="kAPstf"]'],
   },
   micButton: {
     id: 'in-call.mic-button',
@@ -97,10 +97,11 @@ export const CALL_ENDED_SELECTORS = {
   returnHomeButton: {
     id: 'call-ended.return-home',
     description: 'Return to home screen button',
+    // No `a[href="/"]` fallback: that link is on the in-call page too, and `ended` stops recording
+    // after 3 s whenever the Leave button is not found.
     selectors: [
       'button[aria-label*="Return to home screen" i]',
       'a[aria-label*="Return to home screen" i]',
-      'a[href="/"]',
     ],
   },
 } as const satisfies Record<string, SelectorDescriptor>;

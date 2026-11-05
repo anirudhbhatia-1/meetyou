@@ -1,3 +1,5 @@
+import { senderTabId } from '../messages.ts';
+
 interface CallStateSnapshot {
   state: 'home' | 'lobby' | 'in_call' | 'ended';
   meetingCode: string | null;
@@ -114,8 +116,21 @@ function renderSnapshot(
   }
 }
 
+/** Side panels are per tab (configureSidePanel): show only this panel's own Meet tab. */
+let panelTabId: number | null = null;
+
+async function resolvePanelTabId(): Promise<number | null> {
+  if (panelTabId === null) {
+    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+    panelTabId = tab?.id ?? null;
+  }
+  return panelTabId;
+}
+
 // 1. Listen for real-time state changes from the content script
-chrome.runtime.onMessage.addListener((message) => {
+chrome.runtime.onMessage.addListener((message, sender) => {
+  const fromTab = senderTabId(sender);
+  if (fromTab === null || fromTab !== panelTabId) return false;
   if (
     typeof message === 'object' &&
     message !== null &&
@@ -128,14 +143,15 @@ chrome.runtime.onMessage.addListener((message) => {
       'healthReport' in message ? (message.healthReport as SelectorHealthReport) : undefined;
     renderSnapshot(message.snapshot as CallStateSnapshot, meta, health);
   }
+  return false;
 });
 
 // 2. Query the active Meet tab for state immediately upon sidepanel mount
 async function fetchCurrentState(): Promise<void> {
   try {
-    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-    if (tab?.id !== undefined) {
-      const response = (await chrome.tabs.sendMessage(tab.id, {
+    const tabId = await resolvePanelTabId();
+    if (tabId !== null) {
+      const response = (await chrome.tabs.sendMessage(tabId, {
         type: 'meet.get-state',
       })) as
         | {

@@ -81,6 +81,9 @@ export interface LaneEncoder {
   close(): void;
 }
 
+/** Bounded so a persistently failing encoder does not restart in a loop. */
+const MAX_ENCODER_RESTARTS = 5;
+
 /** Returns null when this Chrome cannot encode the config; the caller falls back to PCM16. */
 export async function createLaneEncoder(options: {
   onFrame(group: OpusGroup): void;
@@ -96,20 +99,31 @@ export async function createLaneEncoder(options: {
   }
 
   const grouper = new OpusFrameGrouper();
-  const encoder = new AudioEncoder({
-    output(chunk) {
-      const bytes = new Uint8Array(chunk.byteLength);
-      chunk.copyTo(bytes);
-      const durationUs = chunk.duration ?? OPUS_PACKET_MS * 1000;
-      for (const group of grouper.push(bytes, chunk.timestamp, durationUs)) {
-        options.onFrame(group);
-      }
-    },
-    error(error) {
-      options.onError('opus encoder error', error);
-    },
-  });
-  encoder.configure(OPUS_ENCODER_CONFIG);
+  let restarts = 0;
+  let closed = false;
+  // An encoder error closes the AudioEncoder for good; without a restart the lane would go silent
+  // for the rest of the meeting while still reported as captured.
+  const create = (): AudioEncoder => {
+    const next = new AudioEncoder({
+      output(chunk) {
+        const bytes = new Uint8Array(chunk.byteLength);
+        chunk.copyTo(bytes);
+        const durationUs = chunk.duration ?? OPUS_PACKET_MS * 1000;
+        for (const group of grouper.push(bytes, chunk.timestamp, durationUs)) {
+          options.onFrame(group);
+        }
+      },
+      error(error) {
+        options.onError('opus encoder error', error);
+        if (closed || restarts >= MAX_ENCODER_RESTARTS) return;
+        restarts += 1;
+        encoder = create();
+      },
+    });
+    next.configure(OPUS_ENCODER_CONFIG);
+    return next;
+  };
+  let encoder = create();
 
   return {
     encode(pcm, captureMs) {
@@ -133,6 +147,7 @@ export async function createLaneEncoder(options: {
       for (const group of grouper.flush()) options.onFrame(group);
     },
     close() {
+      closed = true;
       if (encoder.state !== 'closed') encoder.close();
     },
   };

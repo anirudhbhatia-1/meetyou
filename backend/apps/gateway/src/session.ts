@@ -20,7 +20,7 @@ import type { ChunkStore } from './chunk-store.ts';
 import { EchoDetector } from './echo.ts';
 import { LaneChunker, type PendingChunk } from './lane-chunker.ts';
 import { errorCode, log } from './log.ts';
-import { oggOpusFile, OggOpusWriter } from './ogg.ts';
+import { DEFAULT_PRE_SKIP, oggOpusFile, OggOpusWriter } from './ogg.ts';
 import { clusterId, splitBySpeaker, type SpeakerRun } from './speakers.ts';
 import type { SttProvider, SttResult, SttStream } from './stt/types.ts';
 import { StreamTimeline } from './timeline.ts';
@@ -28,6 +28,10 @@ import { UsageMeter } from './usage.ts';
 
 const LANES: readonly Lane[] = ['me', 'them'];
 const STT_RETRY_MS = 5_000;
+/** ~60 s of audio per lane waits for a provider stream that is still opening; older is dropped. */
+const MAX_STT_QUEUE = 600;
+/** Without a client for this long, the lane STT streams close (they reopen on the next frame). */
+export const STT_IDLE_CLOSE_MS = 60_000;
 /** 16 kHz × 2 bytes per sample. */
 const PCM16_BYTES_PER_MS = 32;
 
@@ -80,14 +84,21 @@ export class StreamSession {
   readonly #laneStt: Record<Lane, LaneStt> = { me: newLaneStt(), them: newLaneStt() };
   #socket: WebSocket | null = null;
   #ended = false;
+  /** A chunk write failed: later chunks of the lane are not written or acked until a new hello. */
+  readonly #writeFailed: Record<Lane, boolean> = { me: false, them: false };
+  #idleTimer: ReturnType<typeof setTimeout> | null = null;
+  readonly #onEnded: (() => void) | undefined;
 
   constructor(options: {
     sessionId: string;
     workspaceId: string;
     store: ChunkStore;
     stt: SttProvider | null;
+    /** Called once the session ended, so the server can forget it. */
+    onEnded?: () => void;
   }) {
     this.sessionId = options.sessionId;
+    this.#onEnded = options.onEnded;
     this.workspaceId = options.workspaceId;
     this.#store = options.store;
     this.#stt = options.stt;
@@ -127,6 +138,14 @@ export class StreamSession {
         this.#socket = null;
         log('stream.disconnected', { sessionId: this.sessionId });
         void this.#saveUsage();
+        // A client that never comes back must not keep provider sockets (and their keep-alives)
+        // open forever; the session itself stays so a late reconnect still resumes (§5.3).
+        if (!this.#ended) {
+          this.#idleTimer = setTimeout(() => {
+            this.#idleTimer = null;
+            if (this.#socket === null) void this.#closeStt();
+          }, STT_IDLE_CLOSE_MS);
+        }
       }
     });
     socket.on('error', (error) => log('stream.socket_error', { code: errorCode(error) }));
@@ -153,6 +172,8 @@ export class StreamSession {
     }
     this.#codec = parsed.format.codec;
 
+    if (this.#idleTimer !== null) clearTimeout(this.#idleTimer);
+    this.#idleTimer = null;
     const previous = this.#socket;
     this.#socket = socket;
     if (previous !== null && previous !== socket) previous.close(4000, 'replaced');
@@ -161,7 +182,11 @@ export class StreamSession {
       const lanes = await this.#lanesReady();
       // Writes in flight from the previous connection finish first, so `durableUpTo` is final.
       await Promise.all(LANES.map((l) => this.#writes[l]));
-      for (const lane of LANES) lanes[lane].dropPending();
+      for (const lane of LANES) {
+        lanes[lane].dropPending();
+        // The client replays from `durableUpTo`, so the lane can write again.
+        this.#writeFailed[lane] = false;
+      }
       if (this.#socket !== socket) return;
       this.#meter.connected(this.#codec);
       this.#send(socket, {
@@ -225,7 +250,14 @@ export class StreamSession {
 
     if (frame.seq > this.#sttUpTo[frame.lane]) {
       this.#sttUpTo[frame.lane] = frame.seq;
-      this.#forwardToStt(frame.lane, frame.payload, packets, frame.captureMs, durationMs);
+      this.#forwardToStt(
+        frame.lane,
+        frame.seq,
+        frame.payload,
+        packets,
+        frame.captureMs,
+        durationMs,
+      );
     }
     this.#writeChunk(frame.lane, false);
   }
@@ -234,7 +266,7 @@ export class StreamSession {
     if (this.#codec === 'opus') {
       return oggOpusFile(
         chunk.payloads.flatMap((p) => unpackOpusFrame(p)),
-        { serial: randomInt(0, 2 ** 32) },
+        { serial: randomInt(0, 2 ** 32), preSkip: preSkipFor(chunk.frames[0]?.seq ?? 0) },
       );
     }
     return Buffer.concat(chunk.payloads);
@@ -248,6 +280,9 @@ export class StreamSession {
     const lastSeq = chunk.frames.at(-1)?.seq ?? -1;
     const codec = this.#codec ?? 'pcm16';
     this.#writes[lane] = this.#writes[lane].then(async () => {
+      // After a failed write, a later chunk's ack would cover the lost frames and the client would
+      // prune them. Nothing more is written or acked until the client reconnects and replays.
+      if (this.#writeFailed[lane]) return;
       try {
         const audio = this.#chunkAudio(chunk);
         await this.#store.put({
@@ -264,6 +299,7 @@ export class StreamSession {
           chunk.frames.reduce((n, f) => n + f.durationMs, 0),
         );
       } catch (error: unknown) {
+        this.#writeFailed[lane] = true;
         log('chunk.write_failed', { sessionId: this.sessionId, lane, code: errorCode(error) });
         const socket = this.#socket;
         if (socket !== null) this.#fail(socket, 'storage_failed', true);
@@ -309,15 +345,13 @@ export class StreamSession {
   async #end(socket: WebSocket): Promise<void> {
     this.#ended = true;
     await Promise.all(LANES.map((l) => this.#writeChunk(l, true)));
-    await Promise.all(
-      LANES.map(async (lane) => {
-        const stt = this.#laneStt[lane];
-        await stt.opening;
-        const stream = stt.stream;
-        stt.stream = null;
-        await stream?.close();
-      }),
-    );
+    if (LANES.some((l) => this.#writeFailed[l])) {
+      // The client keeps its unacknowledged frames and retries; ending now would refuse them.
+      this.#ended = false;
+      if (this.#socket === socket) this.#fail(socket, 'storage_failed', true);
+      return;
+    }
+    await this.#closeStt();
     const usage = await this.#saveUsage();
     log('stream.ended', {
       sessionId: this.sessionId,
@@ -329,6 +363,27 @@ export class StreamSession {
       estimatedCostUsd: usage.estimatedCostUsd,
     });
     if (this.#socket === socket) socket.close(1000, 'ended');
+    this.#onEnded?.();
+  }
+
+  /** Closes both lanes' provider streams; the next forwarded frame reopens them. */
+  async #closeStt(): Promise<void> {
+    await Promise.all(
+      LANES.map(async (lane) => {
+        const stt = this.#laneStt[lane];
+        await stt.opening;
+        const stream = stt.stream;
+        stt.stream = null;
+        await stream?.close();
+      }),
+    );
+  }
+
+  /** Gateway shutdown: drop timers and provider sockets. */
+  async shutdown(): Promise<void> {
+    if (this.#idleTimer !== null) clearTimeout(this.#idleTimer);
+    this.#idleTimer = null;
+    await this.#closeStt();
   }
 
   async #saveUsage() {
@@ -343,6 +398,7 @@ export class StreamSession {
 
   #forwardToStt(
     lane: Lane,
+    seq: number,
     payload: Uint8Array,
     packets: Uint8Array[] | null,
     captureMs: number,
@@ -356,7 +412,10 @@ export class StreamSession {
     const opening = stt.stream === null && stt.opening === null;
     if (opening) {
       stt.timeline = new StreamTimeline();
-      stt.ogg = packets === null ? null : new OggOpusWriter({ serial: randomInt(0, 2 ** 32) });
+      stt.ogg =
+        packets === null
+          ? null
+          : new OggOpusWriter({ serial: randomInt(0, 2 ** 32), preSkip: preSkipFor(seq) });
       if (stt.ogg !== null) stt.queued.push({ bytes: stt.ogg.headers(), durationMs: 0 });
     }
     const bytes = packets !== null && stt.ogg !== null ? stt.ogg.packets(packets) : payload;
@@ -368,6 +427,9 @@ export class StreamSession {
       return;
     }
     stt.queued.push({ bytes, durationMs });
+    // Bounded while a provider handshake stalls. The Ogg headers (entry 0) must stay first; audio
+    // dropped here is still durable and goes to the batch pass (§6.3).
+    if (stt.queued.length > MAX_STT_QUEUE) stt.queued.splice(stt.ogg === null ? 0 : 1, 1);
     if (!opening) return;
 
     const timeline = stt.timeline;
@@ -378,7 +440,13 @@ export class StreamSession {
           onResult: (result) => this.#onSttResult(lane, timeline, result),
           onClosed: (reason) => {
             log('stt.closed', { sessionId: this.sessionId, lane, reason });
-            if (stt.timeline === timeline) stt.stream = null;
+            // `#closeStt` clears `stream` before closing, so only an unexpected close backs off.
+            if (stt.timeline === timeline && stt.stream !== null) {
+              stt.stream = null;
+              // Back off before reopening, or a provider that accepts and then closes is reopened
+              // on every 100 ms frame (ARCHITECTURE §6.3).
+              stt.retryAt = Date.now() + STT_RETRY_MS;
+            }
           },
         },
         { diarize: lane === 'them' },
@@ -475,6 +543,15 @@ export class StreamSession {
     this.#send(socket, { type: 'error', code, retryable });
     socket.close(retryable ? 1011 : 1008, code);
   }
+}
+
+/**
+ * Only the encoder's first packets carry its lookahead (RFC 7845 §4.2). The extension keeps one
+ * encoder per lane for the whole recording, so a chunk or STT stream that starts later must not
+ * trim it again (that would drop ~6.5 ms of real audio each time).
+ */
+function preSkipFor(firstSeq: number): number {
+  return firstSeq === 0 ? DEFAULT_PRE_SKIP : 0;
 }
 
 function parseClient(text: string): ClientMessage | null {

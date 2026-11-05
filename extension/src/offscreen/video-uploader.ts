@@ -3,6 +3,8 @@ import type { VideoFragmentRow } from './video-recorder.ts';
 
 /** ADR-0011 §3.3: video waits while the audio backlog is above 5 s or the stream is reconnecting. */
 export const AUDIO_BACKLOG_LIMIT_MS = 5_000;
+/** D-02 default retention: local video older than this is deleted even if it never uploaded. */
+export const VIDEO_RETENTION_MS = 7 * 24 * 60 * 60 * 1000;
 /** ADR-0011 §3.3: one signing request covers at most 50 fragments. */
 export const SIGN_BATCH = 50;
 const GATE_POLL_MS = 1_000;
@@ -245,4 +247,32 @@ export class IdbFragmentQueue implements FragmentQueue {
     tx.objectStore(VIDEO_STORE).delete([row.sessionId, row.partId, row.index]);
     await idbDone(tx);
   }
+}
+
+/** Deletes `video_buffer` rows written before `cutoffMs`; returns how many were deleted. */
+export async function pruneStaleFragments(db: IDBDatabase, cutoffMs: number): Promise<number> {
+  const tx = db.transaction(VIDEO_STORE, 'readwrite');
+  const store = tx.objectStore(VIDEO_STORE);
+  // Listen before the cursor runs: the transaction may complete as soon as the last request does.
+  const done = idbDone(tx);
+  let deleted = 0;
+  await new Promise<void>((resolve, reject) => {
+    const request = store.openCursor();
+    request.onerror = () => reject(request.error ?? new Error('IndexedDB cursor failed'));
+    request.onsuccess = () => {
+      const cursor = request.result;
+      if (cursor === null) {
+        resolve();
+        return;
+      }
+      const row = cursor.value as VideoFragmentRow;
+      if (row.createdAt < cutoffMs) {
+        cursor.delete();
+        deleted += 1;
+      }
+      cursor.continue();
+    };
+  });
+  await done;
+  return deleted;
 }

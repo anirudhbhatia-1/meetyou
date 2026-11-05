@@ -55,21 +55,22 @@ terraform apply
 
 ---
 
-## 4. Unblocking Stage 1 Tasks
+## 4. What uses this, and when
 
-### For Anirudh (S1-14: Google Chirp 3 Benchmark Gate):
-Once this project exists, set the project ID in `tools/stt-benchmark/.env.bench`:
-```env
-GOOGLE_CLOUD_PROJECT=<YOUR_PROJECT_ID>
-```
-Ensure your ADC login is complete (`gcloud auth application-default login`). You can now run the benchmark gate:
-```bash
-pnpm --filter @meetyou/stt-benchmark run-google
-```
+- **STT:** Deepgram only (ADR-0001 §0, 2026-11-05). The Speech-to-Text API and role are not
+  needed; S1-14 was cancelled.
+- **Gateway (S1-05):** the service runs a placeholder image. The real gateway is deployed after S2
+  sign-in (ADR-0004): its dev endpoints have no auth, and it refuses to start with
+  `APP_ENV=staging` until then. Until then, test against the local gateway.
+- **Video uploads (ADR-0011 §3.3):** set `extension_origins` to the extension's
+  `chrome-extension://<id>` origin so signed PUTs pass CORS. The Meet page origin is never allowed.
+- **Storage lifecycle:** 31 days, a backstop above the longest user retention (30 days, D-02). The
+  retention job (S2-10) does the real deletion.
 
-### For Gateway Deployment (S1-05):
-Cloud Run will output `gateway_url`. Point the extension build to the staging gateway:
-```bash
-MINUTES_GATEWAY_URL=<GATEWAY_URL> pnpm --filter @meetyou/extension build
-```
+## 5. Cost while idle
+
+Cloud Run scales to zero, but the Cloud SQL instance and the VPC connector (two `e2-micro`
+instances) run around the clock. Until S2 needs the database, stop the instance:
+`gcloud sql instances patch meetyou-staging-pg16 --activation-policy=NEVER` (data is kept; only
+storage is billed). Start it again with `--activation-policy=ALWAYS`.
 

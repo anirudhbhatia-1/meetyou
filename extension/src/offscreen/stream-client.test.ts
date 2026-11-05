@@ -42,6 +42,8 @@ class FakeGateway {
   pending: Record<Lane, number[]> = { me: [], them: [] };
   protocols: string[][] = [];
   socket: FakeSocket | null = null;
+  /** Text messages received, as `type` or `control:<action>`. */
+  received: string[] = [];
 
   open(protocols: string[]): FakeSocket {
     this.protocols.push(protocols);
@@ -56,7 +58,8 @@ class FakeGateway {
   }
 
   receiveText(socket: FakeSocket, text: string): void {
-    const msg = JSON.parse(text) as { type: string };
+    const msg = JSON.parse(text) as { type: string; action?: string };
+    this.received.push(msg.type === 'control' ? `control:${msg.action ?? ''}` : msg.type);
     if (msg.type === 'hello') {
       socket.reply({
         type: 'ready',
@@ -214,6 +217,35 @@ describe('StreamClient', () => {
     timers.runPending();
     await settle();
     expect(client.backlogMs()).toBe(0);
+  });
+
+  it('keeps reconnecting after Stop while offline and delivers the buffered audio', async () => {
+    const { store, gateway, timers, client, write } = setup();
+    client.start();
+    await settle();
+    await write(5);
+    gateway.drop(); // network lost; a reconnect timer is pending
+    await write(20); // recorded while offline
+    client.control('pause', 2000); // sent once the link is back (ARCHITECTURE §5.5)
+
+    const stopped = client.stop(2500, 600_000);
+    await settle();
+    const [reconnect] = [...timers.pending.entries()];
+    if (reconnect !== undefined) {
+      timers.pending.delete(reconnect[0]);
+      reconnect[1]();
+    }
+    await settle();
+    expect(gateway.received).toContain('control:pause');
+    expect(gateway.received).toContain('control:end');
+    for (const lane of LANES) gateway.flush(gateway.socket as FakeSocket, lane);
+    await settle();
+
+    expect((await stopped).unacked).toBe(0);
+    for (const lane of LANES) {
+      expect(gateway.durable[lane]).toEqual(Array.from({ length: 25 }, (_, i) => i));
+    }
+    expect(await store.count()).toBe(0);
   });
 
   it('keeps unacknowledged frames when the stream ends without acks', async () => {

@@ -29,7 +29,6 @@ locals {
     "run.googleapis.com",              # Cloud Run for Gateway & API
     "sqladmin.googleapis.com",         # Cloud SQL for PostgreSQL 16
     "storage.googleapis.com",          # Cloud Storage for audio/video chunks
-    "speech.googleapis.com",           # Speech-to-Text V2 for Chirp 3 (ADR-0001)
     "secretmanager.googleapis.com",    # Secret Manager for keys & tokens
     "vpcaccess.googleapis.com",        # Serverless VPC Access connector
     "servicenetworking.googleapis.com",# Private service networking for Cloud SQL
@@ -45,12 +44,13 @@ resource "google_project_service" "enabled_services" {
   disable_dependent_services = false
 }
 
-# 2. Audio & Video Chunks Storage (7-day automated retention lifecycle)
+# 2. Audio & Video Chunks Storage (31-day lifecycle backstop; the retention job deletes per D-02)
 module "storage" {
-  source     = "../../modules/storage"
-  project_id = var.project_id
-  region     = var.region
-  environment = "staging"
+  source         = "../../modules/storage"
+  project_id     = var.project_id
+  region         = var.region
+  environment    = "staging"
+  upload_origins = var.extension_origins
 
   depends_on = [google_project_service.enabled_services]
 }
