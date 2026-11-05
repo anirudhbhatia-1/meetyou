@@ -11,6 +11,7 @@ resource "google_sql_database_instance" "postgres" {
 
   settings {
     tier              = var.tier
+    edition           = "ENTERPRISE"
     availability_type = "ZONAL" # Single zone for cost efficiency in staging (ADR-0002)
     disk_type         = "PD_SSD"
     disk_size         = 10
