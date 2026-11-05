@@ -99,6 +99,12 @@ export class StreamClient {
     return this.#acked;
   }
 
+  /** Audio written but not yet sent, in ms of the larger lane (video uploads wait on it). */
+  backlogMs(): number {
+    const frameMs = this.#o.format?.frameMs ?? PCM16_FORMAT.frameMs;
+    return Math.max(...LANES.map((l) => Math.max(0, this.#written[l] - this.#sent[l]))) * frameMs;
+  }
+
   start(): void {
     void this.#connect();
   }

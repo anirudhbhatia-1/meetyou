@@ -37,7 +37,7 @@ MINUTES_GATEWAY_URL=http://127.0.0.1:8787 pnpm --filter @meetyou/extension build
 
 | Command (repo root) | What it does |
 |---|---|
-| `node backend/apps/gateway/src/check-session.ts [sessionId]` | Loss check of a recorded session from `.data` (latest if no ID): missing frames, duplicates, pause gaps, usage and cost. Exit code 1 on loss |
+| `node backend/apps/gateway/src/check-session.ts [sessionId] [--join]` | Loss check of a recorded session from `.data` (latest if no ID): missing frames, duplicates, pause gaps, usage and cost, uploaded video parts and missing fragments. `--join` writes each part as a playable `video/{partId}.mp4` in `.data`. Exit code 1 on loss |
 | `node backend/apps/gateway/src/load-test.ts [sessions] [seconds] [opus\|pcm16]` | Starts a gateway with STT off on a temp dir and measures CPU/RSS under N synthetic sessions (§26.2 Q6) |
 | `node --env-file=.env.bench backend/apps/gateway/src/backlog-speed.ts <wav> [seconds] [speed] [pcm16\|ogg_opus]` | Streams a public 16 kHz WAV to Deepgram faster than real time (§26.2 Q5). Paid API; Ogg mode needs ffmpeg |
 
@@ -46,6 +46,11 @@ MINUTES_GATEWAY_URL=http://127.0.0.1:8787 pnpm --filter @meetyou/extension build
 - `POST /v1/dev/sessions` and `POST /v1/dev/sessions/{id}/stream-token` stand in for the API
   (`POST /v1/sessions`, ADR-0004). Tokens are random, single use, 10 minutes, sent as the
   `token.<value>` subprotocol next to `minutes.v1`.
+- Video (ADR-0011 §3.3): `POST /v1/dev/sessions/{id}/video/fragments:sign` (contract
+  `SignVideoFragmentsRequest`) returns one URL per fragment, `PUT /v1/dev/video/{token}` stores it
+  at `…/video/{partId}/{index}.frag`. URLs last 15 minutes, are bound to the content type, take at
+  most 8 MB, and a retry overwrites the same file. They stand in for Cloud Storage signed URLs
+  (S2-14).
 - Storage follows ARCHITECTURE §11.4 on local disk:
   `ws/{workspaceId}/meetings/{sessionId}/audio/{lane}/{chunkStartMs}.opus` (or `.pcm16`) plus a
   `.json` manifest written last (commit marker), each fsynced.
@@ -53,6 +58,7 @@ MINUTES_GATEWAY_URL=http://127.0.0.1:8787 pnpm --filter @meetyou/extension build
 - Cost per session (AGENTS §3 rule 10): `usage.json` next to the chunks — stored audio per lane,
   STT minutes per lane, bytes, connections, estimated cost from the provider's list price.
 - Not yet: Cloud Storage (after S1-10), Redis session state, JWT stream tokens, transliteration
-  of segment text, storing segments and events, health messages, a usage table. Each is marked
+  of segment text, storing segments and events, health messages, a usage table, video finalize
+  (concat + faststart MP4, S2-14). Each is marked
   `TODO` in the code.
 - Logs carry IDs, counts and codes only (AGENTS §7).

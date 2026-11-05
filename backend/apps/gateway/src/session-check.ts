@@ -55,3 +55,25 @@ export function checkLane(frames: readonly ChunkFrame[]): LaneReport {
     spanMs: first && last ? last.captureMs + last.durationMs - first.captureMs : 0,
   };
 }
+
+export interface VideoPartReport {
+  fragments: number;
+  /** Indices absent between 0 and the highest stored index: fragments that never uploaded. */
+  missingIndices: number[];
+}
+
+/** Checks one video part's uploaded fragments (ADR-0011 check 4: nothing lost on a slow link). */
+export function checkVideoPart(indices: readonly number[]): VideoPartReport {
+  const present = new Set(indices);
+  const last = Math.max(-1, ...indices);
+  const missingIndices: number[] = [];
+  for (let i = 0; i <= last; i++) if (!present.has(i)) missingIndices.push(i);
+  return { fragments: present.size, missingIndices };
+}
+
+/** File extension from the container's magic bytes: MP4 has `ftyp` at byte 4, WebM starts with EBML. */
+export function videoExtension(head: Uint8Array): 'mp4' | 'webm' | 'bin' {
+  if (new TextDecoder().decode(head.subarray(4, 8)) === 'ftyp') return 'mp4';
+  if (head[0] === 0x1a && head[1] === 0x45 && head[2] === 0xdf && head[3] === 0xa3) return 'webm';
+  return 'bin';
+}

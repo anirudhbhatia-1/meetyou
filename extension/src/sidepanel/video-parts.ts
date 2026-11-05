@@ -33,3 +33,12 @@ export function latestSessionParts(rows: readonly VideoFragmentRow[]): VideoPart
   for (const part of ordered) part.fragments.sort((a, b) => a.index - b.index);
   return ordered;
 }
+
+/**
+ * Side-panel upload line (ADR-0011 §3.3, DESIGN "Uploading video — N%"): the share of fragments
+ * uploaded since the uploader started; empty while nothing has been uploaded or is waiting.
+ */
+export function uploadLabel(pending: number, uploaded: number): string {
+  if (pending === 0) return uploaded === 0 ? '' : 'Video uploaded';
+  return `Uploading video — ${Math.floor((100 * uploaded) / (uploaded + pending))}%`;
+}

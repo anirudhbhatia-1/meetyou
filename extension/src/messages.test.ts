@@ -4,6 +4,7 @@ import {
   parseBackgroundMessage,
   parseCaptureStartResult,
   parseCaptureStatusReply,
+  parseCaptureStopReply,
   parseMeetCallState,
   parseMeetStateReply,
   parseOffscreenMessage,
@@ -91,6 +92,23 @@ describe('message parsers', () => {
     expect(parseCaptureStartResult(undefined)).toBeNull();
     expect(parseCaptureStatusReply({ active: true })).toEqual({ active: true });
     expect(parseCaptureStatusReply({})).toBeNull();
+    expect(parseCaptureStopReply({ ok: true, uploading: true })).toEqual({
+      ok: true,
+      uploading: true,
+    });
+    expect(parseCaptureStopReply({ ok: true })).toEqual({ ok: true, uploading: false });
+    expect(parseCaptureStopReply({ uploading: true })).toBeNull();
+  });
+
+  it('parses the video upload messages (ADR-0011 §3.3)', () => {
+    expect(parseBackgroundMessage({ target: 'background', type: 'capture.upload_idle' })).toEqual({
+      target: 'background',
+      type: 'capture.upload_idle',
+    });
+    const upload = { target: 'sidepanel', type: 'video.upload', pending: 3, uploaded: 7 };
+    expect(parseSidePanelMessage(upload)).toEqual(upload);
+    expect(parseSidePanelMessage({ ...upload, pending: -1 })).toBeNull();
+    expect(parseSidePanelMessage({ ...upload, uploaded: 1.5 })).toBeNull();
   });
 
   it('reads the call state from the Meet adapter and the sender tab', () => {

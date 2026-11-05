@@ -7,7 +7,15 @@ import { IdbFrameStore } from './frame-store.ts';
 import { openMinutesDb } from './idb.ts';
 import { createLaneEncoder, type LaneEncoder } from './opus-encoder.ts';
 import { OPUS_FORMAT, PCM16_FORMAT, StreamClient } from './stream-client.ts';
-import { pickVideoMimeType, startVideoPart, type VideoPart } from './video-recorder.ts';
+import {
+  nextVideoQuality,
+  pickVideoMimeType,
+  startVideoPart,
+  VIDEO_QUALITY,
+  type VideoPart,
+  type VideoQuality,
+} from './video-recorder.ts';
+import { AUDIO_BACKLOG_LIMIT_MS } from './video-uploader.ts';
 
 export interface RecorderEvents {
   onTabEnded(): void;
@@ -16,6 +24,8 @@ export interface RecorderEvents {
   onLink(link: StreamLink): void;
   onVideo(video: VideoStatus): void;
   onTranscript(message: ServerMessage): void;
+  /** A video fragment reached IndexedDB. */
+  onVideoFragment(): void;
   onError(context: string, error: unknown): void;
 }
 
@@ -25,6 +35,10 @@ export interface Recorder {
   readonly micError: string | null;
   readonly link: StreamLink;
   readonly video: VideoStatus;
+  /** True when video may use the link: audio is online with at most 5 s unsent (ADR-0011 §3.3). */
+  audioClear(): boolean;
+  /** Upload backlog in fragments; drives the data-saver switch (ADR-0011 §3.2). */
+  setUploadBacklog(fragments: number): void;
   pause(): Promise<void>;
   resume(): void;
   stop(): Promise<void>;
@@ -141,6 +155,8 @@ export async function startRecorder(options: {
 
   let video: VideoStatus = 'off';
   let part: VideoPart | null = null;
+  let quality: VideoQuality = 'standard';
+  let switching: Promise<void> = Promise.resolve();
   const mimeType = pickVideoMimeType((t) => MediaRecorder.isTypeSupported(t));
   const startPart = (): void => {
     if (capture.video === null || mimeType === null) return;
@@ -152,6 +168,8 @@ export async function startRecorder(options: {
         mixedAudio: capture.mixedAudio,
         mimeType,
         startMs: capture.nowMs(),
+        quality,
+        onFragment: events.onVideoFragment,
         onError: events.onError,
       });
       video = 'recording';
@@ -173,6 +191,28 @@ export async function startRecorder(options: {
     console.info('offscreen: video part closed', current.partId, fragments);
   };
 
+  /**
+   * A bitrate cannot change inside a MediaRecorder run, so a quality switch closes the part and
+   * starts a new one. Resolution and frame rate drop through `applyConstraints` on the tab track;
+   * [Verify] in S1-13 that Chrome applies them to a tab-capture track (failure keeps 720p).
+   */
+  const switchQuality = async (next: VideoQuality): Promise<void> => {
+    if (part === null || paused || capture.video === null) return;
+    await stopPart();
+    const { width, height, frameRate } = VIDEO_QUALITY[next];
+    try {
+      await capture.video.applyConstraints({
+        width: { max: width },
+        height: { max: height },
+        frameRate: { max: frameRate },
+      });
+    } catch (error: unknown) {
+      events.onError('video constraints not applied', error);
+    }
+    if (!paused) startPart();
+    console.info('offscreen: video quality', next);
+  };
+
   return {
     sessionId,
     lanes: capture.lanes,
@@ -181,10 +221,21 @@ export async function startRecorder(options: {
       return link;
     },
     video,
+    audioClear() {
+      if (client === null) return true;
+      return link === 'online' && client.backlogMs() <= AUDIO_BACKLOG_LIMIT_MS;
+    },
+    setUploadBacklog(fragments) {
+      const next = nextVideoQuality(quality, fragments);
+      if (next === quality) return;
+      quality = next;
+      switching = switching.then(() => switchQuality(next));
+    },
     async pause() {
       if (paused) return;
       paused = true;
       client?.control('pause', capture.nowMs());
+      await switching;
       await stopPart();
     },
     resume() {
@@ -197,6 +248,7 @@ export async function startRecorder(options: {
     async stop() {
       const at = capture.nowMs();
       paused = true;
+      await switching;
       await capture.stop();
       await stopPart();
       for (const encoder of Object.values(encoders)) {

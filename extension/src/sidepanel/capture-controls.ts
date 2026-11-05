@@ -14,7 +14,7 @@ import {
 import { idbDone, idbRequest, openMinutesDb, VIDEO_STORE } from '../offscreen/idb.ts';
 import type { VideoFragmentRow } from '../offscreen/video-recorder.ts';
 import { parseParticipants, speakerLabel, type ParticipantName } from './speaker-label.ts';
-import { latestSessionParts } from './video-parts.ts';
+import { latestSessionParts, uploadLabel } from './video-parts.ts';
 
 /**
  * Developer control for Stage 1: start/stop/pause, per-lane meters, gateway link, live transcript
@@ -70,6 +70,7 @@ const status = el('p', { className: 'status' });
 status.setAttribute('role', 'status');
 const linkLine = el('p', { className: 'status' });
 const videoLine = el('p', { className: 'status' });
+const uploadLine = el('p', { className: 'status' });
 const startStop = el('button', { type: 'button' });
 const pauseResume = el('button', { type: 'button' });
 const videoToggle = el('input', { type: 'checkbox', checked: true });
@@ -93,6 +94,7 @@ section.append(
   videoToggleRow,
   linkLine,
   videoLine,
+  uploadLine,
   me.row,
   them.row,
   transcript,
@@ -315,6 +317,8 @@ chrome.runtime.onMessage.addListener((message, sender) => {
     them.meter.value = parsed.them;
   } else if (parsed?.type === 'transcript') {
     showTranscript(parsed.final, parsed.lane, parsed.text, parsed.startMs, parsed.speaker);
+  } else if (parsed?.type === 'video.upload') {
+    uploadLine.textContent = uploadLabel(parsed.pending, parsed.uploaded);
   }
   return false;
 });

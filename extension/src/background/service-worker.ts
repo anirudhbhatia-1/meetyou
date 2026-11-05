@@ -6,6 +6,7 @@ import {
   type MeetCallState,
   parseCaptureStartResult,
   parseCaptureStatusReply,
+  parseCaptureStopReply,
   type OffscreenMessage,
 } from '../messages.ts';
 import {
@@ -96,7 +97,6 @@ async function ensureOffscreenDocument(): Promise<void> {
   }
 }
 
-// TODO(S2-14): keep the document open after stop until the video upload finishes (ADR-0011).
 async function closeOffscreenDocument(): Promise<void> {
   if (await hasOffscreenDocument()) {
     await chrome.offscreen.closeDocument();
@@ -235,18 +235,30 @@ async function stopRecording(): Promise<void> {
     return;
   }
   await applyCaptureEvent({ type: 'stop_requested' });
+  let uploading = false;
   try {
-    await sendToOffscreen({ target: 'offscreen', type: 'capture.stop' });
+    const reply = await sendToOffscreen({ target: 'offscreen', type: 'capture.stop' });
+    uploading = parseCaptureStopReply(reply)?.uploading === true;
   } catch (error: unknown) {
     // Closing the document below still releases the streams.
     logError('offscreen stop failed', error);
   }
+  // Video keeps uploading after the meeting (ADR-0011 §3.3); `capture.upload_idle` closes it later.
+  if (!uploading) await closeOffscreenQuietly();
+  await applyCaptureEvent({ type: 'stopped' });
+}
+
+async function closeOffscreenQuietly(): Promise<void> {
   try {
     await closeOffscreenDocument();
   } catch (error: unknown) {
     logError('close offscreen failed', error);
   }
-  await applyCaptureEvent({ type: 'stopped' });
+}
+
+/** The offscreen document finished uploading video; close it unless a recording uses it. */
+async function closeIfUploadsDone(): Promise<void> {
+  if (canStart(await loadCaptureState())) await closeOffscreenQuietly();
 }
 
 async function pauseRecording(): Promise<void> {
@@ -477,6 +489,9 @@ chrome.runtime.onMessage.addListener((message, sender) => {
       break;
     case 'recording.resume':
       enqueueCapture(resumeRecording);
+      break;
+    case 'capture.upload_idle':
+      enqueueCapture(closeIfUploadsDone);
       break;
     case 'capture.mic_lost':
       enqueueCapture(async () => {

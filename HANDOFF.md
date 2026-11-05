@@ -6,7 +6,7 @@ pointer to where the full detail lives — the linked document stays the source 
 
 | Field | Value |
 |---|---|
-| Last updated | 2026-11-05 (Deepgram only; library web app from alpha; UI design sources fixed) |
+| Last updated | 2026-11-05 (S1-13 video uploader and data saver; Deepgram only; library web app) |
 | Updated by | Anirudh (Claude Code) |
 | Repository | [anirudhbhatia-1/meetyou](https://github.com/anirudhbhatia-1/meetyou) — branches `main`, `anirudh`, `feature/S1-07-meet-adapter-v0` |
 | Current stage | **Stage 1** in progress — S1-01, S1-02, S1-07 done; Anirudh's S1-03..S1-06 and S1-13 code in; Gaurav: S1-08, S1-09, S1-10 (§7) |
@@ -191,6 +191,24 @@ Stage 0 is complete (status table: IMPLEMENTATION_PLAN.md → "Stage 0 status").
 ## 9. Session log
 
 Newest first. One entry per working session (either person).
+
+### 2026-11-05 (latest) — Anirudh (Claude Code): S1-13 video upload and data saver
+Anirudh asked to finish all S1 code first and run the Chrome tests at the end.
+- **Extension** (`offscreen/video-uploader.ts`): uploads `video_buffer` fragments one at a time,
+  oldest first, one signed PUT each, signing up to 50 per request; deletes a fragment only after its
+  PUT. Waits while the audio stream is reconnecting or more than 5 s of audio is unsent
+  (`StreamClient.backlogMs()`); backs off up to 30 s on errors; skips sessions the gateway no longer
+  knows (their fragments stay local) and `local_…` recordings. It outlives the recording, so the
+  service worker keeps the offscreen document open until `capture.upload_idle`. Leftovers resume
+  when the document next opens.
+- **Data saver** (`nextVideoQuality`): above 12 pending fragments (2 min) the recorder closes the
+  part and starts a new one at 400 kbps with 854×480 / 10 fps via `applyConstraints`; back to
+  standard when the backlog is 0. `applyConstraints` on a tab-capture track is **[Verify]** in Chrome.
+- Side panel shows "Uploading video — N%" / "Video uploaded".
+- **Gateway:** dev `fragments:sign` + `PUT /v1/dev/video/{token}` (15-min, content-type bound,
+  8 MB cap, idempotent), stored per ARCHITECTURE §11.4; `check-session` lists video parts and
+  missing fragments, `--join` writes a playable file. 20 new tests; `pnpm check` passes (267 tests).
+- **Not done:** all Chrome checks (ADR-0011 1–4, 60-min run); server finalize stays S2-14.
 
 ### 2026-11-05 (later) — Anirudh (Claude Code): UI design sources
 **Decision (Anirudh):** all UI work uses only `docs/DESIGN.md`, the Claude Code design artifact
