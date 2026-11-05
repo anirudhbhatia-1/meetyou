@@ -5,6 +5,7 @@ import { dirname, join } from 'node:path';
 import type { Lane } from '@meetyou/contracts';
 import { z } from 'zod';
 
+import { errorCode, log } from './log.ts';
 import type { SessionUsage } from './usage.ts';
 
 export interface ChunkFrame {
@@ -44,6 +45,17 @@ export interface ChunkStore {
   putUsage(usage: SessionUsage): Promise<void>;
   /** Overwrites the same fragment on a retry (idempotent, like a signed PUT to Cloud Storage). */
   putVideoFragment(fragment: VideoFragment): Promise<void>;
+  /** Stored video parts of a meeting with their fragment indices, ascending. */
+  listVideo(
+    workspaceId: string,
+    meetingId: string,
+  ): Promise<{ partId: string; indices: number[] }[]>;
+  readVideoFragment(
+    workspaceId: string,
+    meetingId: string,
+    partId: string,
+    index: number,
+  ): Promise<Uint8Array>;
 }
 
 const Manifest = z.object({
@@ -101,6 +113,42 @@ export class LocalChunkStore implements ChunkStore {
     );
     await mkdir(dirname(path), { recursive: true });
     await writeDurably(path, fragment.bytes);
+  }
+
+  async listVideo(
+    workspaceId: string,
+    meetingId: string,
+  ): Promise<{ partId: string; indices: number[] }[]> {
+    const dir = join(this.#meetingDir(workspaceId, meetingId), 'video');
+    let parts: string[];
+    try {
+      parts = (await readdir(dir)).filter((name) => /^vp_[0-9A-HJKMNP-TV-Z]{26}$/.test(name));
+    } catch (error: unknown) {
+      if ((error as { code?: string }).code === 'ENOENT') return [];
+      throw error;
+    }
+    const out: { partId: string; indices: number[] }[] = [];
+    for (const partId of parts.sort()) {
+      const indices = (await readdir(join(dir, partId)))
+        .filter((name) => /^\d+\.frag$/.test(name))
+        .map((name) => Number.parseInt(name, 10))
+        .sort((a, b) => a - b);
+      out.push({ partId, indices });
+    }
+    return out;
+  }
+
+  async readVideoFragment(
+    workspaceId: string,
+    meetingId: string,
+    partId: string,
+    index: number,
+  ): Promise<Uint8Array> {
+    if (!ID.test(partId) || !Number.isInteger(index) || index < 0) {
+      throw new Error('invalid video fragment id');
+    }
+    const path = join(this.#meetingDir(workspaceId, meetingId), 'video', partId, `${index}.frag`);
+    return new Uint8Array(await readFile(path));
   }
 
   async put(chunk: AudioChunk): Promise<void> {
@@ -166,8 +214,9 @@ async function writeDurably(path: string, bytes: Uint8Array): Promise<void> {
       } finally {
         await dir.close();
       }
-    } catch {
-      // Best-effort directory sync across filesystems.
+    } catch (error: unknown) {
+      // The file itself is synced; a failed directory sync weakens crash safety, so say so.
+      log('chunk.dir_sync_failed', { code: errorCode(error) });
     }
   }
 }
@@ -182,6 +231,33 @@ export class MemoryChunkStore implements ChunkStore {
     const key = `${fragment.meetingId}/${fragment.partId}/${fragment.index}`;
     this.videoFragments.set(key, fragment);
     return Promise.resolve();
+  }
+
+  listVideo(
+    _workspaceId: string,
+    meetingId: string,
+  ): Promise<{ partId: string; indices: number[] }[]> {
+    const parts = new Map<string, number[]>();
+    for (const f of this.videoFragments.values()) {
+      if (f.meetingId !== meetingId) continue;
+      parts.set(f.partId, [...(parts.get(f.partId) ?? []), f.index]);
+    }
+    return Promise.resolve(
+      [...parts.entries()]
+        .sort(([a], [b]) => a.localeCompare(b))
+        .map(([partId, indices]) => ({ partId, indices: indices.sort((a, b) => a - b) })),
+    );
+  }
+
+  readVideoFragment(
+    _workspaceId: string,
+    meetingId: string,
+    partId: string,
+    index: number,
+  ): Promise<Uint8Array> {
+    const fragment = this.videoFragments.get(`${meetingId}/${partId}/${index}`);
+    if (fragment === undefined) return Promise.reject(new Error('no such fragment'));
+    return Promise.resolve(fragment.bytes);
   }
 
   putUsage(usage: SessionUsage): Promise<void> {

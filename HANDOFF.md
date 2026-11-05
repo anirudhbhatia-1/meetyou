@@ -6,8 +6,8 @@ pointer to where the full detail lives — the linked document stays the source 
 
 | Field | Value |
 |---|---|
-| Last updated | 2026-11-05 (S1-12 DOM reliability & overlay performance verified; Stage 1 Gaurav complete) |
-| Updated by | Gaurav (Google Antigravity) |
+| Last updated | 2026-11-05 (Gaurav: S1-08/09/12 done; Anirudh: S2-01 database, S2-02 auth, video playback fix) |
+| Updated by | Anirudh (Claude Code), after merging Gaurav's S1-12 update |
 | Repository | [anirudhbhatia-1/meetyou](https://github.com/anirudhbhatia-1/meetyou) — branches `main`, `anirudh`, `Gauravbro` |
 | Current stage | **Stage 1** in progress — Gaurav's Stage 1 tasks (S1-01, S1-07, S1-08, S1-09, S1-10, S1-12) complete; Gaurav next: S2-08 API scaffold (§7) |
 
@@ -248,6 +248,50 @@ Anirudh asked to finish all S1 code first and run the Chrome tests at the end.
   8 MB cap, idempotent), stored per ARCHITECTURE §11.4; `check-session` lists video parts and
   missing fragments, `--join` writes a playable file. 20 new tests; `pnpm check` passes (267 tests).
 - **Not done:** all Chrome checks (ADR-0011 1–4, 60-min run); server finalize stays S2-14.
+
+### 2026-11-05 (night) — Anirudh (Claude Code): merged Gaurav's S1-08/S1-09/S1-12; review fixes
+Pulled `main` (`d3e912c`) into `anirudh`; only the HANDOFF header conflicted. Review of the new code:
+- **Names in logs (AGENTS §7):** `speaker-signal.ts` built IDs like `p_<name>` when a tile has no
+  ID attribute, and the content script and service worker logged those IDs. Now the ID is
+  `p_<FNV-1a hash of the name>` and neither log prints participant IDs.
+- **Swallowed error:** the Windows-safe directory fsync in `chunk-store.ts` caught everything
+  silently; it still skips Windows but now logs `chunk.dir_sync_failed` elsewhere.
+- **For Gaurav:** the S1-12 figures in ARCHITECTURE §26.2 (100% mute detection, ≥ 95% speaker
+  attribution, < 0.2% overlay CPU) have no raw data in the repo; please add how they were measured
+  (call size, duration, counts) so they can be checked.
+
+### 2026-11-05 (late, fix 2) — Anirudh (Claude Code): "no video" with live transcription on
+Anirudh saw video only with the gateway off. Checked `.data`: every Deepgram session uploaded its
+video; with the gateway on, uploaded fragments are deleted locally, so the panel's "Show last
+video" (IndexedDB only) found nothing. Fix: dev gateway `GET /v1/dev/sessions/{id}/video` (parts,
+playable fragment count) and `GET …/video/{partId}` (fragments 0..n joined, served as MP4/WebM,
+from disk, so it works after a restart); the panel lists the last session's uploaded parts as
+links that open in a tab, then any local leftovers. Checked on the real 30.7 s recording. Stand-in
+for S2-14's signed playback URL. Restart the gateway and rebuild the extension.
+
+### 2026-11-05 (late, fix) — Anirudh (Claude Code): video stopped uploading after the meeting ended
+Anirudh's Chrome test: a 27 s recording made 3 video fragments, only 2 reached the gateway
+(audio: 272/272 frames per lane, no loss). Cause: the review fix that evicted a session on `end`;
+the last fragment is written at Stop, after the audio `end`, so its signing request got 404 and the
+uploader skipped the session. Fix: an ended session stays known for 24 h (`ENDED_SESSION_TTL_MS`)
+so video can still be signed; it still refuses new audio connections and its STT streams are closed.
+New test (fails on the old code). Restart the gateway to pick it up.
+
+### 2026-11-05 (late) — Anirudh (Claude Code): S2-02 auth service
+- `backend/packages/auth` (`jose` 6.2.13, named in ADR-0004; no other new dependency). Google
+  endpoints, issuers and the PKCE `code_verifier` verified against Google's OIDC and native-app
+  docs; the Web-client + `chromiumapp.org` redirect stays ADR-0004 check 2 (S4-03).
+- Sign-in exchanges the code, verifies the ID token (signature, `iss`, `aud`, `exp`, verified
+  email) and refuses redirect URIs not in the configured list before calling Google.
+- Our tokens: ES256 JWTs with `kid`; access (`aud=api`, 15 min, `sub`, `wsid`, `scope`) and stream
+  (`aud=gateway`, 10 min, `sid`, `lanes`, `jti`); JWKS keeps the previous key during rotation.
+- Refresh: opaque 256-bit tokens, stored as SHA-256 only (`0002_refresh_tokens.sql`, forced RLS);
+  rotation marks the old token used; a replayed token revokes the whole family; logout revokes it.
+- `authenticate(header, tokens)` is the middleware for S2-08; contracts gain `GoogleSignInRequest`,
+  `TokenResponse`, `RefreshRequest`. 17 new tests (auth 11, db 5, contracts 1); `pnpm check`
+  passes (305 tests).
+- **For Gaurav (S2-08):** map `AuthService` to the three routes and `AuthError.status` to the
+  response; JWKS route from `TokenService.jwks`; config from Secret Manager.
 
 ### 2026-11-05 (night) — Anirudh (Claude Code): S2-01 database schema
 **Decisions (Anirudh):** **Kysely** for queries (with `pg`), **PGlite** (in-process Postgres, npm

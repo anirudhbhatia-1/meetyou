@@ -216,7 +216,9 @@ describe('Meet Active-Speaker Signal Adapter (S1-08)', () => {
 
       const speakers = detectActiveSpeakers(doc);
       expect(speakers).toHaveLength(1);
-      expect(speakers[0]?.participantId).toBe('p_anirudh_bhatia');
+      const id = speakers[0]?.participantId ?? '';
+      expect(id).toMatch(/^p_[0-9a-f]{8}$/);
+      expect(id).not.toContain('anirudh');
       expect(speakers[0]?.displayName).toBe('Anirudh Bhatia');
     });
 

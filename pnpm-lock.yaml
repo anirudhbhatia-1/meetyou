@@ -46,6 +46,18 @@ importers:
         specifier: ^8.18.2
         version: 8.18.2
 
+  backend/packages/auth:
+    dependencies:
+      '@meetyou/contracts':
+        specifier: workspace:*
+        version: link:../../../shared/contracts
+      '@meetyou/db':
+        specifier: workspace:*
+        version: link:../db
+      jose:
+        specifier: 6.2.13
+        version: 6.2.13
+
   backend/packages/db:
     dependencies:
       '@meetyou/contracts':
@@ -936,6 +948,9 @@ packages:
 
   isexe@2.0.0:
     resolution: {integrity: sha512-RHxMLp9lnKHGHRng9QFhRCMbYAcVpn69smSGcq3f36xjgVVWThj4qqLbTLlq7Ssj8B+fIQ1EuCEGI2lKsyQeIw==}
+
+  jose@6.2.13:
+    resolution: {integrity: sha512-7TIg10ZE1x82YediN+lcrPNvGMKge9yFHQD+Qho/b8y2adfugU3AsvvHfxV0fzyFllT6l9xCjf4RWY9g/Z9PJQ==}
 
   json-bigint@1.0.0:
     resolution: {integrity: sha512-SiPv/8VpZuWbvLSMtTDU8hEfrZWg/mH/nV/b4o0CYbSxu1UIQPLdwKOCIyLQX+VIPO5vrLX3i8qtqFyhdPSUSQ==}
@@ -2206,6 +2221,8 @@ snapshots:
       is-extglob: 2.1.1
 
   isexe@2.0.0: {}
+
+  jose@6.2.13: {}
 
   json-bigint@1.0.0:
     dependencies:

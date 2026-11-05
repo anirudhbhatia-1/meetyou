@@ -482,8 +482,8 @@ chrome.runtime.onMessage.addListener((message, sender) => {
       return false;
     }
     if (record.type === 'meet.speaker-active' && typeof record.participantId === 'string') {
-      // AGENTS §7: Log participantId only, never names or transcripts
-      console.log(`[MeetYou] Background observed speaker.active: ${record.participantId}`);
+      // AGENTS §7: no names or participant IDs in logs.
+      console.log('[MeetYou] Background observed speaker.active');
       return false;
     }
   }

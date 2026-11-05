@@ -51,6 +51,8 @@ MINUTES_GATEWAY_URL=http://127.0.0.1:8787 pnpm --filter @meetyou/extension build
   at `…/video/{partId}/{index}.frag`. URLs last 15 minutes, are bound to the content type, take at
   most 8 MB, and a retry overwrites the same file. They stand in for Cloud Storage signed URLs
   (S2-14).
+  `GET /v1/dev/sessions/{id}/video` lists uploaded parts and `GET …/video/{partId}` plays one
+  (fragments joined); the side panel's "Show last video" uses them.
 - Storage follows ARCHITECTURE §11.4 on local disk:
   `ws/{workspaceId}/meetings/{sessionId}/audio/{lane}/{chunkStartMs}.opus` (or `.pcm16`) plus a
   `.json` manifest written last (commit marker), each fsynced.

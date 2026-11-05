@@ -11,6 +11,8 @@ import {
   type BackgroundMessage,
   type Lane,
 } from '../messages.ts';
+import { GATEWAY_URL } from '../build-config.ts';
+import { listDevVideo } from '../offscreen/dev-gateway.ts';
 import { idbDone, idbRequest, openMinutesDb, VIDEO_STORE } from '../offscreen/idb.ts';
 import type { VideoFragmentRow } from '../offscreen/video-recorder.ts';
 import { parseParticipants, speakerLabel, type ParticipantName } from './speaker-label.ts';
@@ -245,13 +247,46 @@ let uploadPending = 0;
  * Lists every part of the newest recording as a download link. Pause/resume starts a new part, so
  * the part before a pause is kept and listed first; each part plays on its own.
  */
+/**
+ * With the gateway on, fragments are deleted locally once uploaded, so the last recording's video
+ * is listed from the gateway (joined there). Returns how many parts were listed.
+ */
+async function showUploadedVideo(): Promise<number> {
+  const sessionId = current.sessionId;
+  if (GATEWAY_URL === '' || sessionId === null || !sessionId.startsWith('ses_')) return 0;
+  let parts;
+  try {
+    parts = await listDevVideo(GATEWAY_URL, sessionId);
+  } catch (error: unknown) {
+    console.error('sidepanel: gateway video list failed', error);
+    status.textContent = 'Gateway is off: uploaded video cannot be listed.';
+    return 0;
+  }
+  const playable = parts.filter((p) => p.playableFragments > 0);
+  playable.forEach((part, i) => {
+    const pending = part.fragments - part.playableFragments;
+    const link = el('a', {
+      href: part.url,
+      target: '_blank',
+      textContent:
+        `Part ${i + 1} — uploaded (${part.playableFragments} × 10 s)` +
+        (pending > 0 ? `, ${pending} more after a gap` : ''),
+    });
+    const item = el('li');
+    item.append(link);
+    videoLinks.append(item);
+  });
+  return playable.length;
+}
+
 async function showLastVideo(): Promise<void> {
   for (const url of videoUrls) URL.revokeObjectURL(url);
   videoUrls = [];
   videoLinks.replaceChildren();
+  const uploaded = await showUploadedVideo();
   const parts = latestSessionParts(await videoRows());
   if (parts.length === 0) {
-    status.textContent = 'No local video yet.';
+    if (uploaded === 0) status.textContent = 'No video yet.';
     return;
   }
   parts.forEach((part, i) => {

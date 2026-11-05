@@ -47,6 +47,16 @@ function findParentParticipantTile(
   return null;
 }
 
+/** FNV-1a (32-bit) as hex: stable per name within a call, not reversible at a glance. */
+export function nameHash(name: string): string {
+  let hash = 0x811c9dc5;
+  for (let i = 0; i < name.length; i++) {
+    hash ^= name.charCodeAt(i);
+    hash = Math.imul(hash, 0x01000193) >>> 0;
+  }
+  return hash.toString(16).padStart(8, '0');
+}
+
 /**
  * Extracts participant identity from a video tile element.
  */
@@ -88,12 +98,13 @@ function extractTileIdentity(tile: Element): ActiveSpeakerInfo | null {
     }
   }
 
-  // If no participantId attribute exists, synthesize a deterministic ID from display name
+  // Without an ID attribute, derive a deterministic ID from a hash of the name, so the ID itself
+  // never carries the name into logs or events (AGENTS §7).
   const resolvedId =
     participantId !== null
       ? participantId
       : displayName !== undefined
-        ? `p_${displayName.toLowerCase().replace(/\s+/g, '_')}`
+        ? `p_${nameHash(displayName.toLowerCase().replace(/\s+/g, ' ').trim())}`
         : null;
 
   if (resolvedId === null) {

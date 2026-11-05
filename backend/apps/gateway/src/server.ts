@@ -6,6 +6,7 @@ import { WebSocketServer } from 'ws';
 
 import type { ChunkStore } from './chunk-store.ts';
 import { errorCode, log } from './log.ts';
+import { videoExtension } from './session-check.ts';
 import { StreamSession } from './session.ts';
 import type { SttProvider } from './stt/types.ts';
 import { DevTokenIssuer, DevVideoSigner } from './tokens.ts';
@@ -18,8 +19,25 @@ const MAX_SIGN_BODY_BYTES = 16 * 1024;
 /** Standard quality is ~1.3 MB per 10 s fragment (ADR-0011 §3.2); the cap leaves room for keyframes. */
 export const MAX_VIDEO_FRAGMENT_BYTES = 8 * 1024 * 1024;
 
+/**
+ * An ended session stays known this long: video fragments keep uploading after the meeting ends
+ * (ADR-0011 §3.3) and need signed URLs. Its audio stream refuses new connections at once
+ * (`session_ended`) and its STT streams are already closed.
+ */
+export const ENDED_SESSION_TTL_MS = 24 * 60 * 60 * 1000;
+
 const SIGN_PATH = /^\/v1\/dev\/sessions\/([A-Za-z0-9_]+)\/video\/fragments:sign$/;
 const VIDEO_PUT_PATH = /^\/v1\/dev\/video\/([A-Za-z0-9_-]+)$/;
+const VIDEO_LIST_PATH = /^\/v1\/dev\/sessions\/(ses_[0-9A-HJKMNP-TV-Z]{26})\/video$/;
+const VIDEO_PART_PATH =
+  /^\/v1\/dev\/sessions\/(ses_[0-9A-HJKMNP-TV-Z]{26})\/video\/(vp_[0-9A-HJKMNP-TV-Z]{26})$/;
+
+/** Fragments 0..n-1 without a hole: what plays (each MediaRecorder part starts at fragment 0). */
+export function playableFragments(indices: readonly number[]): number {
+  let n = 0;
+  while (indices.includes(n)) n += 1;
+  return n;
+}
 
 export interface GatewayOptions {
   store: ChunkStore;
@@ -29,6 +47,8 @@ export interface GatewayOptions {
   workspaceId?: string;
   tokens?: DevTokenIssuer;
   videoSigner?: DevVideoSigner;
+  /** Overrides ENDED_SESSION_TTL_MS (tests). */
+  endedSessionTtlMs?: number;
 }
 
 export interface Gateway {
@@ -51,7 +71,7 @@ function devCors(req: IncomingMessage): Record<string, string> {
   if (origin === undefined || !allowedOrigin(origin)) return {};
   return {
     'access-control-allow-origin': origin,
-    'access-control-allow-methods': 'POST, PUT',
+    'access-control-allow-methods': 'GET, POST, PUT',
     'access-control-allow-headers': 'content-type',
     vary: 'Origin',
   };
@@ -113,6 +133,7 @@ export function createGateway(options: GatewayOptions): Gateway {
   });
 
   const videoSigner = options.videoSigner ?? new DevVideoSigner();
+  const evictions = new Map<string, ReturnType<typeof setTimeout>>();
 
   /** Dev stand-in for `fragments:sign` (ADR-0011 §3.3): URLs only for a session this gateway holds. */
   const signVideo = async (req: IncomingMessage, res: ServerResponse, sessionId: string) => {
@@ -165,6 +186,45 @@ export function createGateway(options: GatewayOptions): Gateway {
     json(req, res, 200, { ok: true });
   };
 
+  /**
+   * Dev playback of uploaded video (the side panel's "Show last video"): the uploader deletes local
+   * fragments after upload, so the joined part is served from here. Works from disk, also after a
+   * restart. TODO(S2-14): signed playback URL of the finalized MP4 (`GET /meetings/{id}/video`).
+   */
+  const getVideo = async (req: IncomingMessage, res: ServerResponse, path: string) => {
+    const list = VIDEO_LIST_PATH.exec(path);
+    if (list?.[1] !== undefined) {
+      const sessionId = list[1];
+      const parts = await options.store.listVideo(workspaceId, sessionId);
+      json(req, res, 200, {
+        parts: parts.map(({ partId, indices }) => ({
+          partId,
+          fragments: indices.length,
+          playableFragments: playableFragments(indices),
+          url: `http://${req.headers.host ?? 'localhost'}/v1/dev/sessions/${sessionId}/video/${partId}`,
+        })),
+      });
+      return;
+    }
+    const part = VIDEO_PART_PATH.exec(path);
+    const sessionId = part?.[1];
+    const partId = part?.[2];
+    if (sessionId === undefined || partId === undefined) throw new HttpError(404, 'not_found');
+    const stored = (await options.store.listVideo(workspaceId, sessionId)).find(
+      (p) => p.partId === partId,
+    );
+    const count = stored === undefined ? 0 : playableFragments(stored.indices);
+    if (count === 0) throw new HttpError(404, 'not_found');
+    const first = await options.store.readVideoFragment(workspaceId, sessionId, partId, 0);
+    const type = videoExtension(first.subarray(0, 8)) === 'webm' ? 'video/webm' : 'video/mp4';
+    res.writeHead(200, { 'content-type': type, ...devCors(req) });
+    res.write(first);
+    for (let i = 1; i < count; i++) {
+      res.write(await options.store.readVideoFragment(workspaceId, sessionId, partId, i));
+    }
+    res.end();
+  };
+
   const handle = async (req: IncomingMessage, res: ServerResponse): Promise<void> => {
     const url = new URL(req.url ?? '/', 'http://gateway');
     if (req.method === 'GET' && url.pathname === '/healthz') {
@@ -176,6 +236,10 @@ export function createGateway(options: GatewayOptions): Gateway {
     if (req.method === 'OPTIONS') {
       res.writeHead(204, devCors(req));
       res.end();
+      return;
+    }
+    if (req.method === 'GET') {
+      await getVideo(req, res, url.pathname);
       return;
     }
     const putToken = VIDEO_PUT_PATH.exec(url.pathname)?.[1];
@@ -198,7 +262,14 @@ export function createGateway(options: GatewayOptions): Gateway {
           workspaceId,
           store: options.store,
           stt: options.stt,
-          onEnded: () => sessions.delete(sessionId),
+          onEnded: () => {
+            const timer = setTimeout(() => {
+              evictions.delete(sessionId);
+              sessions.delete(sessionId);
+            }, options.endedSessionTtlMs ?? ENDED_SESSION_TTL_MS);
+            timer.unref();
+            evictions.set(sessionId, timer);
+          },
         }),
       );
       const host = req.headers.host ?? 'localhost';
@@ -258,6 +329,8 @@ export function createGateway(options: GatewayOptions): Gateway {
     close: async () => {
       for (const client of wss.clients) client.terminate();
       wss.close();
+      for (const timer of evictions.values()) clearTimeout(timer);
+      evictions.clear();
       await Promise.all([...sessions.values()].map((s) => s.shutdown()));
       await new Promise<void>((resolve) => server.close(() => resolve()));
     },

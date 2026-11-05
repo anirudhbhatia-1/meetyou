@@ -6,7 +6,12 @@ import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 
 import { LocalChunkStore, MemoryChunkStore } from './chunk-store.ts';
-import { createGateway, MAX_VIDEO_FRAGMENT_BYTES, type Gateway } from './server.ts';
+import {
+  createGateway,
+  MAX_VIDEO_FRAGMENT_BYTES,
+  playableFragments,
+  type Gateway,
+} from './server.ts';
 import { checkVideoPart, videoExtension } from './session-check.ts';
 import { DevVideoSigner, VIDEO_URL_TTL_MS } from './tokens.ts';
 
@@ -156,5 +161,50 @@ describe('checkVideoPart', () => {
     expect(videoExtension(new Uint8Array([0, 0, 0, 0x20, 0x66, 0x74, 0x79, 0x70]))).toBe('mp4');
     expect(videoExtension(new Uint8Array([0x1a, 0x45, 0xdf, 0xa3, 0, 0, 0, 0]))).toBe('webm');
     expect(videoExtension(new Uint8Array(8))).toBe('bin');
+  });
+});
+
+describe('dev video playback (side panel "Show last video")', () => {
+  it('lists uploaded parts and serves the joined fragments as one playable file', async () => {
+    const store = new MemoryChunkStore();
+    const { base, sessionId } = await start(store);
+    const urls = await signedUrls(base, sessionId, [0, 1, 3]);
+    const mp4Head = new Uint8Array([0, 0, 0, 0x20, 0x66, 0x74, 0x79, 0x70]);
+    await put(urls[0] ?? '', mp4Head);
+    await put(urls[1] ?? '', new Uint8Array([9, 9]));
+    await put(urls[2] ?? '', new Uint8Array([7]));
+
+    const listed = await fetch(`${base}/v1/dev/sessions/${sessionId}/video`);
+    expect(listed.status).toBe(200);
+    const { parts } = (await listed.json()) as {
+      parts: { partId: string; fragments: number; playableFragments: number; url: string }[];
+    };
+    expect(parts).toEqual([
+      {
+        partId: PART,
+        fragments: 3,
+        playableFragments: 2,
+        url: `${base}/v1/dev/sessions/${sessionId}/video/${PART}`,
+      },
+    ]);
+
+    const video = await fetch(parts[0]?.url ?? '');
+    expect(video.headers.get('content-type')).toBe('video/mp4');
+    // Fragment 3 sits after a gap (2 is missing), so only 0..1 are joined.
+    expect([...new Uint8Array(await video.arrayBuffer())]).toEqual([...mp4Head, 9, 9]);
+  });
+
+  it('answers 404 for a part with nothing playable', async () => {
+    const { base, sessionId } = await start(new MemoryChunkStore());
+    expect((await fetch(`${base}/v1/dev/sessions/${sessionId}/video/${PART}`)).status).toBe(404);
+    expect(
+      (await (await fetch(`${base}/v1/dev/sessions/${sessionId}/video`)).json()) as unknown,
+    ).toEqual({ parts: [] });
+  });
+
+  it('counts playable fragments from 0 up to the first gap', () => {
+    expect(playableFragments([0, 1, 2])).toBe(3);
+    expect(playableFragments([0, 1, 3])).toBe(2);
+    expect(playableFragments([1, 2])).toBe(0);
   });
 });

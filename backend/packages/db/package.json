@@ -5,7 +5,8 @@
   "type": "module",
   "description": "PostgreSQL schema, migrations and the workspace-scoped data-access layer (ARCHITECTURE \u00a711, S2-01).",
   "exports": {
-    ".": "./src/index.ts"
+    ".": "./src/index.ts",
+    "./testing": "./src/testing.ts"
   },
   "scripts": {
     "typecheck": "tsc -p tsconfig.json",

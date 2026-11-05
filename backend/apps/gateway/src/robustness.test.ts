@@ -18,8 +18,12 @@ afterEach(async () => {
   gateway = null;
 });
 
-async function start(store: MemoryChunkStore, stt: SttProvider | null = null) {
-  gateway = createGateway({ store, stt, devEndpoints: true });
+async function start(
+  store: MemoryChunkStore,
+  stt: SttProvider | null = null,
+  endedSessionTtlMs?: number,
+) {
+  gateway = createGateway({ store, stt, devEndpoints: true, endedSessionTtlMs });
   await new Promise<void>((resolve) => gateway?.server.listen(0, '127.0.0.1', resolve));
   const { port } = gateway.server.address() as AddressInfo;
   return { base: `http://127.0.0.1:${port}`, port };
@@ -142,5 +146,41 @@ describe('gateway robustness (code review 2026-11-05)', () => {
     await new Promise((r) => setTimeout(r, 30));
     expect(opens).toBe(1);
     client.socket.close();
+  });
+
+  it('signs and stores video fragments after the meeting ended (ADR-0011 §3.3)', async () => {
+    const store = new MemoryChunkStore();
+    const { base } = await start(store, null, 200);
+    const client = await connectSession(base);
+    await until(() => client.messages.some((m) => m.type === 'ready'));
+    client.sendFrames('me', 0, 4);
+    client.socket.send(JSON.stringify({ type: 'control', action: 'end', at: 500 }));
+    expect(await client.closed).toBe(1000);
+
+    // The last fragment is written when recording stops, after the audio stream has ended.
+    const sign = () =>
+      fetch(`${base}/v1/dev/sessions/${client.sessionId}/video/fragments:sign`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          partId: 'vp_01JC0000000000000000000000',
+          indices: [2],
+          contentType: 'video/mp4',
+        }),
+      });
+    const signed = await sign();
+    expect(signed.status).toBe(201);
+    const { fragments } = (await signed.json()) as { fragments: { url: string }[] };
+    const put = await fetch(fragments[0]?.url ?? '', {
+      method: 'PUT',
+      headers: { 'content-type': 'video/mp4' },
+      body: new Uint8Array([1, 2, 3]),
+    });
+    expect(put.status).toBe(200);
+    expect(store.videoFragments.size).toBe(1);
+
+    // Evicted only after the grace period.
+    await new Promise((r) => setTimeout(r, 300));
+    expect((await sign()).status).toBe(404);
   });
 });

@@ -125,6 +125,28 @@ export const DEFAULT_USER_SETTINGS: Omit<UserSettings, 'consentAcknowledgedAt'> 
   analyticsOptOut: false,
 };
 
+// POST /v1/auth/google (ADR-0004 §4.1): the authorization code from launchWebAuthFlow with PKCE.
+export const GoogleSignInRequest = z.object({
+  code: z.string().min(1).max(2048),
+  /** RFC 7636: 43–128 characters of [A-Za-z0-9-._~]. */
+  codeVerifier: z.string().regex(/^[A-Za-z0-9._~-]{43,128}$/),
+  redirectUri: z.url({ protocol: /^https$/ }),
+});
+
+// Response of /v1/auth/google and /v1/auth/refresh (ADR-0004 §4.2). The web app receives the
+// refresh token as an HttpOnly cookie instead (§4.5).
+export const TokenResponse = z.object({
+  accessToken: z.string().min(1),
+  accessExpiresAt: IsoDateTime,
+  refreshToken: z.string().min(1),
+  refreshExpiresAt: IsoDateTime,
+});
+
+// POST /v1/auth/refresh and POST /v1/auth/logout
+export const RefreshRequest = z.object({
+  refreshToken: z.string().regex(/^[A-Za-z0-9_-]{43}$/, 'Expected a 256-bit base64url token'),
+});
+
 // POST /v1/sessions (ARCHITECTURE §5.1)
 export const StartSessionRequest = z.object({
   platform: Platform,

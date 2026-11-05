@@ -28,9 +28,18 @@ export interface NewAccountIds {
   settingsId: string;
 }
 
+export type RefreshStatus = 'ok' | 'unknown' | 'expired' | 'revoked' | 'reused';
+
+export interface RefreshRotation {
+  status: RefreshStatus;
+  userId: string | null;
+  workspaceId: string | null;
+}
+
 export interface SignInResult {
   userId: string;
-  workspaceId: string;
+  /** Null only for a user left without any membership (e.g. mid account deletion). */
+  workspaceId: string | null;
   created: boolean;
 }
 
@@ -72,6 +81,56 @@ export class Db {
       const row = rows[0];
       if (row === undefined) throw new Error('sign-in returned no row');
       return row;
+    });
+  }
+
+  /** Starts a refresh-token family for a sign-in (ADR-0004 §4.3). `tokenHash` is SHA-256 hex. */
+  async issueRefreshToken(input: {
+    userId: string;
+    workspaceId: string;
+    familyId: string;
+    tokenId: string;
+    tokenHash: string;
+    expiresAt: Date;
+  }): Promise<void> {
+    await this.#kysely.transaction().execute(async (tx) => {
+      await sql`select app_issue_refresh_token(
+        ${input.userId}, ${input.workspaceId}, ${input.familyId}, ${input.tokenId},
+        ${input.tokenHash}, ${input.expiresAt})`.execute(tx);
+    });
+  }
+
+  /**
+   * Rotates a presented refresh token. Commits even when the result is not `ok`, so a detected
+   * reuse leaves the family revoked; the caller turns the status into an error afterwards.
+   */
+  async rotateRefreshToken(input: {
+    tokenHash: string;
+    newTokenId: string;
+    newTokenHash: string;
+    newExpiresAt: Date;
+  }): Promise<RefreshRotation> {
+    return this.#kysely.transaction().execute(async (tx) => {
+      const { rows } = await sql<RefreshRotation>`
+        select status, user_id, workspace_id from app_rotate_refresh_token(
+          ${input.tokenHash}, ${input.newTokenId}, ${input.newTokenHash}, ${input.newExpiresAt})`.execute(
+        tx,
+      );
+      const row = rows[0];
+      if (row === undefined) throw new Error('refresh rotation returned no row');
+      return row;
+    });
+  }
+
+  /** Logout: revokes the family of the presented token. False when the token is unknown. */
+  async revokeRefreshFamily(
+    tokenHash: string,
+    reason: 'logout' | 'account_deleted',
+  ): Promise<boolean> {
+    return this.#kysely.transaction().execute(async (tx) => {
+      const { rows } = await sql<{ revoked: boolean }>`
+        select app_revoke_refresh_family(${tokenHash}, ${reason}) as revoked`.execute(tx);
+      return rows[0]?.revoked === true;
     });
   }
 

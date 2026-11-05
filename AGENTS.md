@@ -138,6 +138,7 @@ tools/stt-benchmark    ✅ STT benchmark: runner, streaming harness, normalizer,
 extension/             (Stage 1) Chrome MV3: service worker, offscreen document, side panel, Meet adapter (esbuild)
 backend/apps/gateway   (S1-05) realtime gateway, local dev
 backend/packages/db    (S2-01) Postgres schema, migrations, workspace-scoped access (Kysely)
+backend/packages/auth  (S2-02) Google sign-in, JWT access/stream tokens, rotating refresh tokens
 docs/                  PRD, features, architecture, design, plan, research, ADRs, benchmark kit, legal drafts
 ```
 

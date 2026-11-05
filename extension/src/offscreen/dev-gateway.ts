@@ -106,3 +106,27 @@ export async function putFragment(url: string, blob: Blob, contentType: string):
   });
   if (!response.ok) throw new Error(`HTTP ${response.status}`);
 }
+
+const DevVideoParts = z.object({
+  parts: z.array(
+    z.object({
+      partId: z.string().min(1),
+      fragments: z.number().int().nonnegative(),
+      playableFragments: z.number().int().nonnegative(),
+      url: z.string().regex(/^https?:\/\//),
+    }),
+  ),
+});
+export type DevVideoPart = z.infer<typeof DevVideoParts>['parts'][number];
+
+/**
+ * Video parts the dev gateway holds for a session, each with a URL that plays the uploaded part
+ * (fragments joined). Uploaded fragments are deleted locally, so this is where they are seen.
+ * TODO(S2-14): replace with `GET /v1/meetings/{id}/video` (signed URL of the finalized MP4).
+ */
+export async function listDevVideo(baseUrl: string, sessionId: string): Promise<DevVideoPart[]> {
+  const url = new URL(`/v1/dev/sessions/${encodeURIComponent(sessionId)}/video`, baseUrl);
+  const response = await fetch(url.href, { signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS) });
+  if (!response.ok) throw new Error(`HTTP ${response.status}`);
+  return DevVideoParts.parse(await response.json()).parts;
+}

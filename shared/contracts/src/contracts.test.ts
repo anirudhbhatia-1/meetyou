@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
+  GoogleSignInRequest,
+  RefreshRequest,
   AUDIO_FRAME_HEADER_BYTES,
   CONSENT_MESSAGE_AUDIO_ONLY,
   CaptureEvent,
@@ -257,5 +259,23 @@ describe('Opus frame payload', () => {
     expect(() => unpackOpusFrame(new Uint8Array(0))).toThrow(RangeError);
     expect(() => packOpusFrame([new Uint8Array(0)])).toThrow(RangeError);
     expect(OPUS_PACKET_MS).toBe(20);
+  });
+});
+
+describe('auth dto (ADR-0004)', () => {
+  it('accepts a PKCE sign-in and a 256-bit refresh token, and refuses malformed ones', () => {
+    const verifier = 'a'.repeat(43);
+    const ok = {
+      code: '4/0Ab',
+      codeVerifier: verifier,
+      redirectUri: 'https://abcdefghijklmnop.chromiumapp.org/oauth2',
+    };
+    expect(GoogleSignInRequest.safeParse(ok).success).toBe(true);
+    expect(GoogleSignInRequest.safeParse({ ...ok, codeVerifier: 'short' }).success).toBe(false);
+    expect(
+      GoogleSignInRequest.safeParse({ ...ok, redirectUri: 'http://example.com/cb' }).success,
+    ).toBe(false);
+    expect(RefreshRequest.safeParse({ refreshToken: 'A'.repeat(43) }).success).toBe(true);
+    expect(RefreshRequest.safeParse({ refreshToken: 'A'.repeat(42) }).success).toBe(false);
   });
 });

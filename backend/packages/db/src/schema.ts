@@ -239,6 +239,23 @@ export interface DeletionRequestsTable extends Audit {
   completedAt: NullableTimestamp;
 }
 
+export interface RefreshTokenFamiliesTable extends Audit {
+  id: string;
+  userId: string;
+  workspaceId: string;
+  revokedAt: NullableTimestamp;
+  revokeReason: 'logout' | 'reuse' | 'account_deleted' | null;
+}
+
+export interface RefreshTokensTable extends Audit {
+  id: string;
+  familyId: string;
+  userId: string;
+  tokenHash: string;
+  expiresAt: Timestamp;
+  usedAt: NullableTimestamp;
+}
+
 export interface Database {
   workspaces: WorkspacesTable;
   users: UsersTable;
@@ -259,4 +276,6 @@ export interface Database {
   feedback: FeedbackTable;
   usageRecords: UsageRecordsTable;
   deletionRequests: DeletionRequestsTable;
+  refreshTokenFamilies: RefreshTokenFamiliesTable;
+  refreshTokens: RefreshTokensTable;
 }

@@ -588,7 +588,7 @@ REST over HTTPS, JSON, versioned under `/v1`. Realtime uses the WebSocket protoc
 ### 12.1 Phase 1 endpoints
 | Area | Endpoints |
 |---|---|
-| Auth | `POST /v1/auth/google` (exchange Google ID token) · `POST /v1/auth/refresh` · `POST /v1/auth/logout` |
+| Auth | `POST /v1/auth/google` (exchange the PKCE authorization code, ADR-0004 §4.1) · `POST /v1/auth/refresh` · `POST /v1/auth/logout` |
 | Me & settings | `GET /v1/me` · `GET/PATCH /v1/settings` |
 | Sessions | `POST /v1/sessions` · `POST /v1/sessions/{id}/stream-token` (reconnects, ADR-0004) · `POST /v1/sessions/{id}/end` · `POST /v1/sessions/{id}/recover` |
 | Meetings | `GET /v1/meetings` · `GET/PATCH/DELETE /v1/meetings/{id}` · `POST /v1/meetings/{id}:restore` (within the delete grace period) |

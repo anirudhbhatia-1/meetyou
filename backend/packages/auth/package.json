@@ -1,0 +1,19 @@
+{
+  "name": "@meetyou/auth",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Google sign-in, our JWT access and stream tokens, rotating refresh tokens, request authentication (ADR-0004, S2-02).",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@meetyou/contracts": "workspace:*",
+    "@meetyou/db": "workspace:*",
+    "jose": "6.2.13"
+  }
+}

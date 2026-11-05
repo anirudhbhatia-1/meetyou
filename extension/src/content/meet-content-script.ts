@@ -67,10 +67,8 @@ function updateSignalObservers(state: string): void {
     }
     if (stopSpeakerObserving === null) {
       stopSpeakerObserving = observeActiveSpeakers(document, (event) => {
-        // AGENTS §7: Do not log participant names; log ID only.
-        console.log(
-          `[MeetYou] Active speaker: ${event.speaker.participantId} (self=${event.speaker.isSelf})`,
-        );
+        // AGENTS §7: no names in logs; Meet's own participant IDs are not logged either.
+        console.log(`[MeetYou] Active speaker changed (self=${event.speaker.isSelf})`);
         notifyExtension({
           type: 'meet.speaker-active',
           participantId: event.speaker.participantId,

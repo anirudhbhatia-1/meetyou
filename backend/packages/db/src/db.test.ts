@@ -27,10 +27,13 @@ function accountIds(): NewAccountIds {
 }
 
 async function signIn(db: Db, sub: string) {
-  return db.signInGoogleUser(
+  const result = await db.signInGoogleUser(
     { googleSub: sub, email: `${sub}@example.com`, displayName: `User ${sub}` },
     accountIds(),
   );
+  const { workspaceId } = result;
+  if (workspaceId === null) throw new Error('sign-in returned no workspace');
+  return { ...result, workspaceId };
 }
 
 async function addMeeting(db: Db, workspaceId: string): Promise<string> {
@@ -56,7 +59,7 @@ describe('migrations', () => {
     const { rows } = await env.pg.query<{ version: string }>(
       'SELECT version FROM schema_migrations',
     );
-    expect(rows.map((r) => r.version)).toEqual(['0001']);
+    expect(rows.map((r) => r.version)).toEqual(['0001', '0002']);
   });
 });
 
@@ -214,5 +217,69 @@ describe('schema rules', () => {
           .execute(),
       ),
     ).rejects.toThrow(/check constraint/);
+  });
+});
+
+describe('refresh tokens (ADR-0004 §4.3)', () => {
+  const hash = (n: number) => n.toString(16).padStart(64, '0');
+  const later = () => new Date(Date.now() + 30 * 24 * 3600 * 1000);
+
+  async function issued() {
+    const user = await signIn(env.db, 'r');
+    await env.db.issueRefreshToken({
+      userId: user.userId,
+      workspaceId: user.workspaceId,
+      familyId: id('rtf'),
+      tokenId: id('rt'),
+      tokenHash: hash(1),
+      expiresAt: later(),
+    });
+    return user;
+  }
+
+  const rotate = (from: number, to: number, expiresAt = later()) =>
+    env.db.rotateRefreshToken({
+      tokenHash: hash(from),
+      newTokenId: id('rt'),
+      newTokenHash: hash(to),
+      newExpiresAt: expiresAt,
+    });
+
+  it('rotates: the old token is spent and the new one works', async () => {
+    const user = await issued();
+    expect(await rotate(1, 2)).toEqual({
+      status: 'ok',
+      userId: user.userId,
+      workspaceId: user.workspaceId,
+    });
+    expect((await rotate(2, 3)).status).toBe('ok');
+  });
+
+  it('revokes the whole family when a used token comes back (theft signal)', async () => {
+    await issued();
+    await rotate(1, 2);
+    expect((await rotate(1, 9)).status).toBe('reused');
+    // The legitimate holder's newer token is dead too: both parties must sign in again.
+    expect((await rotate(2, 3)).status).toBe('revoked');
+  });
+
+  it('refuses unknown and expired tokens', async () => {
+    await issued();
+    expect((await rotate(7, 8)).status).toBe('unknown');
+    expect((await rotate(1, 2, new Date(Date.now() - 1000))).status).toBe('ok');
+    expect((await rotate(2, 3)).status).toBe('expired');
+  });
+
+  it('logout revokes the family', async () => {
+    await issued();
+    expect(await env.db.revokeRefreshFamily(hash(1), 'logout')).toBe(true);
+    expect((await rotate(1, 2)).status).toBe('revoked');
+    expect(await env.db.revokeRefreshFamily(hash(5), 'logout')).toBe(false);
+  });
+
+  it('keeps token rows invisible without the token or its user', async () => {
+    await issued();
+    expect((await env.pg.query('SELECT id FROM refresh_tokens')).rows).toEqual([]);
+    expect((await env.pg.query('SELECT id FROM refresh_token_families')).rows).toEqual([]);
   });
 });

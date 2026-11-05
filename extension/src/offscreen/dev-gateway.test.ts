@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { createDevSessionWithRetry } from './dev-gateway.ts';
+import { createDevSessionWithRetry, listDevVideo } from './dev-gateway.ts';
 
 afterEach(() => {
   vi.unstubAllGlobals();
@@ -33,5 +33,23 @@ describe('createDevSessionWithRetry', () => {
     const session = createDevSessionWithRetry('http://127.0.0.1:8787', () => undefined, 2);
     await vi.advanceTimersByTimeAsync(1_000);
     expect(await session).toBeNull();
+  });
+});
+
+describe('listDevVideo', () => {
+  it('reads the uploaded parts of a session from the gateway', async () => {
+    const part = {
+      partId: 'vp_01JC0000000000000000000000',
+      fragments: 3,
+      playableFragments: 3,
+      url: 'http://127.0.0.1:8787/v1/dev/sessions/ses_1/video/vp_01JC0000000000000000000000',
+    };
+    let requested = '';
+    vi.stubGlobal('fetch', (url: string) => {
+      requested = url;
+      return Promise.resolve(new Response(JSON.stringify({ parts: [part] })));
+    });
+    expect(await listDevVideo('http://127.0.0.1:8787', 'ses_1')).toEqual([part]);
+    expect(requested).toBe('http://127.0.0.1:8787/v1/dev/sessions/ses_1/video');
   });
 });
