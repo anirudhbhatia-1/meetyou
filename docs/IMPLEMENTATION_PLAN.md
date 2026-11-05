@@ -145,7 +145,7 @@ All Stage 0 work was done by Anirudh (Claude Code) on branch `anirudh`. Two prod
 | Task | Status | Result / what moved |
 |---|---|---|
 | S0-01 | ✅ Replaced | No consented recordings were available, so the benchmark used the public **MUCS 2021 Hindi-English** set (20 clips, CC BY-SA 4.0). The consent and recording kit stays in `docs/benchmark/` for meeting recordings during **S1 dogfooding** |
-| S0-02 | ✅ Done | Deepgram (`mip_opt_out`) and Gemini (free tier — public data only) keys used; Sarvam used then dropped. **Google:** enable Speech-to-Text in the ADR-0002 project, data logging off, ADC login — needed for the ADR-0001 gate |
+| S0-02 | ✅ Done | Deepgram (`mip_opt_out`) and Gemini (free tier — public data only) keys used; Sarvam used then dropped. Google Speech-to-Text is no longer needed (Deepgram only, ADR-0001 §0, 2026-11-05) |
 | S0-03 | ✅ Done | Annotation guideline; canonical Hinglish list v1 (92 entries) |
 | S0-04 / S0-05 | ✅ Replaced | References come from the dataset (`bench import-kaldi`); own annotation moves to S1 dogfooding |
 | S0-06 | ✅ Done | Batch runner; Phase A run on 20 clips for Deepgram, Gemini, Sarvam |
@@ -187,13 +187,13 @@ answer ARCHITECTURE §26.2.
 | S1-08 | **Active-speaker and mute signals:** observe Meet's DOM, emit `speaker.active` and mute events per the contract | Gaurav | S1-07, S0-16 | Events logged with timestamps on a 4-person call |
 | S1-09 | **Prompt chip prototype in Shadow DOM** (no styling polish) to test user-gesture entry points for capture and `sidePanel.open()` | Gaurav | S1-01 | Answers to §26.2 questions 1 and 7 written up |
 | S1-10 | **Staging infrastructure v0** (Terraform, `asia-south1`): Cloud Run services for gateway/API/workers, Cloud SQL, Cloud Storage bucket with lifecycle rule, Secret Manager, Redis | Gaurav | ADR-0002 | `terraform apply` creates staging from scratch |
-| S1-11 | **Measurements and long sessions:** CPU/memory, echo leakage on laptop speakers, 2-hour meeting through Cloud Run's 60-minute reconnect (after S2 sign-in, see S1-05), backlog catch-up speed per provider, gateway cost per session | Anirudh | S1-05 | §26.2 questions 2, 3, 5, 6 written up; ADR-0003 decided |
+| S1-11 | **Measurements and long sessions:** CPU/memory, echo leakage on laptop speakers, 2-hour meeting through Cloud Run's 60-minute reconnect (after S2 sign-in, see S1-05), Deepgram backlog catch-up speed, gateway cost per session | Anirudh | S1-05 | §26.2 questions 2, 3, 5, 6 written up; ADR-0003 decided |
 | S1-13 | **Video capture spike** ([ADR-0011](adr/0011-video-screen-recording.md) §5): `MediaRecorder` on the tab video + WebAudio mix in the offscreen document, 10 s fragments to IndexedDB `video_buffer`, MIME support, hidden-tab rendering, CPU/battery with video on/off, audio-first uploader on a 2 Mbps link | Anirudh | S1-02, S1-04 | ADR-0011 checks 1–4 recorded; audio loss 0 with video on |
 | S1-14 | ~~**ADR-0001 gate** with Google Chirp 3~~ — **cancelled 2026-11-05**: Deepgram is the only STT provider (ADR-0001 §0) | Anirudh | — | — |
 | S1-12 | **DOM signal reliability and overlay performance:** active-speaker accuracy on 2/4/6-person calls; glass `backdrop-filter` cost inside Meet | Gaurav | S1-08, S1-09 | §26.2 questions 4 and 8 written up |
 
-**Exit criteria (PRD M1):** a 60-minute Meet call recorded with no audio loss, with video on ·
-ADR-0001 gate run · CPU/memory measured ·
+**Exit criteria (PRD M1):** a 60-minute Meet call recorded with no audio loss, with video on, live Deepgram
+transcript for the whole call · CPU/memory measured ·
 user-gesture and permission questions answered · ADR-0003 accepted · findings recorded in
 ARCHITECTURE §26.2.
 
