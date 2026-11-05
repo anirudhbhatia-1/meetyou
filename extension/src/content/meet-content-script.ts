@@ -13,6 +13,7 @@ import {
   type SelectorHealthReport,
 } from '../adapters/meet/health.ts';
 import { extractMeetingMetadata, type MeetingMetadata } from '../adapters/meet/metadata.ts';
+import { PromptChip } from './prompt-chip.ts';
 
 /**
  * Best effort: after an extension reload this page keeps the old content script, whose runtime
@@ -27,6 +28,18 @@ function notifyExtension(message: unknown): void {
 }
 
 notifyExtension({ type: 'meet.page-ready' });
+
+const promptChip = new PromptChip(document, {
+  onStart: () => {
+    console.log('[MeetYou] Prompt chip: user clicked Start');
+    // Test user-gesture entry points for sidePanel.open() and tabCapture (S1-09)
+    notifyExtension({ target: 'background', type: 'prompt.open-sidepanel' });
+    notifyExtension({ target: 'background', type: 'prompt.start-recording' });
+  },
+  onDismiss: () => {
+    console.log('[MeetYou] Prompt chip: dismissed by user');
+  },
+});
 
 function broadcastState(
   snapshot: ReturnType<typeof detectCallState>,
@@ -44,6 +57,9 @@ function broadcastState(
     console.error('[MeetYou] Selector health is BROKEN:', healthReport);
   }
 
+  // Update prompt chip visibility based on call state (DESIGN §8.2)
+  promptChip.updateCallState(snapshot.state);
+
   notifyExtension({ type: 'meet.state-changed', snapshot, metadata, healthReport });
 }
 
@@ -60,21 +76,29 @@ const stopObserving = observeCallState(document, (snapshot) => {
   broadcastState(snapshot, metadata, healthReport);
 });
 
-// 3. Respond to pull requests from side panel
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null;
+}
+
+// 3. Respond to runtime messages
 chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
-  if (
-    typeof message === 'object' &&
-    message !== null &&
-    'type' in message &&
-    message.type === 'meet.get-state'
-  ) {
+  if (!isRecord(message)) return;
+
+  if (message.type === 'meet.get-state') {
     const current = detectCallState(document, window.location.href);
     const metadata = extractMeetingMetadata(document, window.location.href);
     const healthReport = generateSelectorHealthReport(document, current.state);
     sendResponse({ snapshot: current, metadata, healthReport });
+  } else if (
+    message.target === 'content' &&
+    message.type === 'recording.state' &&
+    typeof message.status === 'string'
+  ) {
+    promptChip.updateRecordingStatus(message.status);
   }
 });
 
 window.addEventListener('beforeunload', () => {
+  promptChip.unmount();
   stopObserving();
 });

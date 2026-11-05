@@ -6,10 +6,10 @@ pointer to where the full detail lives — the linked document stays the source 
 
 | Field | Value |
 |---|---|
-| Last updated | 2026-11-05 (S1-13 video uploader done; S1-10 staging infra live on GCP; Deepgram only) |
+| Last updated | 2026-11-05 (S1-09 prompt chip in Shadow DOM verified in Chrome; S1-10 done) |
 | Updated by | Gaurav (Google Antigravity) |
 | Repository | [anirudhbhatia-1/meetyou](https://github.com/anirudhbhatia-1/meetyou) — branches `main`, `anirudh`, `Gauravbro` |
-| Current stage | **Stage 1** in progress — S1-01, S1-02, S1-07, S1-10, S1-13 done; Gaurav next: S1-09, S1-08 (§7) |
+| Current stage | **Stage 1** in progress — S1-01, S1-02, S1-07, S1-09, S1-10, S1-13 done; Gaurav next: S1-08 (§7) |
 
 ---
 
@@ -172,7 +172,7 @@ Facts learned so far that change how we build. Full sources in STT_PREFLIGHT.md 
 
 Stage 0 is complete (status table: IMPLEMENTATION_PLAN.md → "Stage 0 status"). Next, Stage 1:
 
-1. **Gaurav:** S1-01, S1-07, S1-10 done; next: S1-09 (prompt chip in Shadow DOM) and S1-08 (active speaker & mute signals).
+1. **Gaurav:** S1-01, S1-07, S1-10, S1-09 done; next: S1-08 (active speaker & mute signals).
 2. **Anirudh:** S1-02..S1-06 capture path, **S1-13 video capture spike** (ADR-0011 checks), S1-14 was
    cancelled 2026-11-05 (Deepgram only, ADR-0001 §0).
 3. Record consented dogfooding meetings for benchmark Phases E–G (kit in `docs/benchmark/`).
@@ -190,6 +190,18 @@ Stage 0 is complete (status table: IMPLEMENTATION_PLAN.md → "Stage 0 status").
 ## 9. Session log
 
 Newest first. One entry per working session (either person).
+
+### 2026-11-05 (night) — Gaurav (Google Antigravity): S1-09 prompt chip in Shadow DOM verified
+**Done** (branch `Gauravbro`)
+- Implemented `PromptChip` class (`extension/src/content/prompt-chip.ts`) rendered in an isolated Shadow DOM container over Google Meet (`#meetyou-prompt-root`, top 18px / right 18px).
+- Glass card design per DESIGN §8.2 with title, reminder line, "Start", and "Not now" action buttons.
+- Keyboard accessible: Escape key dismisses the prompt chip.
+- Cleanly updates with Meet call state: shows on `in_call`, hides on `ended`/`lobby`, auto-hides when recording starts.
+- **Chrome verification passed live on Google Meet:**
+  - Clicking "Not now" or pressing Escape dismisses the chip cleanly and prevents re-appearance during the call.
+  - Clicking "Start" successfully triggers `chrome.sidePanel.open({ tabId })` and initiates `startRecording` (`tabCapture`).
+  - Questions 1 & 7 of ARCHITECTURE §26.2 answered: In-page prompt chip click in Shadow DOM satisfies Chrome user-gesture requirements.
+- 17 test files, 128 tests passing; monorepo check clean.
 
 ### 2026-11-05 (latest) — Anirudh (Claude Code): S1-13 video upload and data saver
 Anirudh asked to finish all S1 code first and run the Chrome tests at the end.

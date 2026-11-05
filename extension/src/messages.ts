@@ -22,7 +22,10 @@ export type BackgroundMessage =
   | { target: 'background'; type: 'capture.link'; link: StreamLink }
   | { target: 'background'; type: 'capture.video'; video: VideoStatus }
   /** Every uploadable video fragment is uploaded; the offscreen document may close (ADR-0011). */
-  | { target: 'background'; type: 'capture.upload_idle' };
+  | { target: 'background'; type: 'capture.upload_idle' }
+  /** In-meeting prompt chip user actions (S1-09). */
+  | { target: 'background'; type: 'prompt.start-recording' }
+  | { target: 'background'; type: 'prompt.open-sidepanel' };
 
 export type OffscreenMessage =
   | { target: 'offscreen'; type: 'capture.start'; streamId: string; recordVideo: boolean }
@@ -121,6 +124,8 @@ const SIMPLE_BACKGROUND = new Set<string>([
   'capture.tab_ended',
   'capture.mic_lost',
   'capture.upload_idle',
+  'prompt.start-recording',
+  'prompt.open-sidepanel',
 ]);
 
 export function parseBackgroundMessage(message: unknown): BackgroundMessage | null {
