@@ -6,7 +6,7 @@ pointer to where the full detail lives — the linked document stays the source 
 
 | Field | Value |
 |---|---|
-| Last updated | 2026-11-05 (UI ownership moved to Anirudh; full code review fixes pushed) |
+| Last updated | 2026-11-05 (S2-01 database schema in code; UI ownership moved to Anirudh) |
 | Updated by | Anirudh (Claude Code) |
 | Repository | [anirudhbhatia-1/meetyou](https://github.com/anirudhbhatia-1/meetyou) — branches `main`, `anirudh`, `Gauravbro` |
 | Current stage | **Stage 1** in progress — S1-01, S1-02, S1-07, S1-10, S1-13 done; Gaurav next: S1-09, S1-08 (§7) |
@@ -209,6 +209,25 @@ Anirudh asked to finish all S1 code first and run the Chrome tests at the end.
   8 MB cap, idempotent), stored per ARCHITECTURE §11.4; `check-session` lists video parts and
   missing fragments, `--join` writes a playable file. 20 new tests; `pnpm check` passes (267 tests).
 - **Not done:** all Chrome checks (ADR-0011 1–4, 60-min run); server finalize stays S2-14.
+
+### 2026-11-05 (night) — Anirudh (Claude Code): S2-01 database schema
+**Decisions (Anirudh):** **Kysely** for queries (with `pg`), **PGlite** (in-process Postgres, npm
+dev dependency) for tests. Versions pinned to releases at least two weeks old: kysely 0.29.7,
+pg 8.23.1, @electric-sql/pglite 0.5.10. A spike confirmed PGlite enforces RLS for a non-superuser.
+- `backend/packages/db`: `migrations/0001_init.sql` with every PRD §13 table plus `video_assets`
+  (ADR-0011) and `meetings.session_id` (StartSessionResponse has both IDs); text + CHECK for value
+  sets matching `shared/contracts`; `updated_at` triggers.
+- **Tenancy:** forced RLS on every table keyed on `app.workspace_id`; `Db.inWorkspace()` is the only
+  query path and sets it per transaction; children reference `(meeting_id, workspace_id)` so they
+  cannot point at another workspace. `users` has no workspace_id: visible only to its own sign-in.
+  `app_sign_in_google_user()` creates user + personal workspace + owner membership + settings.
+- Tests (9, PGlite, as a non-superuser role like Cloud SQL's `meetyou_app`): cross-tenant
+  read/write/update/delete and foreign-key attempts fail; nothing is visible without a workspace;
+  sign-in is idempotent. `pnpm check` passes (288 tests).
+- `migrate-cli.ts` applies migrations with `DATABASE_URL`. **Not applied to staging yet** (Cloud SQL
+  is private-IP only; needs a Cloud Run job or the proxy from inside the VPC — S2-12).
+- **For Gaurav (S2-09):** query through `Db.inWorkspace`; never connect as a superuser or a
+  `BYPASSRLS` role. Open: the retention scheduler's cross-workspace path (S2-10).
 
 ### 2026-11-05 (latest) — Anirudh (Claude Code): UI ownership
 **Decision (Anirudh):** Anirudh builds the UI, not Gaurav. Recorded in IMPLEMENTATION_PLAN §1.1

@@ -208,7 +208,7 @@ tenant-isolated segments, visible through the API.
 ### Tasks
 | ID | Task and approach | Owner | Depends on | Done when |
 |---|---|---|---|---|
-| S2-01 | **Database schema and migrations** (PRD §13) with row-level security keyed on workspace, data-access layer that refuses unscoped queries, cross-tenant tests | Anirudh | ADR-0002 | Migrations apply on staging; cross-tenant tests fail as expected |
+| S2-01 | **Database schema and migrations** (PRD §13) with row-level security keyed on workspace, data-access layer that refuses unscoped queries, cross-tenant tests. **Code done 2026-11-05** (`backend/packages/db`, Kysely + PGlite tests); staging apply pending | Anirudh | ADR-0002 | Migrations apply on staging; cross-tenant tests fail as expected |
 | S2-02 | **Auth service** (ADR-0004): Google ID token exchange, access tokens, rotating refresh tokens with reuse detection, session-scoped stream tokens, auth middleware package | Anirudh | S2-01 | Token tests pass; middleware published for the API |
 | S2-03 | **Provider layer** (ARCHITECTURE §7): STT streaming/batch, LLM, transliterator interfaces, capability descriptors, registry, enforced opt-outs, free-key guard by environment (free Gemini key only in `local`/`ci`), adapter for the ADR-0001 provider (Deepgram Nova-3, streaming and pre-recorded) | Anirudh | ADR-0001 | Contract tests against each adapter |
 | S2-04 | **Gateway, production version:** Redis session state, resume on any instance, per-lane STT sessions with keep-alive and rotation overlap, outage handling (degraded health, batch-later marking), glossary terms in session config | Anirudh | S1-05, S2-03 | Kill-an-instance test resumes with no loss |

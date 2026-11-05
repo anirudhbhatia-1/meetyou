@@ -3,8 +3,7 @@ packages:
   - tools/*
   - extension
   - backend/apps/*
-  # Added when their stages start (IMPLEMENTATION_PLAN.md):
-  # - backend/packages/*
+  - backend/packages/*
 
 allowBuilds:
   # esbuild's postinstall only verifies the platform binary that pnpm already installs as an

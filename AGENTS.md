@@ -136,7 +136,8 @@ shared/contracts       ✅ zod schemas: capture events, WS protocol, REST DTOs, 
 shared/design-tokens   ✅ colour/type/radius tokens, tokens.css, bundled fonts, contrast tests
 tools/stt-benchmark    ✅ STT benchmark: runner, streaming harness, normalizer, scorer
 extension/             (Stage 1) Chrome MV3: service worker, offscreen document, side panel, Meet adapter (esbuild)
-backend/apps/gateway   (S1-05) realtime gateway, local dev; API, workers, providers, db follow in Stage 2
+backend/apps/gateway   (S1-05) realtime gateway, local dev
+backend/packages/db    (S2-01) Postgres schema, migrations, workspace-scoped access (Kysely)
 docs/                  PRD, features, architecture, design, plan, research, ADRs, benchmark kit, legal drafts
 ```
 
