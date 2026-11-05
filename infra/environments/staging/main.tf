@@ -24,6 +24,8 @@ provider "google" {
 # 1. Enable required Google Cloud APIs for Stage 1 & Stage 2
 locals {
   services = [
+    "cloudresourcemanager.googleapis.com", # Master Resource Manager API
+    "iam.googleapis.com",              # Identity and Access Management for service accounts
     "run.googleapis.com",              # Cloud Run for Gateway & API
     "sqladmin.googleapis.com",         # Cloud SQL for PostgreSQL 16
     "storage.googleapis.com",          # Cloud Storage for audio/video chunks
