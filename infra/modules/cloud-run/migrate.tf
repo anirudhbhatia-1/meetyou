@@ -18,6 +18,12 @@ resource "google_cloud_run_v2_job" "migrate" {
   location = var.region
   project  = var.project_id
 
+  labels = {
+    environment = var.environment
+    managed_by  = "terraform"
+    project     = "meetyou"
+  }
+
   template {
     template {
       service_account = google_service_account.migrate_sa.email
@@ -43,13 +49,6 @@ resource "google_cloud_run_v2_job" "migrate" {
           value = var.environment
         }
       }
-
-      labels = {
-        environment = var.environment
-        managed_by  = "terraform"
-        project     = "meetyou"
-      }
     }
   }
 }
-
