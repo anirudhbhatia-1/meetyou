@@ -344,12 +344,16 @@ the service worker (persisted in `chrome.storage.session`) and every surface sub
   width `min(300px, calc(100% − 36px))`, glass, radius 18, padding 16, gap 12. Must not overlap
   Meet's own controls or participant panel; if Meet's right-hand panel is open, shift left of it.
 - Brand tile 26 px + "Take notes for this call?" (14/600).
-- Body: "Nothing joins the call. Recording starts only when you press Start." (13, `#3a3b35`).
+- Body: "Nothing joins the call. To start, press {shortcut} or click the MeetYou (M) icon in
+  Chrome's toolbar, then Start." (13, `#3a3b35`); {shortcut} is a small key cap, **Ctrl+Shift+R**
+  on a Mac (Control) and **Alt+Shift+R** elsewhere. Chrome lets an extension record a tab only after
+  its toolbar icon or shortcut, never after a click in the page (ARCHITECTURE §26.2 Q1, 2026-11-06),
+  so the prompt explains how to start instead of offering a Start button.
 - Pre-recording reminder (12, `muted`): "Audio and the Meet tab's video will be recorded." When video
   is off for this meeting (setting off or retention "Delete after notes"): "Audio will be recorded."
   (FR-CAP-14, ADR-0011 §3.5).
-- **Start** (primary, flex 1, 40 px) · **Not now** (secondary on glass). "Not now" hides it for this
-  call; the toolbar icon still starts recording.
+- **Not now** (secondary on glass, right-aligned). It hides the prompt for this call; the toolbar
+  icon and the shortcut still start recording.
 - Appears ≤ 5 s after joining, never in the lobby or on the Meet home page. Hidden when the setting
   "Offer to take notes when I join a call" is off.
 - Keyboard: focusable, `Esc` = Not now. Announced via `aria-live="polite"` once.
@@ -491,7 +495,7 @@ All states use colour **and** text (UI-02). Amber = degraded, red = stopped.
 | **Consent post failed** | — | — | §8.5 failure banner | FR-CON-01 |
 | **Video stopped** (encoder error, Meet tab video lost) [SPEC] | unchanged | `video` icon removed | Banner (warning): "Screen recording stopped. Audio is still being recorded." Video status line shows "Video off" | FR-CAP-12, ADR-0011 |
 | **Whole screen sharing ended** (P1, user pressed Chrome's "Stop sharing") [SPEC] | unchanged | `video` icon removed | Toast "Screen recording stopped. Audio is still being recorded." | FR-CAP-15 |
-| **Error** | red + "Recording stopped" | red pill | "Something went wrong and recording stopped at {mm:ss}. Your audio so far is safe." **Start again** · **Get help** | NFR-REL |
+| **Error** | red + "Recording stopped" | red pill | "Something went wrong and recording stopped at {mm:ss}. Your audio so far is safe." **Start again** · **Get help**. When Chrome refused the tab (`capture_not_allowed`): the toolbar-icon explanation and **Dismiss** only — clicking the icon restarts the recording by itself, and a Start in the panel would be refused again. | NFR-REL |
 | **Crash recovery** (next launch) | — | — | Library top banner: "A recording from {time} didn't finish. Recover it?" **Recover meeting** · **Discard** | FR-CAP-08 |
 | **Session limit** | — | — | At 3:45:00 toast "Recording will stop in 15 minutes (4-hour limit)." | FR-REC-08 |
 | **Second Meet tab** | — | — | Alert "You're already recording another call" · Cancel · **Stop that one and start here** | FR-REC-07 |
@@ -946,7 +950,7 @@ Sentence case everywhere. All strings in an i18n resource file from day one; Hin
 
 | Context | Strings |
 |---|---|
-| Meet prompt | "Take notes for this call?" · "Nothing joins the call. Recording starts only when you press Start." · Start · Not now |
+| Meet prompt | "Take notes for this call?" · "Nothing joins the call. To start, press {shortcut} or click the MeetYou (M) icon in Chrome's toolbar, then Start." · Not now |
 | Meet prompt reminder | "Audio and the Meet tab's video will be recorded." · "Audio will be recorded." |
 | Panel ready | "Ready when you are" · "Your mic and the Meet tab are recorded as two separate lanes, so you're always labelled correctly." · Start taking notes |
 | Recording options | Record video · "Records what the Meet tab shows — the video grid and anything people present." · Video quality · Standard · Data saver · "Data saver uses less upload — good for slow or mobile connections." · What to record · Meet tab · Whole screen (P1) · "Video is off because recordings are deleted as soon as your notes are ready. Video is only kept for replay." · Change in Settings |

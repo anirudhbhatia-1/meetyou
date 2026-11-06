@@ -4,22 +4,20 @@ import { lightColors as c, fonts, radius } from '@meetyou/design-tokens';
  * Meet prompt in Shadow DOM (S1-09 prototype, restyled to DESIGN §8.2 in S4-04).
  *
  * Appears when `in_call` is detected on meet.google.com. Encapsulated entirely in Shadow DOM
- * so Google Meet styles cannot leak in or break its appearance. Its Start click is the user
- * gesture for sidePanel.open() and tabCapture (ARCHITECTURE §26.2).
+ * so Google Meet styles cannot leak in or break its appearance. It has no Start button: Chrome
+ * allows tab capture only after the toolbar icon or the keyboard shortcut (a click in the page
+ * does not invoke the extension, verified 2026-11-06; ARCHITECTURE §26.2 Q1), so it says how to
+ * start instead of offering a button that is refused.
  * TODO(S4-04): shift left of Meet's right-hand panel when it is open (§8.2) — needs a selector
  * for that panel in adapters/meet/selectors.ts, verified on real Meet.
  */
 
 export interface PromptChipCallbacks {
-  onStart: () => void;
   onDismiss: () => void;
 }
 
 /** Recording statuses during which the chip must stay hidden (capture-state.ts CAPTURING). */
 const ACTIVE_STATUSES = new Set(['starting', 'recording', 'paused', 'reconnecting', 'stopping']);
-
-/** Problems reported back by the service worker after a chip action. */
-export type PromptProblem = 'start_failed' | 'panel_failed';
 
 /** Pre-recording reminder (§8.2, FR-CAP-14): says whether the screen is recorded too. */
 export function reminderText(recordVideo: boolean): string {
@@ -28,10 +26,19 @@ export function reminderText(recordVideo: boolean): string {
     : 'Audio will be recorded.';
 }
 
-const PROBLEM_TEXT: Record<PromptProblem, string> = {
-  start_failed: 'Recording did not start. Click the MeetYou (M) icon in Chrome’s toolbar to start.',
-  panel_failed: 'Recording started. Click the MeetYou (M) icon in Chrome’s toolbar to see notes.',
-};
+/** The manifest's `toggle-recording` shortcut (MacCtrl is the Control key on a Mac). */
+export function startShortcut(userAgent: string): string {
+  return /Mac/i.test(userAgent) ? 'Ctrl+Shift+R' : 'Alt+Shift+R';
+}
+
+/** §8.2 body: the two ways Chrome accepts to start recording a tab. */
+export function startHint(userAgent: string): { before: string; shortcut: string; after: string } {
+  return {
+    before: 'Nothing joins the call. To start, press ',
+    shortcut: startShortcut(userAgent),
+    after: ' or click the MeetYou (M) icon in Chrome’s toolbar, then Start.',
+  };
+}
 
 export class PromptChip {
   private readonly doc: Document;
@@ -43,7 +50,6 @@ export class PromptChip {
   private recordingActive = false;
   private meetingCode: string | null = null;
   private liveRegion: HTMLElement | null = null;
-  private problemEl: HTMLElement | null = null;
   private reminderEl: HTMLElement | null = null;
   // TODO(S4-12): also off when retention is "Delete after notes" (ADR-0011 §3.5).
   private recordVideo = true;
@@ -76,7 +82,7 @@ export class PromptChip {
     host.style.zIndex = '2147483647';
     host.style.display = 'none';
 
-    // Closed, so page scripts cannot reach the Start button through `host.shadowRoot`.
+    // Closed, so page scripts cannot reach the chip's buttons through `host.shadowRoot`.
     const shadow = host.attachShadow({ mode: 'closed' });
     this.shadow = shadow;
     this.host = host;
@@ -133,7 +139,6 @@ export class PromptChip {
       this.host = null;
       this.shadow = null;
       this.liveRegion = null;
-      this.problemEl = null;
       this.isVisible = false;
     }
   }
@@ -160,18 +165,6 @@ export class PromptChip {
   public updateRecordingStatus(status: string): void {
     this.recordingActive = ACTIVE_STATUSES.has(status);
     if (this.recordingActive) this.hide();
-  }
-
-  /** Shows the chip again with a short explanation after a chip action failed. */
-  public showProblem(problem: PromptProblem): void {
-    if (this.host === null) this.mount();
-    if (this.problemEl !== null) this.problemEl.textContent = PROBLEM_TEXT[problem];
-    if (problem === 'start_failed') this.recordingActive = false;
-    if (this.host !== null) {
-      this.host.style.display = 'block';
-      this.isVisible = true;
-      if (this.liveRegion !== null) this.liveRegion.textContent = PROBLEM_TEXT[problem];
-    }
   }
 
   /** The "Record video" setting, so the reminder says what will be recorded. */
@@ -221,47 +214,30 @@ export class PromptChip {
     header.appendChild(tile);
     header.appendChild(title);
 
-    const body = el(
-      'p',
-      'prompt-body',
-      'Nothing joins the call. Recording starts only when you press Start.',
-    );
+    const hint = startHint(this.doc.defaultView?.navigator.userAgent ?? '');
+    const body = el('p', 'prompt-body', hint.before);
+    body.appendChild(el('kbd', 'prompt-kbd', hint.shortcut));
+    body.appendChild(this.doc.createTextNode(hint.after));
     const reminder = el('p', 'prompt-reminder', reminderText(this.recordVideo));
     this.reminderEl = reminder;
 
     const actions = el('div', 'prompt-actions');
-    const startBtn = el('button', 'btn btn-primary', 'Start');
-    startBtn.type = 'button';
-    startBtn.id = 'start-btn';
     const notNowBtn = el('button', 'btn btn-secondary', 'Not now');
     notNowBtn.type = 'button';
     notNowBtn.id = 'not-now-btn';
-    actions.appendChild(startBtn);
     actions.appendChild(notNowBtn);
 
-    // Synthetic clicks from page scripts (`isTrusted === false`) must not start a recording.
+    // Synthetic clicks from page scripts (`isTrusted === false`) are ignored.
     notNowBtn.addEventListener('click', (e) => {
       e.stopPropagation();
       if (e.isTrusted === false) return;
       this.dismiss();
     });
-    startBtn.addEventListener('click', (e) => {
-      e.stopPropagation();
-      if (e.isTrusted === false) return;
-      if (this.problemEl !== null) this.problemEl.textContent = '';
-      this.hide();
-      this.callbacks.onStart();
-    });
-
-    const problem = el('p', 'prompt-problem');
-    problem.setAttribute('role', 'status');
-    this.problemEl = problem;
 
     container.appendChild(header);
     container.appendChild(body);
     container.appendChild(reminder);
     container.appendChild(actions);
-    container.appendChild(problem);
 
     const live = el('div', 'sr-only');
     live.setAttribute('aria-live', 'polite');
@@ -307,9 +283,16 @@ const PROMPT_CSS = `
   .prompt-tile-dot { width: 9px; height: 9px; border-radius: 50%; background: ${c.olive}; }
   .prompt-title { margin: 0; font-size: 14px; font-weight: 600; line-height: 1.3; }
   .prompt-body { margin: 0; font-size: 13px; color: #3a3b35; }
-  .prompt-reminder, .prompt-problem { margin: 0; font-size: 12px; color: ${c.muted}; }
-  .prompt-problem:empty { display: none; }
-  .prompt-actions { display: flex; gap: 8px; }
+  .prompt-kbd {
+    padding: 1px 6px;
+    border-radius: 6px;
+    border: 1px solid rgba(17, 18, 14, 0.18);
+    background: rgba(255, 255, 255, 0.6);
+    font: 600 12px ${fonts.sans};
+    white-space: nowrap;
+  }
+  .prompt-reminder { margin: 0; font-size: 12px; color: ${c.muted}; }
+  .prompt-actions { display: flex; justify-content: flex-end; gap: 8px; }
   .btn {
     all: unset;
     box-sizing: border-box;
@@ -322,8 +305,6 @@ const PROMPT_CSS = `
     transition: background 150ms;
   }
   .btn:focus-visible { outline: 2px solid ${c.oliveLine}; outline-offset: 2px; }
-  .btn-primary { flex: 1; background: ${c.olive}; color: ${c.onOlive}; }
-  .btn-primary:hover { background: ${c.oliveHover}; }
   .btn-secondary {
     background: rgba(255, 255, 255, 0.5);
     border: 1px solid rgba(17, 18, 14, 0.15);

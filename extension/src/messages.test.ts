@@ -21,10 +21,9 @@ describe('message parsers', () => {
     expect(parseBackgroundMessage({ target: 'background', type: 'recording.delete' })).toBeNull();
     expect(parseBackgroundMessage('offscreen.ensure')).toBeNull();
 
+    // The prompt chip cannot start recording (Chrome refuses page clicks for tab capture).
     const promptStart = { target: 'background', type: 'prompt.start-recording' };
-    expect(parseBackgroundMessage(promptStart)).toEqual(promptStart);
-    const promptOpen = { target: 'background', type: 'prompt.open-sidepanel' };
-    expect(parseBackgroundMessage(promptOpen)).toEqual(promptOpen);
+    expect(parseBackgroundMessage(promptStart)).toBeNull();
   });
 
   it('validates link and video values', () => {

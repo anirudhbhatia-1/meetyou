@@ -192,9 +192,12 @@ export function ErrorView({ state }: { state: CaptureState }) {
       <p className="state-text">
         {state.error === null ? ERROR_TEXT.offscreen_failed : ERROR_TEXT[state.error]}
       </p>
-      <Button variant="primary" size="lg" onClick={() => send('recording.start')}>
-        Start again
-      </Button>
+      {/* Chrome refuses a start from the panel here; the toolbar click restarts on its own. */}
+      {state.error !== 'capture_not_allowed' && (
+        <Button variant="primary" size="lg" onClick={() => send('recording.start')}>
+          Start again
+        </Button>
+      )}
       <Button variant="ghost" onClick={() => send('recording.dismiss')}>
         Dismiss
       </Button>

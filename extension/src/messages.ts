@@ -29,9 +29,6 @@ export type BackgroundMessage =
   | { target: 'background'; type: 'capture.stt'; stt: SttHealth }
   /** Every uploadable video fragment is uploaded; the offscreen document may close (ADR-0011). */
   | { target: 'background'; type: 'capture.upload_idle' }
-  /** In-meeting prompt chip user actions (S1-09). */
-  | { target: 'background'; type: 'prompt.start-recording' }
-  | { target: 'background'; type: 'prompt.open-sidepanel' }
   /** Click on the Meet recording pill (DESIGN §8.4). */
   | { target: 'background'; type: 'pill.open-sidepanel' }
   /** Cloud mode sign-in from the side panel; replies `AuthReply`. */
@@ -179,8 +176,6 @@ const SIMPLE_BACKGROUND = new Set<string>([
   'capture.tab_ended',
   'capture.mic_lost',
   'capture.upload_idle',
-  'prompt.start-recording',
-  'prompt.open-sidepanel',
   'pill.open-sidepanel',
   'auth.sign_in',
   'auth.sign_out',

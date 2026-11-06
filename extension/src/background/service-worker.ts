@@ -157,12 +157,6 @@ function contentStateMessage(state: CaptureState): Record<string, unknown> {
   };
 }
 
-function notifyPromptProblem(tabId: number, problem: 'start_failed' | 'panel_failed'): void {
-  chrome.tabs
-    .sendMessage(tabId, { target: 'content', type: 'prompt.problem', problem })
-    .catch(() => undefined);
-}
-
 // Capture tasks run one at a time so a double click or a shortcut during start cannot interleave.
 let captureQueue: Promise<void> = Promise.resolve();
 
@@ -690,21 +684,6 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     case 'recording.start':
       enqueueCapture(async () => startRecording(await activeTabId()));
       break;
-    case 'prompt.open-sidepanel': {
-      const tabId = fromTab;
-      if (tabId !== null) {
-        chrome.sidePanel
-          .open({ tabId })
-          .then(() => {
-            console.log('[MeetYou] Prompt chip: chrome.sidePanel.open() SUCCEEDED for tab', tabId);
-          })
-          .catch((error: unknown) => {
-            logError('[MeetYou] Prompt chip: chrome.sidePanel.open() FAILED', error);
-            notifyPromptProblem(tabId, 'panel_failed');
-          });
-      }
-      break;
-    }
     case 'pill.open-sidepanel':
       // From a trusted click on the recording pill; a refusal leaves the toolbar icon as the way in.
       if (fromTab !== null) {
@@ -713,19 +692,6 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         });
       }
       break;
-    case 'prompt.start-recording': {
-      enqueueCapture(async () => {
-        const tabId = fromTab ?? (await activeTabId());
-        console.log('[MeetYou] Prompt chip: startRecording requested for tab', tabId);
-        await startRecording(tabId);
-        // A click in the page may not count as invoking the extension, so tabCapture can refuse;
-        // the chip then tells the user to use the toolbar instead of failing silently.
-        if (tabId !== undefined && (await loadCaptureState()).status === 'error') {
-          notifyPromptProblem(tabId, 'start_failed');
-        }
-      });
-      break;
-    }
     case 'recording.stop':
     case 'capture.tab_ended':
       enqueueCapture(stopRecording);

@@ -6,7 +6,7 @@ pointer to where the full detail lives — the linked document stays the source 
 
 | Field | Value |
 |---|---|
-| Last updated | 2026-11-06 (Anirudh: S2 code complete — tracing, §20 latency/spend metrics, upload resume at startup; cloud apply and live tests later) |
+| Last updated | 2026-11-06 (Anirudh: Meet prompt no longer offers a Start Chrome refuses; S2 code complete, cloud setup applied) |
 | Updated by | Anirudh (Claude Code) |
 | Repository | [anirudhbhatia-1/meetyou](https://github.com/anirudhbhatia-1/meetyou) — branches `main`, `anirudh`, `Gauravbro` |
 | Current stage | **Stage 2** in progress — S2-08 & S2-09 complete; Gaurav next: S2-10 data lifecycle (§7) |
@@ -192,7 +192,19 @@ Stage 0 is complete (status table: IMPLEMENTATION_PLAN.md → "Stage 0 status").
 
 Newest first. One entry per working session (either person).
 
-### 2026-11-06 (latest) — Anirudh (Claude Code): S2-12 CI/CD and S2-11 monitoring live on staging
+### 2026-11-06 (latest) — Anirudh (Claude Code): Meet prompt cannot start recording — fixed the UI
+Anirudh's test: the in-Meet prompt's **Start** always ended in "Recording did not start" and the
+panel's "Start again" failed the same way. Chrome grants `tabCapture` only after the extension is
+invoked (toolbar icon or keyboard command); a click in the page or in the side panel never counts
+(ARCHITECTURE §26.2 Q1, now answered).
+- Prompt (DESIGN §8.2 updated): no Start button; the body says "press {Ctrl/Alt}+Shift+R or click
+  the MeetYou (M) icon in Chrome's toolbar, then Start" (shortcut per platform); **Not now** stays.
+  Removed the dead `prompt.start-recording` / `prompt.open-sidepanel` / `prompt.problem` plumbing.
+- Panel error `capture_not_allowed`: no "Start again" (the icon click restarts by itself); Dismiss
+  stays.
+- Extension tests 198 pass. Tester zip rebuilt.
+
+### 2026-11-06 — Anirudh (Claude Code): S2-12 CI/CD and S2-11 monitoring live on staging
 - **Smoke job** `meetyou-staging-smoke` created (API service account, VPC connector, secrets
   `meetyou-staging-database-url` + `meetyou-staging-auth-signing-jwks`) and run by hand:
   `smoke.passed`, all 66 frames acked, 3 segments, meeting deleted.

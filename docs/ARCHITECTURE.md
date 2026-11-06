@@ -1020,7 +1020,10 @@ contracts. Changing them requires an ADR and a migration plan.
 
 ### 26.2 Open technical questions (answer in the M1 capture spike)
 1. Which UI entry points satisfy the user-gesture requirement for `tabCapture` (toolbar click,
-   in-page chip, side panel button)?
+   in-page chip, side panel button)? **Answered 2026-11-06:** only invoking the extension — the
+   toolbar icon (`action.onClicked`) or the keyboard command. A click on the in-page chip or on a
+   side-panel button is refused (`capture_not_allowed`); the grant from the icon lasts until the tab
+   navigates. The chip therefore has no Start button (DESIGN §8.2).
 2. Does Chrome's echo cancellation on the mic stream suppress Meet audio played back through our
    AudioContext well enough on laptop speakers?
 3. Real CPU and memory cost of two AudioWorklets + Opus encoding on a mid-range laptop.

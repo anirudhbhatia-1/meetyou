@@ -1,5 +1,5 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest';
-import { PromptChip, reminderText } from './prompt-chip.ts';
+import { PromptChip, reminderText, startHint, startShortcut } from './prompt-chip.ts';
 
 class MockElement {
   public id = '';
@@ -122,6 +122,12 @@ class MockDocument {
     return new MockElement();
   }
 
+  public createTextNode(text: string): MockElement {
+    const node = new MockElement();
+    node.textContent = text;
+    return node;
+  }
+
   public getElementById(id: string): MockElement | null {
     return this.body.querySelector(`#${id}`);
   }
@@ -149,15 +155,13 @@ class MockDocument {
 
 describe('PromptChip', () => {
   let doc: MockDocument;
-  let onStart: () => void;
   let onDismiss: () => void;
   let chip: PromptChip;
 
   beforeEach(() => {
     doc = new MockDocument();
-    onStart = vi.fn();
     onDismiss = vi.fn();
-    chip = new PromptChip(doc as unknown as Document, { onStart, onDismiss });
+    chip = new PromptChip(doc as unknown as Document, { onDismiss });
   });
 
   it('mounts into DOM with an isolated shadow root and starts hidden', () => {
@@ -206,16 +210,11 @@ describe('PromptChip', () => {
     expect(chip.isShowing()).toBe(false);
   });
 
-  it('triggers onStart and hides when Start button is clicked', () => {
+  it('has no Start button: Chrome refuses a start from a click in the page', () => {
     chip.show();
     const root = doc.getElementById('meetyou-prompt-root');
-    const startBtn = root?.shadow?.querySelector('#start-btn');
-    expect(startBtn).not.toBeNull();
-
-    startBtn?.trigger('click', { stopPropagation: vi.fn() });
-
-    expect(onStart).toHaveBeenCalledTimes(1);
-    expect(chip.isShowing()).toBe(false);
+    expect(root?.shadow?.querySelector('#start-btn')).toBeNull();
+    expect(root?.shadow?.querySelector('#not-now-btn')).not.toBeNull();
   });
 
   it('dismisses on Escape only when it comes from inside the chip', () => {
@@ -257,11 +256,11 @@ describe('PromptChip', () => {
   it('ignores synthetic clicks from page scripts', () => {
     chip.show();
     const root = doc.getElementById('meetyou-prompt-root');
-    root?.shadow?.querySelector('#start-btn')?.trigger('click', {
+    root?.shadow?.querySelector('#not-now-btn')?.trigger('click', {
       stopPropagation: vi.fn(),
       isTrusted: false,
     });
-    expect(onStart).not.toHaveBeenCalled();
+    expect(onDismiss).not.toHaveBeenCalled();
     expect(chip.isShowing()).toBe(true);
   });
 
@@ -274,16 +273,8 @@ describe('PromptChip', () => {
     expect(chip.isShowing()).toBe(true);
   });
 
-  it('comes back with an explanation when the start failed', () => {
-    chip.show();
-    chip.updateRecordingStatus('starting');
-    expect(chip.isShowing()).toBe(false);
-    chip.showProblem('start_failed');
-    expect(chip.isShowing()).toBe(true);
-  });
-
   it('replaces a chip left behind by an orphaned script', () => {
-    const stale = new PromptChip(doc as unknown as Document, { onStart, onDismiss });
+    const stale = new PromptChip(doc as unknown as Document, { onDismiss });
     stale.mount();
     chip.mount();
     expect(chip.isMounted()).toBe(true);
@@ -310,5 +301,19 @@ describe('PromptChip', () => {
     chip.setRecordVideo(false);
     expect(reminder()).toBe('Audio will be recorded.');
     expect(reminderText(true)).toBe("Audio and the Meet tab's video will be recorded.");
+  });
+});
+
+describe('start hint (DESIGN §8.2)', () => {
+  it('names the shortcut for the platform: Control on a Mac, Alt elsewhere', () => {
+    expect(startShortcut('Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)')).toBe('Ctrl+Shift+R');
+    expect(startShortcut('Mozilla/5.0 (Windows NT 10.0; Win64; x64)')).toBe('Alt+Shift+R');
+  });
+
+  it('tells people to use the shortcut or the toolbar icon', () => {
+    const hint = startHint('Windows');
+    expect(`${hint.before}${hint.shortcut}${hint.after}`).toBe(
+      'Nothing joins the call. To start, press Alt+Shift+R or click the MeetYou (M) icon in Chrome’s toolbar, then Start.',
+    );
   });
 });

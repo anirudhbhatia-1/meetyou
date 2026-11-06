@@ -16,7 +16,7 @@ import { extractMeetingMetadata, type MeetingMetadata } from '../adapters/meet/m
 import { detectMuteState, observeMuteState } from '../adapters/meet/mute-signal.ts';
 import { observeActiveSpeakers } from '../adapters/meet/speaker-signal.ts';
 import { PILL_LAYOUT_KEY } from './pill-model.ts';
-import { PromptChip, type PromptProblem } from './prompt-chip.ts';
+import { PromptChip } from './prompt-chip.ts';
 import { RecordingPill, type RecordingSnapshot } from './recording-pill.ts';
 import { RECORD_VIDEO_KEY, recordVideoFrom } from '../settings.ts';
 
@@ -60,12 +60,6 @@ function notifyExtension(message: unknown): void {
 }
 
 const promptChip = new PromptChip(document, {
-  onStart: () => {
-    console.log('[MeetYou] Prompt chip: user clicked Start');
-    // Test user-gesture entry points for sidePanel.open() and tabCapture (S1-09)
-    notifyExtension({ target: 'background', type: 'prompt.open-sidepanel' });
-    notifyExtension({ target: 'background', type: 'prompt.start-recording' });
-  },
   onDismiss: () => {
     console.log('[MeetYou] Prompt chip: dismissed by user');
   },
@@ -205,12 +199,6 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
     sendResponse({ snapshot: current, metadata, healthReport, muteState });
   } else if (message.target === 'content' && message.type === 'recording.state') {
     applyRecordingState(message);
-  } else if (
-    message.target === 'content' &&
-    message.type === 'prompt.problem' &&
-    (message.problem === 'start_failed' || message.problem === 'panel_failed')
-  ) {
-    promptChip.showProblem(message.problem as PromptProblem);
   }
 });
 
