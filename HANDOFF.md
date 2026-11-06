@@ -6,7 +6,7 @@ pointer to where the full detail lives — the linked document stays the source 
 
 | Field | Value |
 |---|---|
-| Last updated | 2026-11-06 (Anirudh: S2-12 CI/CD live on staging — WIF applied, smoke job passing, first automatic deploy green) |
+| Last updated | 2026-11-06 (Anirudh: S2-12 CI/CD and S2-11 monitoring live on staging; smoke now checks usage rows and the meeting delete job) |
 | Updated by | Anirudh (Claude Code) |
 | Repository | [anirudhbhatia-1/meetyou](https://github.com/anirudhbhatia-1/meetyou) — branches `main`, `anirudh`, `Gauravbro` |
 | Current stage | **Stage 2** in progress — S2-08 & S2-09 complete; Gaurav next: S2-10 data lifecycle (§7) |
@@ -192,7 +192,7 @@ Stage 0 is complete (status table: IMPLEMENTATION_PLAN.md → "Stage 0 status").
 
 Newest first. One entry per working session (either person).
 
-### 2026-11-06 (latest) — Anirudh (Claude Code): S2-12 CI/CD live on staging
+### 2026-11-06 (latest) — Anirudh (Claude Code): S2-12 CI/CD and S2-11 monitoring live on staging
 - **Smoke job** `meetyou-staging-smoke` created (API service account, VPC connector, secrets
   `meetyou-staging-database-url` + `meetyou-staging-auth-signing-jwks`) and run by hand:
   `smoke.passed`, all 66 frames acked, 3 segments, meeting deleted.
@@ -206,9 +206,17 @@ Newest first. One entry per working session (either person).
   smoke job passed. From now on every green CI on `main` deploys staging. The web app on staging now
   has the list-row delete menu.
 - STAGING_SETUP §9.3 step 1 fixed (`terraform output` takes one name; Terraform install note).
-- Still open: `-target=module.monitoring` (needs `alert_emails`), GitHub Actions Node 20
-  deprecation warnings (bump `actions/checkout`, `google-github-actions/*` later),
-  failover/crash/60-min tests.
+- **Automatic path verified**: pushing `c35b70e` to `main` ran CI, then the deploy by itself (green).
+- **`terraform apply -target=module.monitoring`** (alerts to the Cloud Shell account's email):
+  7 log metrics, 6 alert policies, "Minutes staging" dashboard, 1 email channel; 15 added.
+- **Smoke job now also checks the database** (`backend/apps/smoke/src/records.ts`): the meeting's
+  `usage_records` row has `them` seconds (S2-07), and after the API's DELETE the worker's
+  `meeting.delete` removes the meeting and completes its deletion request (S2-10). The local e2e
+  test runs a real worker for this. Deploy of `2e46699` green with these checks.
+- GitHub Actions moved to their Node 24 majors (`checkout@v5`, `setup-node@v5`,
+  `pnpm/action-setup@v5`, `google-github-actions/auth@v3`, `setup-gcloud@v3`).
+- Still open: live failover test (S2-04), worker shutdown mid-job (S2-06), 60-min video sync and
+  website playback check (S2-14), OpenTelemetry tracing (dependency approval).
 
 ### 2026-11-06 — Anirudh (Claude Code): S2-10 merged and fixed, S2-11 and S2-12 built
 Anirudh asked to finish everything left in S2, including S2-11 and S2-12 (owned by Gaurav until

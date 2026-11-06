@@ -432,7 +432,8 @@ run the smoke job. GitHub reaches Google Cloud through Workload Identity Federat
 The smoke job (`backend/apps/smoke`, `Dockerfile.smoke`) signs in a synthetic account
 (`smoke-test@minutes.invalid`) through the same bootstrap function, mints a token with the API's
 signing key, starts a session on the API, streams espeak-ng speech through the gateway, checks
-every frame was acked, reads the segments back through the API and deletes the meeting (about
+every frame was acked, reads the segments back through the API, checks the meeting's `usage_records` row, deletes the
+meeting and waits until the worker has removed it after the 10 s grace (about
 20 s of Deepgram per lane per deploy). The same flow runs locally in `smoke.test.ts` against the
 real gateway and API with scripted STT.
 
