@@ -202,7 +202,8 @@ invoked (toolbar icon or keyboard command); a click in the page or in the side p
   Removed the dead `prompt.start-recording` / `prompt.open-sidepanel` / `prompt.problem` plumbing.
 - Panel error `capture_not_allowed`: no "Start again" (the icon click restarts by itself); Dismiss
   stays.
-- Extension tests 198 pass. Tester zip rebuilt.
+- Extension tests 198 pass. Tester zip rebuilt. **Verified by Anirudh in Chrome:** starting from
+  the M icon records.
 
 ### 2026-11-06 — Anirudh (Claude Code): S2-12 CI/CD and S2-11 monitoring live on staging
 - **Smoke job** `meetyou-staging-smoke` created (API service account, VPC connector, secrets
