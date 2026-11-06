@@ -26,7 +26,9 @@ resource "google_storage_bucket" "audio_chunks" {
     content {
       origin          = var.upload_origins
       method          = ["PUT"]
-      response_header = ["Content-Type"]
+      # The signed size range travels as x-goog-content-length-range (S2-14,
+      # @meetyou/storage signFragmentUploads); the browser may only send it if CORS lists it.
+      response_header = ["Content-Type", "x-goog-content-length-range"]
       max_age_seconds = 3600
     }
   }

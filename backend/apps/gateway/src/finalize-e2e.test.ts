@@ -126,7 +126,8 @@ describe.runIf(hasFfmpeg())('video.finalize through the dev gateway (S2-14)', ()
       parts: [],
       playback: null,
     };
-    for (let i = 0; i < 300 && listed.playback === null; i++) {
+    // The playback file is stored first and the fragments deleted right after, so wait for both.
+    for (let i = 0; i < 300 && (listed.playback === null || listed.parts.length > 0); i++) {
       await new Promise((r) => setTimeout(r, 50));
       listed = (await (
         await fetch(`${base}/v1/dev/sessions/${sessionId}/video`)

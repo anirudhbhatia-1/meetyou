@@ -45,10 +45,11 @@ Deepgram for transcription (ADR-0001 §0, `mip_opt_out=true`).
 | Job queue library (`backend/packages/queue`) | ✅ | Anirudh | Worker |
 | `video.finalize` task (`backend/packages/video`) | ✅ | Anirudh | Worker |
 | Gateway: Redis state, JWT tokens, Postgres sinks, health | ✅ | Anirudh | — |
-| **Gateway staging mode** (Cloud Storage chunk store, listen on `0.0.0.0`, `APP_ENV=staging` boot without dev endpoints) | ❌ to do | Anirudh | §9 gateway deploy |
-| **Worker app** (`backend/apps/worker`: starts `startWorker` with `videoFinalizeTask`) | ❌ to do | Anirudh | §9 worker deploy |
-| **API service** (S2-08 scaffold, S2-09 endpoints, S3-08 action items) | ❌ to do | Gaurav | sign-in, library |
-| Dockerfiles for gateway, API, worker, migration job | ❌ to do | Gaurav (§8 gives the shape) | §8 |
+| Gateway staging mode (Cloud Storage chunk store, `0.0.0.0`, `APP_ENV=staging` without dev endpoints, exact origin allow-list) + `Dockerfile.gateway` | ✅ 2026-11-06 | Anirudh | — |
+| Worker app (`backend/apps/worker`: health endpoint, RLS check, queue schema, `video.finalize`) + `Dockerfile.worker` (ffmpeg) | ✅ 2026-11-06 | Anirudh | — |
+| Signed video URLs + playback helper (`@meetyou/storage`: `signFragmentUploads`, `meetingVideoPlayback`) | ✅ 2026-11-06 | Anirudh | API routes (S2-09/S2-14) |
+| API service: S2-08 scaffold ✅ (deployed); S2-09 endpoints, S3-08 action items | ⏳ | Gaurav | sign-in, library |
+| Dockerfiles: API + migrate ✅ (Gaurav), gateway + worker ✅ (Anirudh) | ✅ | both | — |
 | CI/CD to staging + smoke test (S2-12) | ❌ to do | Gaurav | — |
 
 So: **do §2–§7 now** (they need no new application code), then §8–§10 as each service is ready.
@@ -291,6 +292,48 @@ What the API must do, using what already exists:
 | `DATABASE_URL` | secret |
 | `GCS_AUDIO_BUCKET` | as above |
 Image includes `ffmpeg`. Min instances 1, CPU always on.
+
+### 9.1 Deploying the gateway and the worker (ready since 2026-11-06)
+
+Both images build from the repo root; Cloud Shell has Docker. Tag with the commit, not `latest`.
+```bash
+gcloud auth configure-docker asia-south1-docker.pkg.dev
+TAG=$(git rev-parse --short HEAD)
+REPO=asia-south1-docker.pkg.dev/<STAGING_PROJECT_ID>/meetyou
+docker build -f Dockerfile.gateway -t $REPO/gateway:$TAG . && docker push $REPO/gateway:$TAG
+docker build -f Dockerfile.worker  -t $REPO/worker:$TAG  . && docker push $REPO/worker:$TAG
+```
+Terraform changes (Gaurav; Terraform stays the source of truth, so no `gcloud run services update`
+that would drift):
+- `gateway_image` / `worker_image` = the tags above.
+- **Gateway** env: `APP_ENV=staging`, `STT_PROVIDER=deepgram`, `GCS_AUDIO_BUCKET`,
+  `REDIS_URL=redis://10.254.5.203:6379`, `ALLOWED_ORIGINS=chrome-extension://hjimcofnjnikbeepahmclaniopbnhbbe`,
+  `STREAM_TOKEN_JWKS` (below), `DISPLAY_TEXT=as_provided`; secrets `DATABASE_URL`,
+  `DEEPGRAM_API_KEY`. The gateway refuses to start without any of them and says which.
+- **Worker** env: `APP_ENV=staging`, `GCS_AUDIO_BUCKET`; secret `DATABASE_URL`. It serves
+  `/healthz` on `$PORT` (Cloud Run needs a listener) and installs the queue schema on start.
+- **Bucket CORS** now also lists `x-goog-content-length-range` (`infra/modules/storage`): apply it
+  before the extension uploads to signed URLs.
+- `STREAM_TOKEN_JWKS` = the **public** half of the signing keys. Until the API serves
+  `/.well-known/jwks.json`, derive it in Cloud Shell (prints public keys only, never `d`):
+  ```bash
+  gcloud secrets versions access latest --secret=meetyou-staging-auth-signing-jwks \
+    | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>console.log(JSON.stringify({keys:JSON.parse(s).map(({kty,crv,x,y,kid})=>({kty,crv,x,y,kid,alg:"ES256",use:"sig"}))})))'
+  ```
+- **Deploy the worker before the gateway**: the gateway enqueues `video.finalize` when a meeting
+  ends, which needs the queue schema the worker installs.
+
+Checks after deploy:
+```bash
+curl -s https://<gateway-url>/healthz            # {"ok":true}
+gcloud run services logs read meetyou-staging-gateway --region asia-south1 --limit 20   # gateway.listening … storage "gcs", redis true, db true
+gcloud run services logs read meetyou-staging-worker  --region asia-south1 --limit 20   # worker.started
+```
+Cloud tests still to run once the API's `/sessions` exists (S2 exit criteria): stream a session,
+kill the gateway revision mid-stream (`gcloud run services update-traffic` to a new revision, or
+delete the instance) and check the client resumes with no loss; restart the worker during a
+`video.finalize` and check it completes exactly once; record 60 minutes and check video ↔
+transcript sync within ±0.5 s.
 
 ## 10. Deploy order and checks
 

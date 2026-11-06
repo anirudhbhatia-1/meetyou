@@ -29,6 +29,8 @@ export interface SignedFragment {
   index: number;
   url: string;
   expiresAt: number;
+  /** Signed headers the PUT must carry, e.g. Cloud Storage's size range (S2-14). */
+  headers?: Record<string, string>;
 }
 
 /** The server will never accept this session's fragments (unknown or ended session). */
@@ -62,7 +64,12 @@ export interface VideoUploaderOptions {
     indices: number[],
     contentType: string,
   ): Promise<SignedFragment[]>;
-  put(url: string, blob: Blob, contentType: string): Promise<void>;
+  put(
+    url: string,
+    blob: Blob,
+    contentType: string,
+    headers?: Record<string, string>,
+  ): Promise<void>;
   /** False while audio needs the link (reconnecting, or backlog above 5 s). */
   canUpload(): boolean;
   /** Sessions that never upload, e.g. recordings made without the gateway (`local_…`). */
@@ -181,9 +188,9 @@ export class VideoUploader {
     const contentType = baseContentType(row.mimeType);
     const key = fragmentKey(row.sessionId, row.partId, row.index);
     this.#current = key;
-    const url = await this.#urlFor(row, contentType);
+    const signed = await this.#urlFor(row, contentType);
     try {
-      await this.#o.put(url, row.blob, contentType);
+      await this.#o.put(signed.url, row.blob, contentType, signed.headers ?? {});
     } finally {
       // Retries re-sign: a failed PUT may mean the URL expired or was refused.
       this.#urls.delete(key);
@@ -191,10 +198,10 @@ export class VideoUploader {
     await this.#o.queue.remove(row);
   }
 
-  async #urlFor(row: VideoFragmentRow, contentType: string): Promise<string> {
+  async #urlFor(row: VideoFragmentRow, contentType: string): Promise<SignedFragment> {
     const key = fragmentKey(row.sessionId, row.partId, row.index);
     const cached = this.#urls.get(key);
-    if (cached !== undefined && cached.expiresAt - URL_MARGIN_MS > this.#now()) return cached.url;
+    if (cached !== undefined && cached.expiresAt - URL_MARGIN_MS > this.#now()) return cached;
 
     const indices = await this.#o.queue.indices(row.sessionId, row.partId, SIGN_BATCH);
     if (!indices.includes(row.index)) indices.unshift(row.index);
@@ -213,9 +220,9 @@ export class VideoUploader {
     for (const fragment of signed) {
       this.#urls.set(fragmentKey(row.sessionId, row.partId, fragment.index), fragment);
     }
-    const url = this.#urls.get(key)?.url;
-    if (url === undefined) throw new Error('fragment was not signed');
-    return url;
+    const fragment = this.#urls.get(key);
+    if (fragment === undefined) throw new Error('fragment was not signed');
+    return fragment;
   }
 
   async #pause(ms: number): Promise<void> {

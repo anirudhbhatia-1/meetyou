@@ -1,0 +1,21 @@
+# syntax=docker/dockerfile:1
+# Realtime gateway (S2-04): docs/STAGING_SETUP.md §9. Node 24 runs the TypeScript sources directly.
+FROM node:24-slim
+RUN corepack enable
+
+WORKDIR /app
+
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
+COPY shared/ ./shared/
+COPY backend/ ./backend/
+
+RUN pnpm install --frozen-lockfile --prod
+
+ENV NODE_ENV=production
+ENV HOST=0.0.0.0
+# Never root in the container.
+USER node
+
+EXPOSE 8080
+
+CMD ["node", "backend/apps/gateway/src/main.ts"]

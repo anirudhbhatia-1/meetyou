@@ -1,0 +1,26 @@
+{
+  "name": "@meetyou/worker",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Background worker (ADR-0005, S2-06): runs queued jobs — video.finalize now, summaries and retention later. Cloud Run service with a health endpoint; needs ffmpeg in its image.",
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json",
+    "test": "vitest run",
+    "dev": "node src/main.ts"
+  },
+  "dependencies": {
+    "@meetyou/db": "workspace:*",
+    "@meetyou/queue": "workspace:*",
+    "@meetyou/storage": "workspace:*",
+    "@meetyou/video": "workspace:*",
+    "graphile-worker": "0.18.0",
+    "pg": "8.23.1",
+    "zod": "^4.6.7"
+  },
+  "devDependencies": {
+    "@meetyou/contracts": "workspace:*",
+    "@types/pg": "8.23.1",
+    "kysely": "0.29.7"
+  }
+}

@@ -37,6 +37,13 @@ MINUTES_GATEWAY_URL=http://127.0.0.1:8787 pnpm --filter @meetyou/extension build
 | `DATABASE_URL` | — | Segments, usage, meetings in Postgres (application role); files when unset |
 | `DEV_WORKSPACE_ID` | — | Needed with `DATABASE_URL`: the workspace dev sessions record into |
 | `STREAM_TOKEN_JWKS` | — | Public JWKS of the API, to accept real (JWT) stream tokens |
+| `GCS_AUDIO_BUCKET` | — | Cloud Storage bucket (deployed); local disk under `DATA_DIR` when unset |
+| `ALLOWED_ORIGINS` | — | Exact WebSocket origins (the pinned extension), deployed |
+| `HOST` | `127.0.0.1` / `0.0.0.0` | Loopback locally, all interfaces when deployed |
+
+With `APP_ENV=staging` or `production` the gateway has no dev endpoints and refuses to start
+unless `DATABASE_URL`, `REDIS_URL`, `STREAM_TOKEN_JWKS`, `GCS_AUDIO_BUCKET` and
+`ALLOWED_ORIGINS` are set (docs/STAGING_SETUP.md §9.1). Image: `Dockerfile.gateway`.
 
 ## Tools (S1-11 measurements)
 

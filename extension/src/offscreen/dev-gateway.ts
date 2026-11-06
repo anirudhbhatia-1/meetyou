@@ -65,6 +65,8 @@ const DevSignedFragments = z.object({
       expiresAt: z.string().min(1),
     }),
   ),
+  /** Headers every PUT must send (Cloud Storage size range); absent from the dev gateway. */
+  headers: z.record(z.string().regex(/^x-goog-[a-z0-9-]+$/), z.string().max(200)).optional(),
 });
 
 /**
@@ -91,15 +93,26 @@ export async function signDevVideoFragments(
   });
   if (response.status === 404) throw new UploadRejected(sessionId);
   if (!response.ok) throw new Error(`HTTP ${response.status}`);
-  const { fragments } = DevSignedFragments.parse(await response.json());
-  return fragments.map((f) => ({ index: f.index, url: f.url, expiresAt: Date.parse(f.expiresAt) }));
+  const { fragments, headers } = DevSignedFragments.parse(await response.json());
+  return fragments.map((f) => ({
+    index: f.index,
+    url: f.url,
+    expiresAt: Date.parse(f.expiresAt),
+    ...(headers !== undefined ? { headers } : {}),
+  }));
 }
 
 /** One fragment, one PUT: idempotent, so a retry simply overwrites (ADR-0011 §3.3). */
-export async function putFragment(url: string, blob: Blob, contentType: string): Promise<void> {
+export async function putFragment(
+  url: string,
+  blob: Blob,
+  contentType: string,
+  headers: Record<string, string> = {},
+): Promise<void> {
   const response = await fetch(url, {
     method: 'PUT',
-    headers: { 'content-type': contentType },
+    // Signed extension headers first; Content-Type is ours and always wins.
+    headers: { ...headers, 'content-type': contentType },
     body: blob,
     // A 10 s fragment is ~1.3 MB; a minute covers a slow (~200 kbps) link.
     signal: AbortSignal.timeout(60_000),

@@ -74,6 +74,11 @@ export interface GatewayOptions {
    * Default: `queue` with a database, `local` without.
    */
   videoFinalize?: 'queue' | 'local' | 'off';
+  /**
+   * Exact WebSocket origins allowed (the pinned extension, STAGING_SETUP §4). Deployed gateways
+   * set it; without it the dev rule applies (any extension, or no origin for local tools).
+   */
+  allowedOrigins?: readonly string[];
 }
 
 export interface Gateway {
@@ -647,7 +652,12 @@ export function createGateway(options: GatewayOptions): Gateway {
       reject(socket, 404, 'Not Found');
       return;
     }
-    if (!allowedOrigin(req.headers.origin)) {
+    const origin = req.headers.origin;
+    const originOk =
+      options.allowedOrigins === undefined
+        ? allowedOrigin(origin)
+        : origin !== undefined && options.allowedOrigins.includes(origin);
+    if (!originOk) {
       log('stream.origin_rejected', {});
       reject(socket, 403, 'Forbidden');
       return;

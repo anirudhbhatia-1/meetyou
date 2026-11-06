@@ -146,6 +146,9 @@ backend/packages/auth  (S2-02) Google sign-in, JWT access/stream tokens, rotatin
 backend/packages/providers (S2-03) STT/LLM/transliteration interfaces, Deepgram adapters, registry
 backend/packages/queue (S2-06) graphile-worker: transactional enqueue, worker, dead letter
 backend/packages/video (S2-14) video.finalize: ffmpeg join/remux/gap fill/poster, queue task
+backend/packages/storage Cloud Storage: bucket interface, object layout, video store, V4 signed URLs
+backend/apps/api       (S2-08, Gaurav) Fastify REST API
+backend/apps/worker    (S2-06) background worker: queue jobs (video.finalize), health endpoint
 docs/                  PRD, features, architecture, design, plan, research, ADRs, benchmark kit, legal drafts,
                        STAGING_SETUP.md (step-by-step cloud setup runbook)
 ```

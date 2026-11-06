@@ -107,7 +107,7 @@ export interface ChunkStore {
   ): Promise<Uint8Array>;
 }
 
-const Manifest = z.object({
+export const Manifest = z.object({
   codec: z.enum(['pcm16', 'opus']),
   firstSeq: z.number().int().nonnegative(),
   lastSeq: z.number().int().nonnegative(),

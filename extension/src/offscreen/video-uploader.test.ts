@@ -136,6 +136,29 @@ describe('VideoUploader (ADR-0011 §3.3)', () => {
     h.uploader.stop();
   });
 
+  it('sends the signed headers with each PUT (Cloud Storage size range, S2-14)', async () => {
+    const sent: Record<string, string>[] = [];
+    const h = harness([row('ses_A', 'vp_1', 0)], {
+      sign: (_s, _p, indices) =>
+        Promise.resolve(
+          indices.map((index) => ({
+            index,
+            url: `https://storage.googleapis.com/b/${index}`,
+            expiresAt: Date.now() + 15 * 60_000,
+            headers: { 'x-goog-content-length-range': '0,8388608' },
+          })),
+        ),
+      put: (_url, _blob, _type, headers) => {
+        sent.push(headers ?? {});
+        return Promise.resolve();
+      },
+    });
+    h.uploader.kick();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(sent).toEqual([{ 'x-goog-content-length-range': '0,8388608' }]);
+    h.uploader.stop();
+  });
+
   it('signs a part in one batch and reuses the URLs', async () => {
     const h = harness([0, 1, 2].map((i) => row('ses_A', 'vp_1', i)));
     h.uploader.kick();

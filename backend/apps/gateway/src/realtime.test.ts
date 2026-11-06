@@ -362,6 +362,49 @@ describe('production stream path (JWT + Postgres, S2-04/S2-05/S2-07)', () => {
     }
   });
 
+  it('admits only the pinned extension origin when an allow-list is set (deployed)', async () => {
+    const streamTokens = new TokenService(await loadKeyRing([await generateSigningJwk('k1')]));
+    const registry = new MemorySessionRegistry();
+    const r = record();
+    await registry.create(r);
+    const pinned = 'chrome-extension://hjimcofnjnikbeepahmclaniopbnhbbe';
+    const host = await listen(
+      createGateway({
+        store: new MemoryChunkStore(),
+        stt: null,
+        devEndpoints: false,
+        registry,
+        streamTokens,
+        allowedOrigins: [pinned],
+      }),
+    );
+    const token = async () =>
+      (
+        await streamTokens.issueStreamToken({
+          sessionId: r.sessionId,
+          workspaceId: r.workspaceId,
+          lanes: ['me'],
+        })
+      ).token;
+    const open = (origin: string | undefined, t: string) =>
+      new Promise<number>((resolve) => {
+        const ws = new WebSocket(`ws://${host}/v1/stream`, [SUBPROTOCOL, `token.${t}`], {
+          ...(origin === undefined ? {} : { origin }),
+        });
+        ws.once('open', () => {
+          ws.close();
+          resolve(101);
+        });
+        ws.once('unexpected-response', (_req, res) => resolve(res.statusCode ?? 0));
+        ws.once('error', () => undefined);
+      });
+    expect(await open('chrome-extension://otherextensionidotherextensionid', await token())).toBe(
+      403,
+    );
+    expect(await open(undefined, await token())).toBe(403);
+    expect(await open(pinned, await token())).toBe(101);
+  });
+
   it('refuses dev tokens when dev endpoints are off, and tokens for another workspace', async () => {
     const streamTokens = new TokenService(await loadKeyRing([await generateSigningJwk('k1')]));
     const registry = new MemorySessionRegistry();
