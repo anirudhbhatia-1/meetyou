@@ -1,0 +1,20 @@
+# syntax=docker/dockerfile:1
+FROM node:24-slim
+RUN corepack enable
+
+WORKDIR /app
+
+# Copy root package manifests and workspace configuration
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
+
+# Copy packages required by database migrations
+COPY shared/ ./shared/
+COPY backend/ ./backend/
+
+# Install dependencies (only production)
+RUN pnpm install --frozen-lockfile --prod
+
+ENV NODE_ENV=production
+
+# Execute database migrations
+CMD ["node", "backend/packages/db/src/migrate-cli.ts"]

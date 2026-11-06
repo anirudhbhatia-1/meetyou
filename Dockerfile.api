@@ -1,0 +1,23 @@
+# syntax=docker/dockerfile:1
+FROM node:24-slim
+RUN corepack enable
+
+WORKDIR /app
+
+# Copy root package manifests and workspace configuration
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
+
+# Copy packages required by API service
+COPY shared/ ./shared/
+COPY backend/ ./backend/
+
+# Install dependencies (only production)
+RUN pnpm install --frozen-lockfile --prod
+
+ENV NODE_ENV=production
+ENV HOST=0.0.0.0
+
+EXPOSE 8080
+
+# Execute Fastify API server
+CMD ["node", "backend/apps/api/src/main.ts"]

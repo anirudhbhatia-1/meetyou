@@ -1,0 +1,12 @@
+node_modules
+**/.data
+bench-data
+.env*
+dist
+shared/fixtures/audio
+infra/**/.terraform
+*.tfstate*
+.git
+.github
+.vscode
+.gemini
