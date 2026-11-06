@@ -1,0 +1,29 @@
+{
+  "name": "@meetyou/api",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Fastify REST API service (ARCHITECTURE §12, S2-08): auth, meetings, notes, transcripts, idempotency, OpenAPI.",
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json",
+    "test": "vitest run",
+    "dev": "node src/main.ts"
+  },
+  "dependencies": {
+    "@fastify/cors": "^10.0.2",
+    "@fastify/swagger": "^9.4.2",
+    "@fastify/swagger-ui": "^5.2.1",
+    "@meetyou/auth": "workspace:*",
+    "@meetyou/contracts": "workspace:*",
+    "@meetyou/db": "workspace:*",
+    "fastify": "^5.2.1",
+    "fastify-plugin": "^5.0.1",
+    "kysely": "0.29.7",
+    "zod": "^4.6.7"
+  },
+  "devDependencies": {
+    "@electric-sql/pglite": "0.5.11",
+    "@meetyou/db": "workspace:*",
+    "@types/node": "^24.0.0"
+  }
+}
