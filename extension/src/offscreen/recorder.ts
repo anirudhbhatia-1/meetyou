@@ -1,4 +1,10 @@
-import { newUlid, packOpusFrame, type AudioFormat, type ServerMessage } from '@meetyou/contracts';
+import {
+  newUlid,
+  packOpusFrame,
+  type AudioFormat,
+  type CaptureEvent,
+  type ServerMessage,
+} from '@meetyou/contracts';
 
 import type { Lane, LaneFlags, StreamLink, VideoStatus } from '../messages.ts';
 import { startCapture, type CaptureSession } from './capture.ts';
@@ -196,24 +202,28 @@ export async function startRecorder(options: {
 
   let video: VideoStatus = 'off';
   let part: VideoPart | null = null;
+  /** Video part timing for the gateway (finalize follows the session clock, ADR-0011 §3.4). */
+  const emit = (event: CaptureEvent): void => client?.event(event);
   let quality: VideoQuality = 'standard';
   let switching: Promise<void> = Promise.resolve();
   const mimeType = pickVideoMimeType((t) => MediaRecorder.isTypeSupported(t));
   const startPart = (): void => {
     if (capture.video === null || mimeType === null) return;
     try {
+      const startMs = capture.nowMs();
       part = startVideoPart({
         db,
         sessionId,
         video: capture.video,
         mixedAudio: capture.mixedAudio,
         mimeType,
-        startMs: capture.nowMs(),
+        startMs,
         quality,
         onFragment: events.onVideoFragment,
         onError: events.onError,
       });
       video = 'recording';
+      emit(partStartedEvent(sessionId, part.partId, mimeType, capture.video, quality, startMs));
     } catch (error: unknown) {
       events.onError('video recorder failed', error);
       video = 'failed';
@@ -224,12 +234,22 @@ export async function startRecorder(options: {
     else startPart();
   }
 
-  const stopPart = async (): Promise<void> => {
+  const stopPart = async (
+    reason: 'stopped' | 'paused' | 'quality_changed' | 'error',
+  ): Promise<void> => {
     const current = part;
     part = null;
     if (current === null) return;
     const { fragments } = await current.stop();
     console.info('offscreen: video part closed', current.partId, fragments);
+    emit({
+      type: 'video.part_stopped',
+      sessionId,
+      partId: current.partId,
+      fragments,
+      reason,
+      at: Math.max(0, Math.round(capture.nowMs())),
+    });
   };
 
   /**
@@ -239,7 +259,7 @@ export async function startRecorder(options: {
    */
   const switchQuality = async (next: VideoQuality): Promise<void> => {
     if (part === null || paused || capture.video === null) return;
-    await stopPart();
+    await stopPart('quality_changed');
     const { width, height, frameRate } = VIDEO_QUALITY[next];
     try {
       await capture.video.applyConstraints({
@@ -278,7 +298,7 @@ export async function startRecorder(options: {
       paused = true;
       client?.control('pause', capture.nowMs());
       await switching;
-      await stopPart();
+      await stopPart('paused');
     },
     resume() {
       if (!paused) return;
@@ -292,7 +312,7 @@ export async function startRecorder(options: {
       paused = true;
       await switching;
       await capture.stop();
-      await stopPart();
+      await stopPart('stopped');
       for (const encoder of Object.values(encoders)) {
         try {
           await encoder.flush();
@@ -315,5 +335,31 @@ export async function startRecorder(options: {
         .finally(() => db.close());
       return { drained };
     },
+  };
+}
+
+/** `video.part_started` within the contract's bounds (dimensions as the track reports them). */
+function partStartedEvent(
+  sessionId: string,
+  partId: string,
+  mimeType: string,
+  track: MediaStreamTrack,
+  quality: VideoQuality,
+  startMs: number,
+): CaptureEvent {
+  const settings = track.getSettings();
+  const fallback = VIDEO_QUALITY[quality];
+  const clamp = (value: number | undefined, max: number, otherwise: number) =>
+    Math.min(max, Math.max(1, Math.round(value ?? otherwise)));
+  return {
+    type: 'video.part_started',
+    sessionId,
+    partId,
+    source: 'tab',
+    mimeType: mimeType.startsWith('video/webm') ? 'video/webm' : 'video/mp4',
+    width: clamp(settings.width, 1920, fallback.width),
+    height: clamp(settings.height, 1080, fallback.height),
+    fps: clamp(settings.frameRate, 30, fallback.frameRate),
+    at: Math.max(0, Math.round(startMs)),
   };
 }

@@ -987,6 +987,7 @@ contracts. Changing them requires an ADR and a migration plan.
 |---|---|---|---|
 | Language | TypeScript everywhere | **Proposed** | One language for extension, backend, and shared schemas |
 | Extension platform | Chrome MV3 | Decided | Required by Chrome |
+| Web app | React + Vite (`web/`) | **Decided** 2026-11-06 | Library web app (D-07); static build, hosting in ADR-0006 |
 | Schema validation | Runtime schema library shared by client and server (e.g. zod) | Proposed | Single source of truth for contracts |
 | HTTP/WS server | Lightweight Node.js framework with first-class WebSocket support | Proposed | Gateway needs efficient long-lived connections |
 | Database | PostgreSQL (+ pgvector in Phase 2) | Proposed | Relational data, RLS, full-text search, queue, vectors in one system |

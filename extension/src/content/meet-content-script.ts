@@ -15,7 +15,10 @@ import {
 import { extractMeetingMetadata, type MeetingMetadata } from '../adapters/meet/metadata.ts';
 import { detectMuteState, observeMuteState } from '../adapters/meet/mute-signal.ts';
 import { observeActiveSpeakers } from '../adapters/meet/speaker-signal.ts';
+import { PILL_LAYOUT_KEY } from './pill-model.ts';
 import { PromptChip, type PromptProblem } from './prompt-chip.ts';
+import { RecordingPill, type RecordingSnapshot } from './recording-pill.ts';
+import { RECORD_VIDEO_KEY, recordVideoFrom } from '../settings.ts';
 
 let stopObserving: (() => void) | null = null;
 let stopMuteObserving: (() => void) | null = null;
@@ -41,6 +44,7 @@ function teardown(): void {
   stopSpeakerObserving?.();
   stopSpeakerObserving = null;
   promptChip.unmount();
+  recordingPill.unmount();
 }
 
 function notifyExtension(message: unknown): void {
@@ -66,6 +70,49 @@ const promptChip = new PromptChip(document, {
     console.log('[MeetYou] Prompt chip: dismissed by user');
   },
 });
+
+const recordingPill = new RecordingPill(document, {
+  onOpenPanel: () => notifyExtension({ target: 'background', type: 'pill.open-sidepanel' }),
+  loadLayout: async () => {
+    if (!contextValid()) return null;
+    return (await chrome.storage.local.get(PILL_LAYOUT_KEY))[PILL_LAYOUT_KEY];
+  },
+  saveLayout: (layout) => {
+    if (!contextValid()) return;
+    chrome.storage.local.set({ [PILL_LAYOUT_KEY]: layout }).catch(() => undefined);
+  },
+});
+
+// The prompt's reminder line says whether the screen will be recorded (DESIGN §8.2).
+if (contextValid()) {
+  chrome.storage.local
+    .get(RECORD_VIDEO_KEY)
+    .then((items) => promptChip.setRecordVideo(recordVideoFrom(items)))
+    .catch(() => undefined);
+  chrome.storage.onChanged.addListener((changes, areaName) => {
+    const change = changes[RECORD_VIDEO_KEY];
+    if (areaName === 'local' && change !== undefined) {
+      promptChip.setRecordVideo(recordVideoFrom({ [RECORD_VIDEO_KEY]: change.newValue }));
+    }
+  });
+}
+
+/** `recording.state` from the service worker, or its reply to `meet.page-ready`. */
+function parseRecordingSnapshot(value: unknown): RecordingSnapshot | null {
+  if (!isRecord(value) || typeof value.status !== 'string') return null;
+  return {
+    status: value.status,
+    startedAt: typeof value.startedAt === 'number' ? value.startedAt : null,
+    video: typeof value.video === 'string' ? value.video : 'off',
+  };
+}
+
+function applyRecordingState(value: unknown): void {
+  const snapshot = parseRecordingSnapshot(value);
+  if (snapshot === null) return;
+  promptChip.updateRecordingStatus(snapshot.status);
+  recordingPill.update(snapshot);
+}
 
 function updateSignalObservers(state: string): void {
   if (state === 'in_call') {
@@ -126,15 +173,11 @@ function broadcastState(
 }
 
 // Content scripts cannot read the recording state, so ask once: a reloaded Meet tab must not show
-// the chip over a recording that is already running.
+// the chip over a recording that is already running, and must show its recording pill.
 if (contextValid()) {
   chrome.runtime
     .sendMessage({ type: 'meet.page-ready' })
-    .then((reply: unknown) => {
-      if (isRecord(reply) && typeof reply.status === 'string') {
-        promptChip.updateRecordingStatus(reply.status);
-      }
-    })
+    .then(applyRecordingState)
     .catch(() => undefined);
 }
 
@@ -160,12 +203,8 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
     const healthReport = generateSelectorHealthReport(document, current.state);
     const muteState = detectMuteState(document);
     sendResponse({ snapshot: current, metadata, healthReport, muteState });
-  } else if (
-    message.target === 'content' &&
-    message.type === 'recording.state' &&
-    typeof message.status === 'string'
-  ) {
-    promptChip.updateRecordingStatus(message.status);
+  } else if (message.target === 'content' && message.type === 'recording.state') {
+    applyRecordingState(message);
   } else if (
     message.target === 'content' &&
     message.type === 'prompt.problem' &&
@@ -177,6 +216,7 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
 
 window.addEventListener('beforeunload', () => {
   promptChip.unmount();
+  recordingPill.unmount();
   stopMuteObserving?.();
   stopSpeakerObserving?.();
   stopObserving?.();

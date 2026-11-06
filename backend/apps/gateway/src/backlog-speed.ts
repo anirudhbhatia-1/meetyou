@@ -3,8 +3,8 @@ import { readFileSync } from 'node:fs';
 import process from 'node:process';
 
 import { OggOpusWriter, readOggOpusPackets } from './ogg.ts';
-import { deepgramProvider } from './stt/deepgram.ts';
-import type { SttInput, SttResult } from './stt/types.ts';
+import { deepgramProvider } from '@meetyou/providers';
+import type { SttInput, SttResult } from '@meetyou/providers';
 
 /**
  * ARCHITECTURE §26.2 Q5: can a reconnect backlog be sent to the STT provider faster than real

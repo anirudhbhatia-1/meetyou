@@ -12,20 +12,28 @@ export type StreamLink = 'off' | 'connecting' | 'online' | 'reconnecting';
 
 export type VideoStatus = 'off' | 'recording' | 'unsupported' | 'failed';
 
+/** Live transcription health from the gateway (ws-protocol `health`, ARCHITECTURE §6.3). */
+export type SttHealth = 'ok' | 'degraded' | 'down';
+
 export type BackgroundMessage =
   | { target: 'background'; type: 'recording.start' }
   | { target: 'background'; type: 'recording.stop' }
   | { target: 'background'; type: 'recording.pause' }
   | { target: 'background'; type: 'recording.resume' }
+  /** Side panel "Done": back to Ready after processing, notes ready, or an error. */
+  | { target: 'background'; type: 'recording.dismiss' }
   | { target: 'background'; type: 'capture.tab_ended' }
   | { target: 'background'; type: 'capture.mic_lost' }
   | { target: 'background'; type: 'capture.link'; link: StreamLink }
   | { target: 'background'; type: 'capture.video'; video: VideoStatus }
+  | { target: 'background'; type: 'capture.stt'; stt: SttHealth }
   /** Every uploadable video fragment is uploaded; the offscreen document may close (ADR-0011). */
   | { target: 'background'; type: 'capture.upload_idle' }
   /** In-meeting prompt chip user actions (S1-09). */
   | { target: 'background'; type: 'prompt.start-recording' }
-  | { target: 'background'; type: 'prompt.open-sidepanel' };
+  | { target: 'background'; type: 'prompt.open-sidepanel' }
+  /** Click on the Meet recording pill (DESIGN §8.4). */
+  | { target: 'background'; type: 'pill.open-sidepanel' };
 
 export type OffscreenMessage =
   | { target: 'offscreen'; type: 'capture.start'; streamId: string; recordVideo: boolean }
@@ -114,6 +122,12 @@ function isLink(value: unknown): value is StreamLink {
   return typeof value === 'string' && LINKS.has(value);
 }
 
+const STT_HEALTH = new Set<string>(['ok', 'degraded', 'down']);
+
+function isSttHealth(value: unknown): value is SttHealth {
+  return typeof value === 'string' && STT_HEALTH.has(value);
+}
+
 function isVideo(value: unknown): value is VideoStatus {
   return typeof value === 'string' && VIDEO.has(value);
 }
@@ -123,11 +137,13 @@ const SIMPLE_BACKGROUND = new Set<string>([
   'recording.stop',
   'recording.pause',
   'recording.resume',
+  'recording.dismiss',
   'capture.tab_ended',
   'capture.mic_lost',
   'capture.upload_idle',
   'prompt.start-recording',
   'prompt.open-sidepanel',
+  'pill.open-sidepanel',
 ]);
 
 export function parseBackgroundMessage(message: unknown): BackgroundMessage | null {
@@ -141,6 +157,9 @@ export function parseBackgroundMessage(message: unknown): BackgroundMessage | nu
   }
   if (message.type === 'capture.video' && isVideo(message.video)) {
     return { target: 'background', type: 'capture.video', video: message.video };
+  }
+  if (message.type === 'capture.stt' && isSttHealth(message.stt)) {
+    return { target: 'background', type: 'capture.stt', stt: message.stt };
   }
   return null;
 }

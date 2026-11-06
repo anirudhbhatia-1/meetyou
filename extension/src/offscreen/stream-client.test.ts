@@ -219,6 +219,35 @@ describe('StreamClient', () => {
     expect(client.backlogMs()).toBe(0);
   });
 
+  it('sends capture events, queued while offline (video part timing, ADR-0011 §3.4)', async () => {
+    const { gateway, timers, client } = setup();
+    client.start();
+    await settle();
+    const part = {
+      type: 'video.part_started',
+      sessionId: 's1',
+      partId: 'vp_01J00000000000000000000PRT',
+      source: 'tab',
+      mimeType: 'video/mp4',
+      width: 1280,
+      height: 720,
+      fps: 15,
+      at: 0,
+    } as const;
+    client.event(part);
+    expect(gateway.received.filter((m) => m === 'event')).toHaveLength(1);
+    gateway.drop();
+    client.event({ ...part, at: 5000 });
+    expect(gateway.received.filter((m) => m === 'event')).toHaveLength(1);
+    const [reconnect] = [...timers.pending.entries()];
+    if (reconnect !== undefined) {
+      timers.pending.delete(reconnect[0]);
+      reconnect[1]();
+    }
+    await settle();
+    expect(gateway.received.filter((m) => m === 'event')).toHaveLength(2);
+  });
+
   it('keeps reconnecting after Stop while offline and delivers the buffered audio', async () => {
     const { store, gateway, timers, client, write } = setup();
     client.start();

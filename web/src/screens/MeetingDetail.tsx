@@ -1,0 +1,403 @@
+import type { Segment, SummaryItem } from '@meetyou/contracts';
+import { useMemo, useState } from 'react';
+
+import type { MeetingSummary, Participant } from '../api/types.ts';
+import {
+  Icon,
+  useToast,
+  Banner,
+  Button,
+  Card,
+  Checkbox,
+  CitationChip,
+  SkeletonRows,
+} from '@meetyou/ui';
+import { useApi } from '../lib/api-context.ts';
+import { numberCitations } from '../lib/citations.ts';
+import {
+  formatClock,
+  formatDue,
+  formatLength,
+  formatWhen,
+  recordingLabel,
+  TEMPLATE_LABEL,
+} from '../lib/format.ts';
+import { href, navigate } from '../lib/router.ts';
+import { useAsync } from '../lib/useAsync.ts';
+
+/** DESIGN §12 */
+export function MeetingDetail({
+  meetingId,
+  tab,
+  onActionsChanged,
+}: {
+  meetingId: string;
+  tab: 'notes' | 'transcript';
+  onActionsChanged: () => void;
+}) {
+  const api = useApi();
+  const now = new Date();
+  const meeting = useAsync(() => api.getMeeting(meetingId), [meetingId]);
+  const summary = useAsync(() => api.getSummary(meetingId), [meetingId]);
+  const segments = useAsync(() => api.getSegments(meetingId), [meetingId]);
+  const people = useAsync(() => api.getParticipants(meetingId), [meetingId]);
+  const [selected, setSelected] = useState<SummaryItem | null>(null);
+
+  const m = meeting.data;
+  if (meeting.loading && m === undefined) {
+    return (
+      <div className="page">
+        <SkeletonRows rows={4} />
+      </div>
+    );
+  }
+  if (m === null || m === undefined) {
+    return (
+      <div className="page">
+        <Banner tone="error">This meeting was not found. It may have been deleted.</Banner>
+        <Button variant="ghost" onClick={() => navigate({ screen: 'meetings' })}>
+          Back to Meetings
+        </Button>
+      </div>
+    );
+  }
+
+  const rec = recordingLabel(m.recordingExpiresAt, now);
+  return (
+    <div className="detail">
+      <div className="toolbar glass-bar">
+        <Button variant="ghost" onClick={() => navigate({ screen: 'meetings' })}>
+          <Icon name="chevron-left" /> Meetings
+        </Button>
+        <span className="toolbar-title">{m.title}</span>
+        <div className="toolbar-actions">
+          {/* TODO(S4-09/S3-08): regenerate menu (§12.2), share sheet (§13.1), more menu. */}
+          <Button disabled title="Available when summaries come from the server (S3-08)">
+            <Icon name="refresh-cw" /> {TEMPLATE_LABEL[m.template]}
+          </Button>
+          <Button variant="primary" disabled title="Share sheet comes with S4-10">
+            Share
+          </Button>
+        </div>
+      </div>
+      <div className="page detail-page">
+        <header>
+          <p className="meta">
+            {formatWhen(m.startedAt, now)} · {formatLength(m.startedAt, m.endedAt)} ·{' '}
+            {m.participantNames.join(', ')} and you
+            {rec !== null && ` · ${rec}`}
+          </p>
+          <h1 className="meeting-title">{m.title}</h1>
+        </header>
+        {m.status === 'processing' ? (
+          <Card className="processing">
+            <span className="proc-dot" aria-hidden />
+            <h2>Writing your notes…</h2>
+            <p className="meta">
+              This usually takes under a minute. You can leave this page — we&rsquo;ll let you know
+              when they&rsquo;re ready.
+            </p>
+          </Card>
+        ) : (
+          <>
+            <div className="tabs" role="tablist" aria-label="Meeting">
+              {(['notes', 'transcript'] as const).map((t) => (
+                <a
+                  key={t}
+                  role="tab"
+                  aria-selected={tab === t}
+                  className={`tab ${tab === t ? 'tab-on' : ''}`}
+                  href={href({ screen: 'detail', meetingId, tab: t })}
+                >
+                  {t === 'notes' ? 'Notes' : 'Transcript'}
+                </a>
+              ))}
+            </div>
+            <div className="detail-grid">
+              {tab === 'notes' ? (
+                <NotesTab
+                  summary={summary.data ?? null}
+                  loading={summary.loading}
+                  selected={selected}
+                  onSelect={setSelected}
+                  status={m.status}
+                />
+              ) : (
+                <TranscriptTab
+                  segments={segments.data ?? []}
+                  loading={segments.loading}
+                  video={m.video}
+                  highlight={selected?.segmentIds ?? []}
+                />
+              )}
+              <aside className="rail">
+                <CitationCard
+                  item={selected}
+                  number={
+                    selected === null || summary.data == null
+                      ? null
+                      : (numberCitations(summary.data).get(selected.id) ?? null)
+                  }
+                  segments={segments.data ?? []}
+                  onShowInTranscript={() =>
+                    navigate({ screen: 'detail', meetingId, tab: 'transcript' })
+                  }
+                />
+                <ActionItemsCard
+                  summary={summary.data ?? null}
+                  people={people.data ?? []}
+                  onChanged={onActionsChanged}
+                />
+              </aside>
+            </div>
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function NotesTab({
+  summary,
+  loading,
+  selected,
+  onSelect,
+  status,
+}: {
+  summary: MeetingSummary | null;
+  loading: boolean;
+  selected: SummaryItem | null;
+  onSelect: (item: SummaryItem) => void;
+  status: string;
+}) {
+  const numbers = useMemo(
+    () => (summary === null ? new Map<string, number>() : numberCitations(summary)),
+    [summary],
+  );
+  if (loading && summary === null)
+    return (
+      <Card className="notes">
+        <SkeletonRows rows={5} />
+      </Card>
+    );
+  if (summary === null) {
+    return (
+      <Card className="notes">
+        <p className="empty">
+          {status === 'too_short'
+            ? 'This meeting was too short for notes.'
+            : 'No notes for this meeting yet.'}
+        </p>
+      </Card>
+    );
+  }
+  const bullet = (item: SummaryItem) => {
+    const n = numbers.get(item.id);
+    return (
+      <li key={item.id} className="ai-line">
+        <span>{item.text}</span>
+        {n !== undefined && (
+          <CitationChip n={n} selected={selected?.id === item.id} onSelect={() => onSelect(item)} />
+        )}
+      </li>
+    );
+  };
+  return (
+    <Card className="notes">
+      <p className="legend">
+        <span className="swatch swatch-ink" aria-hidden /> You wrote this
+        <span className="swatch swatch-muted" aria-hidden /> Added from the conversation
+        <span className="cite cite-static" aria-hidden>
+          1
+        </span>{' '}
+        Click to see who said it
+      </p>
+      <p className="overview">{summary.overview}</p>
+      {summary.sections.map((section, i) => (
+        <section key={section.note?.id ?? `topic-${i}`} className="note-section">
+          <h3 className={section.note === null ? 'topic-heading' : 'note-heading'}>
+            {section.note?.text ?? 'From the conversation'}
+          </h3>
+          <p className="meta small num">
+            {section.note === null
+              ? 'added from the conversation'
+              : `your note · ${formatClock(section.note.sessionMs)}`}
+          </p>
+          {section.items.length === 0 ? (
+            <p className="ai-line italic">Nothing in the conversation matched this note yet.</p>
+          ) : (
+            <ul className="bullets">{section.items.map(bullet)}</ul>
+          )}
+        </section>
+      ))}
+      {summary.decisions.length > 0 && (
+        <section className="note-section">
+          <h3 className="note-heading">Decisions</h3>
+          <ul className="bullets decisions">{summary.decisions.map(bullet)}</ul>
+        </section>
+      )}
+      {summary.questions.length > 0 && (
+        <section className="note-section">
+          <h3 className="note-heading">Open questions</h3>
+          <ul className="bullets questions">{summary.questions.map(bullet)}</ul>
+        </section>
+      )}
+    </Card>
+  );
+}
+
+function TranscriptTab({
+  segments,
+  loading,
+  video,
+  highlight,
+}: {
+  segments: Segment[];
+  loading: boolean;
+  video: { status: string; durationMs: number | null } | null;
+  highlight: string[];
+}) {
+  return (
+    <Card className="transcript">
+      {video !== null && (
+        <div className={`video-slot video-${video.status}`}>
+          {video.status === 'ready' ? (
+            // TODO(S4-17): player with click-to-seek from the signed playback URL (DESIGN §6.19).
+            <p className="meta">
+              <Icon name="video" /> Video player comes with S4-17.
+            </p>
+          ) : video.status === 'uploading' ? (
+            <p className="meta">
+              <Icon name="video" /> Video is still uploading from the computer that recorded it.
+              Your notes and transcript are ready.
+            </p>
+          ) : video.status === 'processing' ? (
+            <p className="meta">Preparing video…</p>
+          ) : video.status === 'failed' ? (
+            <p className="meta">Video couldn&rsquo;t be saved. Audio and notes are fine.</p>
+          ) : (
+            <p className="meta">Recording was deleted after the retention period.</p>
+          )}
+        </div>
+      )}
+      {loading && segments.length === 0 ? (
+        <SkeletonRows rows={6} />
+      ) : segments.length === 0 ? (
+        <p className="empty">No transcript for this meeting.</p>
+      ) : (
+        <ol className="segments">
+          {segments.map((s) => (
+            <li key={s.id} className={`segment ${highlight.includes(s.id) ? 'segment-hl' : ''}`}>
+              <span className="meta small num">{formatClock(s.startMs)}</span>
+              <span>
+                <span className={`speaker ${s.lane === 'me' ? 'speaker-me' : ''}`}>
+                  {s.lane === 'me' ? 'You' : (s.speakerName ?? 'Speaker')}
+                </span>
+                <span className="segment-text">{s.text}</span>
+              </span>
+            </li>
+          ))}
+        </ol>
+      )}
+    </Card>
+  );
+}
+
+function CitationCard({
+  item,
+  number,
+  segments,
+  onShowInTranscript,
+}: {
+  item: SummaryItem | null;
+  number: number | null;
+  segments: Segment[];
+  onShowInTranscript: () => void;
+}) {
+  if (item === null || number === null) {
+    return (
+      <Card className="cite-card">
+        <p className="meta">Click a number next to a note to see who said it.</p>
+      </Card>
+    );
+  }
+  const cited = segments.filter((s) => item.segmentIds.includes(s.id));
+  const start = cited[0]?.startMs ?? 0;
+  const end = cited.at(-1)?.endMs ?? start;
+  return (
+    <Card highlight className="cite-card">
+      <p className="meta">
+        <span className="cite cite-on cite-static">{number}</span> Where this came from ·{' '}
+        <span className="num">
+          {formatClock(start)}–{formatClock(end)}
+        </span>
+      </p>
+      {cited.map((s) => (
+        <blockquote key={s.id}>
+          <span className="speaker">{s.lane === 'me' ? 'You' : (s.speakerName ?? 'Speaker')}</span>
+          <q>{s.text}</q>
+        </blockquote>
+      ))}
+      <div className="cite-actions">
+        {/* TODO(S4-17): play from the cited time once audio/video URLs exist (DESIGN §12.6). */}
+        <Button disabled title="Playback comes with S4-17">
+          <Icon name="play" /> Play from {formatClock(start)}
+        </Button>
+        <Button variant="ghost" onClick={onShowInTranscript}>
+          Show in transcript
+        </Button>
+      </div>
+    </Card>
+  );
+}
+
+function ActionItemsCard({
+  summary,
+  people,
+  onChanged,
+}: {
+  summary: MeetingSummary | null;
+  people: Participant[];
+  onChanged: () => void;
+}) {
+  const api = useApi();
+  const toast = useToast();
+  const [, force] = useState(0);
+  if (summary === null || summary.actionItems.length === 0) return null;
+  const owner = (id: string | null) => {
+    const p = people.find((x) => x.id === id);
+    return p === undefined ? 'Unassigned' : p.isSelf ? 'You' : p.displayName;
+  };
+  const set = async (item: SummaryItem, status: 'open' | 'done') => {
+    await api.setActionItemStatus(item.id, status);
+    item.status = status;
+    force((n) => n + 1);
+    onChanged();
+  };
+  return (
+    <Card className="actions-card">
+      <h2 className="card-title">Action items</h2>
+      <ul className="todos">
+        {summary.actionItems.map((item) => (
+          <li key={item.id}>
+            <Checkbox
+              checked={item.status === 'done'}
+              onChange={(checked) => {
+                void set(item, checked ? 'done' : 'open');
+                if (checked) toast({ message: 'Marked done', undo: () => void set(item, 'open') });
+              }}
+            />
+            <span>
+              <span className={`todo-text ${item.status === 'done' ? 'done' : ''}`}>
+                {item.text}
+              </span>
+              <span className="meta small">
+                {owner(item.ownerParticipantId)} · {formatDue(item)}
+              </span>
+            </span>
+          </li>
+        ))}
+      </ul>
+    </Card>
+  );
+}

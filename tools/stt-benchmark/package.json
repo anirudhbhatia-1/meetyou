@@ -11,6 +11,7 @@
   },
   "dependencies": {
     "@google-cloud/speech": "8.2.0",
+    "@meetyou/hinglish": "workspace:*",
     "sarvamai": "1.1.11",
     "ws": "^8.22.0",
     "zod": "^4.6.7"

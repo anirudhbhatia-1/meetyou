@@ -22,10 +22,10 @@ import {
   type CaptureState,
 } from './capture-state.ts';
 import { isMeetUrl, meetingCodeOf } from './meet-tab.ts';
+import { LAST_RECORDING_KEY, type LastRecording } from '../last-recording.ts';
+import { RECORD_VIDEO_KEY, recordVideoFrom } from '../settings.ts';
 
 const OFFSCREEN_DOCUMENT_PATH = 'offscreen/index.html';
-/** Developer toggle until the settings page exists (S4); ADR-0011 default is on. */
-const RECORD_VIDEO_KEY = 'dev.recordVideo';
 /**
  * After the tab leaves the call, its state is re-read after these delays and must still be out of
  * the call every time before recording stops: a confirmed `ended` stops sooner, an unclear state
@@ -131,11 +131,20 @@ async function applyCaptureEvent(event: CaptureEvent): Promise<CaptureState> {
   const tabId = next.tabId ?? previous.tabId;
   if (tabId !== null) {
     // Best effort: the Meet content script (S1-07/S1-09) may not be listening yet.
-    chrome.tabs
-      .sendMessage(tabId, { target: 'content', type: 'recording.state', status: next.status })
-      .catch(() => undefined);
+    chrome.tabs.sendMessage(tabId, contentStateMessage(next)).catch(() => undefined);
   }
   return next;
+}
+
+/** What the Meet tab's prompt chip and recording pill need (DESIGN §8.2, §8.4). */
+function contentStateMessage(state: CaptureState): Record<string, unknown> {
+  return {
+    target: 'content',
+    type: 'recording.state',
+    status: state.status,
+    startedAt: state.startedAt,
+    video: state.video,
+  };
 }
 
 function notifyPromptProblem(tabId: number, problem: 'start_failed' | 'panel_failed'): void {
@@ -161,8 +170,7 @@ async function failCapture(event: Extract<CaptureEvent, { type: 'failed' }>): Pr
 }
 
 async function recordVideoSetting(): Promise<boolean> {
-  const items = await chrome.storage.local.get(RECORD_VIDEO_KEY);
-  return items[RECORD_VIDEO_KEY] !== false;
+  return recordVideoFrom(await chrome.storage.local.get(RECORD_VIDEO_KEY));
 }
 
 async function startRecording(tabId: number | undefined): Promise<void> {
@@ -223,7 +231,7 @@ async function startRecording(tabId: number | undefined): Promise<void> {
     await failCapture({ type: 'failed', error: result?.reason ?? 'offscreen_failed' });
     return;
   }
-  await applyCaptureEvent({
+  const started = await applyCaptureEvent({
     type: 'started',
     sessionId: result.sessionId,
     lanes: result.lanes,
@@ -231,6 +239,12 @@ async function startRecording(tabId: number | undefined): Promise<void> {
     link: result.link,
     video: result.video,
   });
+  if (started.startedAt !== null) {
+    const last: LastRecording = { sessionId: result.sessionId, startedAt: started.startedAt };
+    await chrome.storage.local
+      .set({ [LAST_RECORDING_KEY]: last })
+      .catch((error: unknown) => logError('save last recording failed', error));
+  }
   // Usually recording starts inside the call; the adapter only reports state changes, so ask.
   if ((await readCallState(tabId)) === 'in_call') await applyCaptureEvent({ type: 'call_joined' });
 }
@@ -496,9 +510,12 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     if (record.type === 'meet.page-ready') {
       // The content script asks once so its prompt chip never shows over a running recording.
       void loadCaptureState().then((state) => {
-        sendResponse({
-          status: fromTab !== null && state.tabId === fromTab ? state.status : 'idle',
-        });
+        // Another tab's recording shows nothing here: its pill belongs to the recorded tab.
+        sendResponse(
+          fromTab !== null && state.tabId === fromTab
+            ? contentStateMessage(state)
+            : { status: 'idle', startedAt: null, video: 'off' },
+        );
       });
       return true;
     }
@@ -539,6 +556,14 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       }
       break;
     }
+    case 'pill.open-sidepanel':
+      // From a trusted click on the recording pill; a refusal leaves the toolbar icon as the way in.
+      if (fromTab !== null) {
+        chrome.sidePanel.open({ tabId: fromTab }).catch((error: unknown) => {
+          logError('pill: sidePanel.open failed', error);
+        });
+      }
+      break;
     case 'prompt.start-recording': {
       enqueueCapture(async () => {
         const tabId = fromTab ?? (await activeTabId());
@@ -562,6 +587,11 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     case 'recording.resume':
       enqueueCapture(resumeRecording);
       break;
+    case 'recording.dismiss':
+      enqueueCapture(async () => {
+        await applyCaptureEvent({ type: 'dismissed' });
+      });
+      break;
     case 'capture.upload_idle':
       enqueueCapture(closeIfUploadsDone);
       break;
@@ -581,6 +611,13 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       const video = parsed.video;
       enqueueCapture(async () => {
         await applyCaptureEvent({ type: 'video_changed', video });
+      });
+      break;
+    }
+    case 'capture.stt': {
+      const stt = parsed.stt;
+      enqueueCapture(async () => {
+        await applyCaptureEvent({ type: 'stt_changed', stt });
       });
       break;
     }

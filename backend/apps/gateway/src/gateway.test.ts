@@ -12,9 +12,9 @@ import { LaneChunker } from './lane-chunker.ts';
 import { createGateway, SUBPROTOCOL, tokenFromProtocols, type Gateway } from './server.ts';
 import { checkLane } from './session-check.ts';
 import { EchoDetector, echoTokens, wordSimilarity } from './echo.ts';
-import { deepgramStreamUrl, parseDeepgramMessage } from './stt/deepgram.ts';
+import { DEEPGRAM_CAPABILITIES, deepgramStreamUrl } from '@meetyou/providers';
 import { clusterId, splitBySpeaker } from './speakers.ts';
-import type { SttInput, SttProvider, SttResult } from './stt/types.ts';
+import type { SttInput, SttProvider, SttResult } from '@meetyou/providers';
 import { StreamTimeline } from './timeline.ts';
 import { DevTokenIssuer } from './tokens.ts';
 
@@ -81,34 +81,6 @@ describe('DevTokenIssuer', () => {
   });
 });
 
-describe('parseDeepgramMessage', () => {
-  it('maps a final result to milliseconds and the majority word language', () => {
-    const result = parseDeepgramMessage(
-      JSON.stringify({
-        type: 'Results',
-        is_final: true,
-        start: 1.5,
-        duration: 1.2,
-        channel: {
-          alternatives: [
-            {
-              transcript: 'kal meeting hai',
-              words: [
-                { word: 'kal', start: 1.5, end: 1.8, language: 'hi' },
-                { word: 'meeting', start: 1.8, end: 2.2, language: 'en' },
-                { word: 'hai', start: 2.2, end: 2.7, language: 'hi' },
-              ],
-            },
-          ],
-        },
-      }),
-    );
-    expect(result).toMatchObject({ final: true, startMs: 1500, endMs: 2700, language: 'hi' });
-    expect(parseDeepgramMessage('{"type":"Metadata"}')).toBeNull();
-    expect(parseDeepgramMessage('not json')).toBeNull();
-  });
-});
-
 describe('LocalChunkStore', () => {
   it('recovers durableUpTo from manifests after a restart', async () => {
     const dir = await mkdtemp(join(tmpdir(), 'gateway-'));
@@ -138,6 +110,7 @@ describe('LocalChunkStore', () => {
 
 class FakeStt implements SttProvider {
   readonly name = 'fake';
+  readonly capabilities = DEEPGRAM_CAPABILITIES;
   readonly usdPerMinute = 0.01;
   frames = 0;
   inputs: SttInput[] = [];
@@ -282,6 +255,51 @@ describe('gateway end to end', () => {
       audioMs: { me: 0, them: 16_000 },
       stt: { provider: 'fake', audioMs: { me: 0, them: 16_000 }, streamsOpened: 1 },
       estimatedCostUsd: 0.0027,
+    });
+  });
+
+  it('stores final segments even when no client is attached (§8.1 step 5)', async () => {
+    const store = new MemoryChunkStore();
+    let emit: ((result: SttResult) => void) | null = null;
+    const stt: SttProvider = {
+      name: 'manual',
+      capabilities: DEEPGRAM_CAPABILITIES,
+      usdPerMinute: null,
+      open(_input, handlers) {
+        emit = (result) => handlers.onResult(result);
+        return Promise.resolve({ send: () => undefined, close: () => Promise.resolve() });
+      },
+    };
+    const base = await start(store, stt);
+    const { sessionId, streamUrl } = await post(`${base}/v1/dev/sessions`);
+    const { streamToken } = await post(`${base}/v1/dev/sessions/${sessionId}/stream-token`);
+    const client = new Client(streamUrl ?? '', streamToken ?? '');
+    await client.opened;
+    client.hello(sessionId ?? '');
+    await client.until((m) => m.some((x) => x.type === 'ready'));
+    client.sendFrames('them', 0, 4);
+    for (let i = 0; i < 100 && emit === null; i++) await new Promise((r) => setTimeout(r, 10));
+    client.socket.terminate();
+    await client.closed;
+    await new Promise((r) => setTimeout(r, 20));
+
+    // The provider's final arrives after the client went away (a late result, or a dropped tab).
+    (emit as ((result: SttResult) => void) | null)?.({
+      final: true,
+      text: 'haan theek hai',
+      startMs: 100,
+      endMs: 400,
+    });
+    for (let i = 0; i < 100 && store.segments.length === 0; i++) {
+      await new Promise((r) => setTimeout(r, 10));
+    }
+    expect(gateway?.sessions.get(sessionId ?? '')?.connected).toBe(false);
+    expect(store.segments).toHaveLength(1);
+    expect(store.segments[0]).toMatchObject({
+      meetingId: sessionId,
+      lane: 'them',
+      text: 'haan theek hai',
+      rawText: 'haan theek hai',
     });
   });
 

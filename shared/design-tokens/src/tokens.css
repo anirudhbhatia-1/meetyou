@@ -1,6 +1,6 @@
 /* Generated from tokens.ts by `pnpm --filter @meetyou/design-tokens build:css`. Do not edit. */
 :root {
-  color-scheme: light dark;
+  color-scheme: light;
   --paper: #f6f5ef;
   --paper-2: #fbfaf6;
   --surface: #ffffff;
@@ -13,14 +13,14 @@
   --stroke: #d6d5cf;
   --control-line: #8a8a83;
   --stroke-off: #c9c8c1;
-  --olive: #566a0a;
-  --olive-hover: #46570a;
-  --olive-ink: #3f4e05;
-  --olive-line: #7a8c1f;
-  --olive-tint: #e7ebd2;
-  --olive-wash: #f3f5e6;
-  --olive-hl: #eef2dc;
-  --match-hl: #e2e8c4;
+  --olive: #c2410c;
+  --olive-hover: #9a3412;
+  --olive-ink: #7c2d12;
+  --olive-line: #ea580c;
+  --olive-tint: #ffedd5;
+  --olive-wash: #fff7ed;
+  --olive-hl: #fff1e3;
+  --match-hl: #fed7aa;
   --ember: #e0603f;
   --ember-line: #bd4a30;
   --ember-halo: #f9dcd2;
@@ -54,47 +54,8 @@
   --focus-ring: 2px solid var(--olive-line);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root:not([data-theme='light']) {
-    --paper: #141511;
-    --paper-2: #1a1b16;
-    --surface: #1f201b;
-    --ink: #f2f1ea;
-    --ink-2: #dcdbd3;
-    --ink-3: #c4c3bb;
-    --muted: #a5a59d;
-    --hairline: #2e2f28;
-    --hairline-2: #262720;
-    --stroke: #3a3b34;
-    --control-line: #77776f;
-    --stroke-off: #4a4b44;
-    --olive: #8aa12a;
-    --olive-hover: #9bb33a;
-    --olive-ink: #d6e3a0;
-    --olive-line: #a3b84a;
-    --olive-tint: #2a3112;
-    --olive-wash: #23281a;
-    --olive-hl: #2d3416;
-    --match-hl: #3a4419;
-    --ember: #e0603f;
-    --ember-line: #bd4a30;
-    --ember-halo: #f9dcd2;
-    --warn-bg: #3a2119;
-    --warn-ink: #f2b8a6;
-    --amber-dot: #d48a1c;
-    --amber-bg: #33270f;
-    --amber-ink: #f0c27a;
-    --danger: #e07a62;
-    --danger-hover: #ea9580;
-    --danger-bg: #3a1f19;
-    --on-olive: #11120e;
-    --glass-bg: rgba(31, 32, 27, 0.6);
-    --glass-sheet-bg: rgba(31, 32, 27, 0.78);
-    --glass-edge: rgba(255, 255, 255, 0.08);
-  }
-}
-
 :root[data-theme='dark'] {
+  color-scheme: dark;
   --paper: #141511;
   --paper-2: #1a1b16;
   --surface: #1f201b;
@@ -107,14 +68,14 @@
   --stroke: #3a3b34;
   --control-line: #77776f;
   --stroke-off: #4a4b44;
-  --olive: #8aa12a;
-  --olive-hover: #9bb33a;
-  --olive-ink: #d6e3a0;
-  --olive-line: #a3b84a;
-  --olive-tint: #2a3112;
-  --olive-wash: #23281a;
-  --olive-hl: #2d3416;
-  --match-hl: #3a4419;
+  --olive: #fb923c;
+  --olive-hover: #fdba74;
+  --olive-ink: #fed7aa;
+  --olive-line: #f97316;
+  --olive-tint: #3b2010;
+  --olive-wash: #2a1a10;
+  --olive-hl: #3f2412;
+  --match-hl: #4a2a12;
   --ember: #e0603f;
   --ember-line: #bd4a30;
   --ember-halo: #f9dcd2;

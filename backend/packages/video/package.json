@@ -1,0 +1,24 @@
+{
+  "name": "@meetyou/video",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "video.finalize (S2-14, ADR-0011 \u00a73.4): joins uploaded fragments into one faststart MP4 on the session clock, with a poster. Runs the ffmpeg binary.",
+  "exports": {
+    ".": "./src/index.ts",
+    "./testing": "./src/testing.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@meetyou/db": "workspace:*",
+    "@meetyou/queue": "workspace:*",
+    "zod": "^4.6.7"
+  },
+  "devDependencies": {
+    "@meetyou/contracts": "workspace:*",
+    "graphile-worker": "0.18.0"
+  }
+}

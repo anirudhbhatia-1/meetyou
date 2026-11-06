@@ -3,7 +3,7 @@ import { request } from 'node:https';
 import { dirname, join, resolve } from 'node:path';
 import { parseArgs } from 'node:util';
 import { Normalizer, loadCanonicalList } from '../normalize/index.ts';
-import { transliterate } from '../normalize/devanagari.ts';
+import { transliterate } from '@meetyou/hinglish';
 import { batchProvider, streamProvider } from '../providers/index.ts';
 import {
   ClipManifest,

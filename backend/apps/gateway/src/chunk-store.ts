@@ -1,8 +1,8 @@
 import { randomBytes } from 'node:crypto';
-import { mkdir, open, readdir, readFile, rename } from 'node:fs/promises';
+import { copyFile, mkdir, open, readdir, readFile, rename, rm, stat } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 
-import type { Lane } from '@meetyou/contracts';
+import type { Lane, Segment } from '@meetyou/contracts';
 import { z } from 'zod';
 
 import { errorCode, log } from './log.ts';
@@ -37,14 +37,63 @@ export interface VideoFragment {
  * Durable audio chunks (ARCHITECTURE §6.1 step 2). `put` resolves only once the chunk survives a
  * crash, because the gateway acknowledges frames on that promise (§5.3).
  */
+/** Timing of one video part (ADR-0011 §3.4), from the extension's part events. */
+export const VideoPartInfo = z.object({
+  partId: z.string().regex(/^vp_[0-9A-HJKMNP-TV-Z]{26}$/),
+  mimeType: z.enum(['video/mp4', 'video/webm']),
+  /** Session-clock start (ARCHITECTURE §5.5). */
+  startMs: z.number().int().nonnegative(),
+  width: z.number().int().positive().optional(),
+  height: z.number().int().positive().optional(),
+  fps: z.number().int().positive().optional(),
+  /** Set when the part stopped: fragments 0..n-1 exist on the client. */
+  fragments: z.number().int().nonnegative().optional(),
+  stoppedAtMs: z.number().int().nonnegative().optional(),
+});
+export type VideoPartInfo = z.infer<typeof VideoPartInfo>;
+
+export type VideoFileName = 'playback.mp4' | 'poster.jpg';
+
 export interface ChunkStore {
   put(chunk: AudioChunk): Promise<void>;
   /** Highest durable seq per lane for a meeting; -1 when nothing is stored. */
   durableUpTo(workspaceId: string, meetingId: string): Promise<Record<Lane, number>>;
   /** Usage counts for cost tracking (AGENTS §3 rule 10); overwrites the previous snapshot. */
-  putUsage(usage: SessionUsage): Promise<void>;
+  /** Written next to the meeting's audio (`meetingId` defaults to the session ID). */
+  putUsage(usage: SessionUsage, meetingId?: string): Promise<void>;
+  /**
+   * Final segments without a database (local dev): appended in order to `segments.jsonl` next to
+   * the audio. With `DATABASE_URL` set they go to `transcript_segments` instead (sinks.ts).
+   */
+  appendSegments(
+    workspaceId: string,
+    meetingId: string,
+    segments: readonly Segment[],
+  ): Promise<void>;
   /** Overwrites the same fragment on a retry (idempotent, like a signed PUT to Cloud Storage). */
   putVideoFragment(fragment: VideoFragment): Promise<void>;
+  /** Merges part timing into `video/{partId}/part.json` (started, then stopped). */
+  putVideoPartInfo(
+    workspaceId: string,
+    meetingId: string,
+    info: Partial<VideoPartInfo> & { partId: string },
+  ): Promise<void>;
+  listVideoPartInfo(workspaceId: string, meetingId: string): Promise<VideoPartInfo[]>;
+  /** `video.finalize` output (ADR-0011 §3.5): `video/playback.mp4` and `video/poster.jpg`. */
+  putVideoFile(
+    workspaceId: string,
+    meetingId: string,
+    name: VideoFileName,
+    sourcePath: string,
+  ): Promise<{ storageKey: string; bytes: number }>;
+  /** Local path and size of a finalized file, or null; Cloud Storage serves signed URLs instead. */
+  videoFile(
+    workspaceId: string,
+    meetingId: string,
+    name: VideoFileName,
+  ): Promise<{ path: string; bytes: number } | null>;
+  /** Deletes the temporary fragments (and part timing) once the playback file is stored. */
+  deleteVideoFragments(workspaceId: string, meetingId: string): Promise<void>;
   /** Stored video parts of a meeting with their fragment indices, ascending. */
   listVideo(
     workspaceId: string,
@@ -95,10 +144,120 @@ export class LocalChunkStore implements ChunkStore {
     return join(this.#meetingDir(workspaceId, meetingId), 'audio', lane);
   }
 
-  async putUsage(usage: SessionUsage): Promise<void> {
-    const path = join(this.#meetingDir(usage.workspaceId, usage.sessionId), 'usage.json');
+  async putUsage(usage: SessionUsage, meetingId = usage.sessionId): Promise<void> {
+    const path = join(this.#meetingDir(usage.workspaceId, meetingId), 'usage.json');
     await mkdir(dirname(path), { recursive: true });
     await writeDurably(path, new TextEncoder().encode(JSON.stringify(usage, null, 2)));
+  }
+
+  async appendSegments(
+    workspaceId: string,
+    meetingId: string,
+    segments: readonly Segment[],
+  ): Promise<void> {
+    if (segments.length === 0) return;
+    const path = join(this.#meetingDir(workspaceId, meetingId), 'segments.jsonl');
+    await mkdir(dirname(path), { recursive: true });
+    const handle = await open(path, 'a');
+    try {
+      await handle.writeFile(segments.map((s) => `${JSON.stringify(s)}\n`).join(''));
+      await handle.sync();
+    } finally {
+      await handle.close();
+    }
+  }
+
+  #videoFilePath(workspaceId: string, meetingId: string, name: VideoFileName): string {
+    return join(this.#meetingDir(workspaceId, meetingId), 'video', name);
+  }
+
+  async putVideoFile(
+    workspaceId: string,
+    meetingId: string,
+    name: VideoFileName,
+    sourcePath: string,
+  ): Promise<{ storageKey: string; bytes: number }> {
+    const path = this.#videoFilePath(workspaceId, meetingId, name);
+    await mkdir(dirname(path), { recursive: true });
+    const tmp = `${path}.${randomBytes(6).toString('hex')}.tmp`;
+    await copyFile(sourcePath, tmp);
+    const handle = await open(tmp, 'r+');
+    try {
+      await handle.sync();
+    } finally {
+      await handle.close();
+    }
+    await rename(tmp, path);
+    return {
+      storageKey: `ws/${workspaceId}/meetings/${meetingId}/video/${name}`,
+      bytes: (await stat(path)).size,
+    };
+  }
+
+  async videoFile(
+    workspaceId: string,
+    meetingId: string,
+    name: VideoFileName,
+  ): Promise<{ path: string; bytes: number } | null> {
+    const path = this.#videoFilePath(workspaceId, meetingId, name);
+    try {
+      return { path, bytes: (await stat(path)).size };
+    } catch {
+      return null;
+    }
+  }
+
+  async deleteVideoFragments(workspaceId: string, meetingId: string): Promise<void> {
+    const dir = join(this.#meetingDir(workspaceId, meetingId), 'video');
+    let names: string[];
+    try {
+      names = await readdir(dir);
+    } catch {
+      return;
+    }
+    // Part directories only; playback.mp4 and poster.jpg stay.
+    for (const name of names.filter((n) => n.startsWith('vp_') && ID.test(n))) {
+      await rm(join(dir, name), { recursive: true, force: true });
+    }
+  }
+
+  async putVideoPartInfo(
+    workspaceId: string,
+    meetingId: string,
+    info: Partial<VideoPartInfo> & { partId: string },
+  ): Promise<void> {
+    if (!ID.test(info.partId)) throw new Error('invalid video part id');
+    const path = join(this.#meetingDir(workspaceId, meetingId), 'video', info.partId, 'part.json');
+    await mkdir(dirname(path), { recursive: true });
+    let previous: Record<string, unknown> = {};
+    try {
+      previous = JSON.parse(await readFile(path, 'utf8')) as Record<string, unknown>;
+    } catch {
+      // First event of the part.
+    }
+    await writeDurably(path, new TextEncoder().encode(JSON.stringify({ ...previous, ...info })));
+  }
+
+  async listVideoPartInfo(workspaceId: string, meetingId: string): Promise<VideoPartInfo[]> {
+    const dir = join(this.#meetingDir(workspaceId, meetingId), 'video');
+    let names: string[];
+    try {
+      names = await readdir(dir);
+    } catch {
+      return [];
+    }
+    const out: VideoPartInfo[] = [];
+    for (const name of names.filter((n) => ID.test(n)).sort()) {
+      try {
+        const parsed = VideoPartInfo.safeParse(
+          JSON.parse(await readFile(join(dir, name, 'part.json'), 'utf8')),
+        );
+        if (parsed.success) out.push(parsed.data);
+      } catch {
+        // A part without timing (older recording, or the event never arrived).
+      }
+    }
+    return out;
   }
 
   async putVideoFragment(fragment: VideoFragment): Promise<void> {
@@ -226,6 +385,63 @@ export class MemoryChunkStore implements ChunkStore {
   readonly chunks: AudioChunk[] = [];
   readonly usage = new Map<string, SessionUsage>();
   readonly videoFragments = new Map<string, VideoFragment>();
+  readonly segments: Segment[] = [];
+  readonly videoParts = new Map<string, Record<string, unknown>>();
+  readonly videoFiles = new Map<string, { path: string; bytes: number }>();
+
+  putVideoFile(
+    workspaceId: string,
+    meetingId: string,
+    name: VideoFileName,
+    sourcePath: string,
+  ): Promise<{ storageKey: string; bytes: number }> {
+    this.videoFiles.set(`${meetingId}/${name}`, { path: sourcePath, bytes: 0 });
+    return Promise.resolve({
+      storageKey: `ws/${workspaceId}/meetings/${meetingId}/video/${name}`,
+      bytes: 0,
+    });
+  }
+
+  videoFile(_w: string, meetingId: string, name: VideoFileName) {
+    return Promise.resolve(this.videoFiles.get(`${meetingId}/${name}`) ?? null);
+  }
+
+  deleteVideoFragments(_w: string, meetingId: string): Promise<void> {
+    for (const key of [...this.videoFragments.keys()]) {
+      if (key.startsWith(`${meetingId}/`)) this.videoFragments.delete(key);
+    }
+    for (const key of [...this.videoParts.keys()]) {
+      if (key.startsWith(`${meetingId}/`)) this.videoParts.delete(key);
+    }
+    return Promise.resolve();
+  }
+
+  putVideoPartInfo(
+    _w: string,
+    meetingId: string,
+    info: Partial<VideoPartInfo> & { partId: string },
+  ): Promise<void> {
+    const key = `${meetingId}/${info.partId}`;
+    this.videoParts.set(key, { ...this.videoParts.get(key), ...info });
+    return Promise.resolve();
+  }
+
+  listVideoPartInfo(_w: string, meetingId: string): Promise<VideoPartInfo[]> {
+    return Promise.resolve(
+      [...this.videoParts.entries()]
+        .filter(([key]) => key.startsWith(`${meetingId}/`))
+        .flatMap(([, value]) => {
+          const parsed = VideoPartInfo.safeParse(value);
+          return parsed.success ? [parsed.data] : [];
+        })
+        .sort((a, b) => a.partId.localeCompare(b.partId)),
+    );
+  }
+
+  appendSegments(_w: string, _m: string, segments: readonly Segment[]): Promise<void> {
+    this.segments.push(...segments);
+    return Promise.resolve();
+  }
 
   putVideoFragment(fragment: VideoFragment): Promise<void> {
     const key = `${fragment.meetingId}/${fragment.partId}/${fragment.index}`;

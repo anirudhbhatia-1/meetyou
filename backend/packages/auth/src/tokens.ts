@@ -1,6 +1,13 @@
 import { randomUUID } from 'node:crypto';
 
-import { createLocalJWKSet, errors, jwtVerify, SignJWT, type JWTPayload } from 'jose';
+import {
+  createLocalJWKSet,
+  errors,
+  jwtVerify,
+  SignJWT,
+  type JSONWebKeySet,
+  type JWTPayload,
+} from 'jose';
 
 import { AuthError } from './errors.ts';
 import { SIGNING_ALG, type KeyRing } from './keys.ts';
@@ -25,6 +32,8 @@ export type Lane = 'me' | 'them';
 
 export interface StreamClaims {
   sessionId: string;
+  /** The session's workspace: the gateway scopes its database writes (RLS) to it. */
+  workspaceId: string;
   lanes: Lane[];
   /** Single use at connect (ADR-0004 §4.4); the gateway remembers spent IDs until `expiresAt`. */
   jti: string;
@@ -75,9 +84,13 @@ export class TokenService {
     return { userId: payload.sub, workspaceId: payload.wsid, scope: 'user' };
   }
 
-  async issueStreamToken(input: { sessionId: string; lanes: Lane[] }): Promise<IssuedToken> {
+  async issueStreamToken(input: {
+    sessionId: string;
+    workspaceId: string;
+    lanes: Lane[];
+  }): Promise<IssuedToken> {
     return this.#sign(
-      { sid: input.sessionId, lanes: input.lanes },
+      { sid: input.sessionId, wsid: input.workspaceId, lanes: input.lanes },
       undefined,
       STREAM_AUDIENCE,
       STREAM_TOKEN_TTL_S,
@@ -87,23 +100,7 @@ export class TokenService {
 
   /** Checks signature, audience and expiry; the caller checks `sessionId` and spends `jti`. */
   async verifyStreamToken(token: string): Promise<StreamClaims> {
-    const payload = await this.#verify(token, STREAM_AUDIENCE);
-    const lanes = payload.lanes;
-    if (
-      typeof payload.sid !== 'string' ||
-      typeof payload.jti !== 'string' ||
-      typeof payload.exp !== 'number' ||
-      !Array.isArray(lanes) ||
-      !lanes.every((l) => l === 'me' || l === 'them')
-    ) {
-      throw new AuthError('invalid_token');
-    }
-    return {
-      sessionId: payload.sid,
-      lanes: lanes as Lane[],
-      jti: payload.jti,
-      expiresAt: new Date(payload.exp * 1000),
-    };
+    return streamClaims(await this.#verify(token, STREAM_AUDIENCE));
   }
 
   async #sign(
@@ -141,6 +138,65 @@ export class TokenService {
       });
       return payload;
     } catch (error: unknown) {
+      if (error instanceof errors.JWTExpired) throw new AuthError('expired_token');
+      throw new AuthError('invalid_token');
+    }
+  }
+}
+
+function streamClaims(payload: JWTPayload): StreamClaims {
+  const lanes = payload.lanes;
+  if (
+    typeof payload.sid !== 'string' ||
+    typeof payload.wsid !== 'string' ||
+    typeof payload.jti !== 'string' ||
+    typeof payload.exp !== 'number' ||
+    !Array.isArray(lanes) ||
+    !lanes.every((l) => l === 'me' || l === 'them')
+  ) {
+    throw new AuthError('invalid_token');
+  }
+  return {
+    sessionId: payload.sid,
+    workspaceId: payload.wsid,
+    lanes: lanes as Lane[],
+    jti: payload.jti,
+    expiresAt: new Date(payload.exp * 1000),
+  };
+}
+
+/** What the gateway needs from stream tokens: verification only. */
+export interface StreamTokenVerification {
+  verifyStreamToken(token: string): Promise<StreamClaims>;
+}
+
+/**
+ * Stream-token verification from **public** keys only (the API's JWKS), so the gateway never holds
+ * a signing key (ADR-0004 §4.4). Same checks as TokenService.
+ */
+export class StreamTokenVerifier implements StreamTokenVerification {
+  readonly #keys: ReturnType<typeof createLocalJWKSet>;
+  readonly #now: () => number;
+
+  constructor(jwks: JSONWebKeySet, now: () => number = Date.now) {
+    if (jwks.keys.some((k) => 'd' in k)) throw new Error('JWKS must hold public keys only');
+    this.#keys = createLocalJWKSet(jwks);
+    this.#now = now;
+  }
+
+  async verifyStreamToken(token: string): Promise<StreamClaims> {
+    try {
+      const { payload } = await jwtVerify(token, this.#keys, {
+        issuer: ISSUER,
+        audience: STREAM_AUDIENCE,
+        algorithms: [SIGNING_ALG],
+        requiredClaims: ['exp', 'iat'],
+        clockTolerance: CLOCK_TOLERANCE_S,
+        currentDate: new Date(this.#now()),
+      });
+      return streamClaims(payload);
+    } catch (error: unknown) {
+      if (error instanceof AuthError) throw error;
       if (error instanceof errors.JWTExpired) throw new AuthError('expired_token');
       throw new AuthError('invalid_token');
     }

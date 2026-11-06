@@ -1,0 +1,545 @@
+{
+  "version": 1,
+  "name": "standup-hinglish",
+  "synthetic": true,
+  "sessionId": "ses_01M6QY6PBS9BRZ04X2JMX35H1K",
+  "durationMs": 21000,
+  "messages": [
+    {
+      "atMs": 0,
+      "message": {
+        "type": "ready",
+        "sessionId": "ses_01M6QY6PBS9BRZ04X2JMX35H1K",
+        "acceptedFormat": {
+          "codec": "pcm16",
+          "sampleRate": 16000,
+          "channels": 1,
+          "frameMs": 100
+        },
+        "durableUpTo": {
+          "me": -1,
+          "them": -1
+        }
+      }
+    },
+    {
+      "atMs": 1900,
+      "message": {
+        "type": "transcript.interim",
+        "lane": "them",
+        "text": "Good morning",
+        "startMs": 1000
+      }
+    },
+    {
+      "atMs": 2900,
+      "message": {
+        "type": "transcript.interim",
+        "lane": "them",
+        "text": "Good morning, chaliye standup",
+        "startMs": 1000
+      }
+    },
+    {
+      "atMs": 3900,
+      "message": {
+        "type": "transcript.segment",
+        "segment": {
+          "id": "seg_01M6QY6PK4CSWVNBT6KDNM6WJD",
+          "workspaceId": "dev",
+          "meetingId": "ses_01M6QY6PBS9BRZ04X2JMX35H1K",
+          "lane": "them",
+          "speakerClusterId": "spk_1",
+          "startMs": 1000,
+          "endMs": 4000,
+          "text": "Good morning, chaliye standup shuru karte hain.",
+          "rawText": "Good morning, chaliye standup shuru karte hain.",
+          "language": "hi",
+          "source": "live",
+          "words": [
+            {
+              "text": "Good",
+              "startMs": 1000,
+              "endMs": 1429,
+              "confidence": 0.95
+            },
+            {
+              "text": "morning,",
+              "startMs": 1429,
+              "endMs": 1857,
+              "confidence": 0.95
+            },
+            {
+              "text": "chaliye",
+              "startMs": 1857,
+              "endMs": 2286,
+              "confidence": 0.95
+            },
+            {
+              "text": "standup",
+              "startMs": 2286,
+              "endMs": 2714,
+              "confidence": 0.95
+            },
+            {
+              "text": "shuru",
+              "startMs": 2714,
+              "endMs": 3143,
+              "confidence": 0.95
+            },
+            {
+              "text": "karte",
+              "startMs": 3143,
+              "endMs": 3571,
+              "confidence": 0.95
+            },
+            {
+              "text": "hain.",
+              "startMs": 3571,
+              "endMs": 4000,
+              "confidence": 0.95
+            }
+          ],
+          "flags": []
+        }
+      }
+    },
+    {
+      "atMs": 5800,
+      "message": {
+        "type": "transcript.interim",
+        "lane": "me",
+        "text": "Kal maine search",
+        "startMs": 4500
+      }
+    },
+    {
+      "atMs": 7100,
+      "message": {
+        "type": "transcript.interim",
+        "lane": "me",
+        "text": "Kal maine search pagination merge kar diya",
+        "startMs": 4500
+      }
+    },
+    {
+      "atMs": 8400,
+      "message": {
+        "type": "transcript.segment",
+        "segment": {
+          "id": "seg_01M6QY6PV11Q86J8RY6K205FRP",
+          "workspaceId": "dev",
+          "meetingId": "ses_01M6QY6PBS9BRZ04X2JMX35H1K",
+          "lane": "me",
+          "startMs": 4500,
+          "endMs": 8500,
+          "text": "Kal maine search pagination merge kar diya, aaj review comments dekhunga.",
+          "rawText": "Kal maine search pagination merge kar diya, aaj review comments dekhunga.",
+          "language": "hi",
+          "source": "live",
+          "words": [
+            {
+              "text": "Kal",
+              "startMs": 4500,
+              "endMs": 4864,
+              "confidence": 0.95
+            },
+            {
+              "text": "maine",
+              "startMs": 4864,
+              "endMs": 5227,
+              "confidence": 0.95
+            },
+            {
+              "text": "search",
+              "startMs": 5227,
+              "endMs": 5591,
+              "confidence": 0.95
+            },
+            {
+              "text": "pagination",
+              "startMs": 5591,
+              "endMs": 5955,
+              "confidence": 0.95
+            },
+            {
+              "text": "merge",
+              "startMs": 5955,
+              "endMs": 6318,
+              "confidence": 0.95
+            },
+            {
+              "text": "kar",
+              "startMs": 6318,
+              "endMs": 6682,
+              "confidence": 0.95
+            },
+            {
+              "text": "diya,",
+              "startMs": 6682,
+              "endMs": 7045,
+              "confidence": 0.95
+            },
+            {
+              "text": "aaj",
+              "startMs": 7045,
+              "endMs": 7409,
+              "confidence": 0.95
+            },
+            {
+              "text": "review",
+              "startMs": 7409,
+              "endMs": 7773,
+              "confidence": 0.95
+            },
+            {
+              "text": "comments",
+              "startMs": 7773,
+              "endMs": 8136,
+              "confidence": 0.95
+            },
+            {
+              "text": "dekhunga.",
+              "startMs": 8136,
+              "endMs": 8500,
+              "confidence": 0.95
+            }
+          ],
+          "flags": []
+        }
+      }
+    },
+    {
+      "atMs": 9900,
+      "message": {
+        "type": "ack",
+        "lane": "me",
+        "upToSeq": 99
+      }
+    },
+    {
+      "atMs": 9900,
+      "message": {
+        "type": "ack",
+        "lane": "them",
+        "upToSeq": 99
+      }
+    },
+    {
+      "atMs": 10300,
+      "message": {
+        "type": "transcript.interim",
+        "lane": "them",
+        "text": "Main staging database pe",
+        "startMs": 9000
+      }
+    },
+    {
+      "atMs": 11600,
+      "message": {
+        "type": "transcript.interim",
+        "lane": "them",
+        "text": "Main staging database pe blocked hoon",
+        "startMs": 9000
+      }
+    },
+    {
+      "atMs": 12900,
+      "message": {
+        "type": "transcript.segment",
+        "segment": {
+          "id": "seg_01M6QY6Q327EREJYGTC9X23SKK",
+          "workspaceId": "dev",
+          "meetingId": "ses_01M6QY6PBS9BRZ04X2JMX35H1K",
+          "lane": "them",
+          "speakerClusterId": "spk_2",
+          "startMs": 9000,
+          "endMs": 13000,
+          "text": "Main staging database pe blocked hoon, migration abhi tak apply nahi hui.",
+          "rawText": "Main staging database pe blocked hoon, migration abhi tak apply nahi hui.",
+          "language": "hi",
+          "source": "live",
+          "words": [
+            {
+              "text": "Main",
+              "startMs": 9000,
+              "endMs": 9333,
+              "confidence": 0.95
+            },
+            {
+              "text": "staging",
+              "startMs": 9333,
+              "endMs": 9667,
+              "confidence": 0.95
+            },
+            {
+              "text": "database",
+              "startMs": 9667,
+              "endMs": 10000,
+              "confidence": 0.95
+            },
+            {
+              "text": "pe",
+              "startMs": 10000,
+              "endMs": 10333,
+              "confidence": 0.95
+            },
+            {
+              "text": "blocked",
+              "startMs": 10333,
+              "endMs": 10667,
+              "confidence": 0.95
+            },
+            {
+              "text": "hoon,",
+              "startMs": 10667,
+              "endMs": 11000,
+              "confidence": 0.95
+            },
+            {
+              "text": "migration",
+              "startMs": 11000,
+              "endMs": 11333,
+              "confidence": 0.95
+            },
+            {
+              "text": "abhi",
+              "startMs": 11333,
+              "endMs": 11667,
+              "confidence": 0.95
+            },
+            {
+              "text": "tak",
+              "startMs": 11667,
+              "endMs": 12000,
+              "confidence": 0.95
+            },
+            {
+              "text": "apply",
+              "startMs": 12000,
+              "endMs": 12333,
+              "confidence": 0.95
+            },
+            {
+              "text": "nahi",
+              "startMs": 12333,
+              "endMs": 12667,
+              "confidence": 0.95
+            },
+            {
+              "text": "hui.",
+              "startMs": 12667,
+              "endMs": 13000,
+              "confidence": 0.95
+            }
+          ],
+          "flags": []
+        }
+      }
+    },
+    {
+      "atMs": 14900,
+      "message": {
+        "type": "transcript.interim",
+        "lane": "them",
+        "text": "Okay, decision",
+        "startMs": 13500
+      }
+    },
+    {
+      "atMs": 16400,
+      "message": {
+        "type": "transcript.segment",
+        "segment": {
+          "id": "seg_01M6QY6Q9EMD79YMBKEKG7AZJ5",
+          "workspaceId": "dev",
+          "meetingId": "ses_01M6QY6PBS9BRZ04X2JMX35H1K",
+          "lane": "them",
+          "speakerClusterId": "spk_1",
+          "startMs": 13500,
+          "endMs": 16500,
+          "text": "Okay, decision: release Friday tak move karte hain.",
+          "rawText": "Okay, decision: release Friday tak move karte hain.",
+          "language": "en",
+          "source": "live",
+          "words": [
+            {
+              "text": "Okay,",
+              "startMs": 13500,
+              "endMs": 13875,
+              "confidence": 0.95
+            },
+            {
+              "text": "decision:",
+              "startMs": 13875,
+              "endMs": 14250,
+              "confidence": 0.95
+            },
+            {
+              "text": "release",
+              "startMs": 14250,
+              "endMs": 14625,
+              "confidence": 0.95
+            },
+            {
+              "text": "Friday",
+              "startMs": 14625,
+              "endMs": 15000,
+              "confidence": 0.95
+            },
+            {
+              "text": "tak",
+              "startMs": 15000,
+              "endMs": 15375,
+              "confidence": 0.95
+            },
+            {
+              "text": "move",
+              "startMs": 15375,
+              "endMs": 15750,
+              "confidence": 0.95
+            },
+            {
+              "text": "karte",
+              "startMs": 15750,
+              "endMs": 16125,
+              "confidence": 0.95
+            },
+            {
+              "text": "hain.",
+              "startMs": 16125,
+              "endMs": 16500,
+              "confidence": 0.95
+            }
+          ],
+          "flags": []
+        }
+      }
+    },
+    {
+      "atMs": 17900,
+      "message": {
+        "type": "transcript.interim",
+        "lane": "me",
+        "text": "Theek hai",
+        "startMs": 17000
+      }
+    },
+    {
+      "atMs": 18900,
+      "message": {
+        "type": "transcript.interim",
+        "lane": "me",
+        "text": "Theek hai, main onboarding screens",
+        "startMs": 17000
+      }
+    },
+    {
+      "atMs": 19900,
+      "message": {
+        "type": "transcript.segment",
+        "segment": {
+          "id": "seg_01M6QY6QFKCE4SNCMANZX4GN4R",
+          "workspaceId": "dev",
+          "meetingId": "ses_01M6QY6PBS9BRZ04X2JMX35H1K",
+          "lane": "me",
+          "startMs": 17000,
+          "endMs": 20000,
+          "text": "Theek hai, main onboarding screens aaj review kar lunga.",
+          "rawText": "Theek hai, main onboarding screens aaj review kar lunga.",
+          "language": "hi",
+          "source": "live",
+          "words": [
+            {
+              "text": "Theek",
+              "startMs": 17000,
+              "endMs": 17333,
+              "confidence": 0.95
+            },
+            {
+              "text": "hai,",
+              "startMs": 17333,
+              "endMs": 17667,
+              "confidence": 0.95
+            },
+            {
+              "text": "main",
+              "startMs": 17667,
+              "endMs": 18000,
+              "confidence": 0.95
+            },
+            {
+              "text": "onboarding",
+              "startMs": 18000,
+              "endMs": 18333,
+              "confidence": 0.95
+            },
+            {
+              "text": "screens",
+              "startMs": 18333,
+              "endMs": 18667,
+              "confidence": 0.95
+            },
+            {
+              "text": "aaj",
+              "startMs": 18667,
+              "endMs": 19000,
+              "confidence": 0.95
+            },
+            {
+              "text": "review",
+              "startMs": 19000,
+              "endMs": 19333,
+              "confidence": 0.95
+            },
+            {
+              "text": "kar",
+              "startMs": 19333,
+              "endMs": 19667,
+              "confidence": 0.95
+            },
+            {
+              "text": "lunga.",
+              "startMs": 19667,
+              "endMs": 20000,
+              "confidence": 0.95
+            }
+          ],
+          "flags": []
+        }
+      }
+    },
+    {
+      "atMs": 19900,
+      "message": {
+        "type": "ack",
+        "lane": "me",
+        "upToSeq": 199
+      }
+    },
+    {
+      "atMs": 19900,
+      "message": {
+        "type": "ack",
+        "lane": "them",
+        "upToSeq": 199
+      }
+    },
+    {
+      "atMs": 21000,
+      "message": {
+        "type": "ack",
+        "lane": "me",
+        "upToSeq": 209
+      }
+    },
+    {
+      "atMs": 21000,
+      "message": {
+        "type": "ack",
+        "lane": "them",
+        "upToSeq": 209
+      }
+    }
+  ]
+}

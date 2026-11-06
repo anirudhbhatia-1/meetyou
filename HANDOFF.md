@@ -6,7 +6,7 @@ pointer to where the full detail lives — the linked document stays the source 
 
 | Field | Value |
 |---|---|
-| Last updated | 2026-11-05 (Gaurav: S1-08/09/12 done; Anirudh: S2-01 database, S2-02 auth, video playback fix) |
+| Last updated | 2026-11-06 (staging setup runbook for Gaurav; S2 remaining work done locally) |
 | Updated by | Anirudh (Claude Code), after merging Gaurav's S1-12 update |
 | Repository | [anirudhbhatia-1/meetyou](https://github.com/anirudhbhatia-1/meetyou) — branches `main`, `anirudh`, `Gauravbro` |
 | Current stage | **Stage 1** in progress — Gaurav's Stage 1 tasks (S1-01, S1-07, S1-08, S1-09, S1-10, S1-12) complete; Gaurav next: S2-08 API scaffold (§7) |
@@ -248,6 +248,218 @@ Anirudh asked to finish all S1 code first and run the Chrome tests at the end.
   8 MB cap, idempotent), stored per ARCHITECTURE §11.4; `check-session` lists video parts and
   missing fragments, `--join` writes a playable file. 20 new tests; `pnpm check` passes (267 tests).
 - **Not done:** all Chrome checks (ADR-0011 1–4, 60-min run); server finalize stays S2-14.
+
+### 2026-11-06 (later) — Anirudh (Claude Code): staging setup runbook for Gaurav
+- **New: [docs/STAGING_SETUP.md](docs/STAGING_SETUP.md)** — step by step: project, budget alert,
+  Terraform state bucket, pinning the extension ID (manifest `key`), applying the existing
+  Terraform, the resources still to add (Artifact Registry, Memorystore, API / worker services,
+  migration job, per-service accounts and secrets), migrations as `meetyou_app` with RLS checks,
+  secrets (database URL, signing JWKS generated with our helper — command checked, Google OAuth
+  client), Dockerfile shape (worker with ffmpeg), environment variables per service, deploy order
+  and smoke test, cost control, security checklist, troubleshooting. Items not run against our
+  project are marked **[Verify]**.
+- **Gaurav:** start with §2–§7 (no new application code needed). Anirudh still owes the gateway
+  staging mode (Cloud Storage chunk store, `0.0.0.0`, `APP_ENV=staging`) and the worker app.
+
+### 2026-11-06 (later) — Anirudh (Claude Code): S2 remaining work (S2-04, S2-05, S2-07, S2-13, S2-14)
+Plan written in IMPLEMENTATION_PLAN ("Stage 2 — Anirudh's remaining work"). Decisions (Anirudh):
+`ioredis` for Redis (long-term choice), the `ffmpeg` binary for finalize, Hindi display text as
+the provider returns it for now (he will switch later). Recorded in AGENTS §9.
+- **S2-05 assembler** (`gateway/src/assembler.ts`): session clock, display policy (`as_provided`
+  default; `roman_rules` = Devanagari→Roman + canonical spelling), `rawText` kept, ULIDs, echo
+  flags. **Segments are now stored even when no client is attached** (before, they were dropped).
+  New `shared/hinglish` (`@meetyou/hinglish`): the S0-03 canonical list and the Devanagari
+  transliterator moved there from the benchmark (benchmark imports it; its 63 tests pass).
+- **Sinks** (`sinks.ts`): `DbSink` → `transcript_segments` (speaker clusters created on first use),
+  `usage_records` (S2-07, one realtime row per meeting), meeting → `processing` at the end,
+  `video_assets` per part; `FileSink` → `segments.jsonl` / `usage.json` locally. Repository
+  functions in `@meetyou/db` (`meetings-repo.ts`, 6 PGlite tests) — **S2-09 (Gaurav) should call
+  `createMeetingForSession` in `POST /sessions`**.
+- **S2-04** (`registry.ts`, `server.ts`, `session.ts`): session registry (memory / Redis hash per
+  session, single-use token JTIs); any instance takes a session over from the registry and
+  resumes from durable chunks (**kill-an-instance test passes**); real **JWT stream tokens**
+  verified from the public JWKS only (`StreamTokenVerifier`; stream tokens now carry `wsid` —
+  **the API must pass `workspaceId` to `issueStreamToken`**); STT `health` messages
+  (`degraded`/`down`) and `needsBatch` marking on outages; workspace glossary → Deepgram
+  `keyterm` (STT_PREFLIGHT §3.3 limits). Storage is keyed by **meeting ID** (§11.4).
+  Redis tested against a local `redis-server` (`REDIS_URL=… vitest`).
+- **Extension:** STT health → capture state → panel header "Recording — transcript delayed" +
+  §9 banner; the recorder sends `video.part_started` / `video.part_stopped` over the stream.
+- **S2-14** (`backend/packages/video`, `@meetyou/video`): `finalizeVideo` (join fragments, remux
+  to faststart MP4 copying H.264 / re-encoding VP9, fill pauses with the last frame + silence so
+  one file follows the session clock, poster), queue task `video.finalize` (re-checks every
+  15 min until uploads are complete, 24 h cap, `delete_after` from the workspace retention,
+  deletes fragments after the row is `ready`); `DbSink` enqueues it in the meeting-end
+  transaction (outbox). Locally without Postgres the gateway finalizes in-process once an ended
+  session has every fragment (`local-finalizer.ts`; a race where the last fragment's check was
+  merged into an earlier one was found and fixed); dev routes serve `playback.mp4` with Range and
+  `poster.jpg`; the side panel shows the finalized "Meeting video" with Play/Download. Tested with
+  real ffmpeg (single part, two parts with a 6 s pause → 14 s file, gateway end to end).
+- **S2-13** (`shared/fixtures`, `@meetyou/fixtures`): synthetic Hinglish standup script; a session
+  recorded through the real gateway with a scripted STT (`gateway/src/record-fixture.ts`) +
+  `replaySession` for UI mocks; `pnpm --filter @meetyou/fixtures audio` makes synthetic TTS WAVs
+  per lane locally (`shared/fixtures/audio/`, gitignored — no audio committed).
+- `pnpm check` passes twice in a row (gateway 56 + 1 Redis test skipped without `REDIS_URL`,
+  db 28, auth 12, providers 8, video 9, fixtures 3, hinglish 5, extension 184, …).
+- **Restart the local gateway** (new code) and rebuild/reload the extension (`build:dev` done).
+- **Not done / needs staging or Gaurav:** Cloud Storage chunk store + V4 signed PUT URLs + bucket
+  CORS (new dependency `@google-cloud/storage` — ask first), Memorystore, migrations on Cloud SQL,
+  the worker service running `videoFinalizeTask` (image with ffmpeg), API `POST /sessions` and
+  `GET /meetings/{id}/video`, S2-06 crash test on Cloud Run. Not checked in Chrome on a real call.
+
+### 2026-11-06 (later) — Anirudh (Claude Code): orange accent; light default with a Dark toggle
+**Decisions (Anirudh):** (1) no green in the UI: the accent is **orange** everywhere; (2) **Light
+is the default** theme with a user switch to Dark; the system theme is no longer followed.
+- `shared/design-tokens`: `olive*` token values changed to orange (light `#c2410c` family, dark
+  `#fb923c` family; names kept so no component changed), `tokens.css` regenerated: light at
+  `:root`, dark only under `:root[data-theme='dark']`. All contrast tests pass (34).
+- `shared/ui/theme.ts`: `useTheme` / `initTheme` (`localStorage` `minutes.theme`, light default,
+  follows other tabs). Web: **Settings → Appearance** (Light · Dark). Side panel: "…" menu →
+  **Dark theme / Light theme**. Meet prompt and pill pick up the orange automatically.
+- DESIGN §5.1, §6.1 and §16 updated with the new values and the appearance rule.
+- Checked in the built-in browser: web app light by default, Dark from Settings (meetings list,
+  meeting detail), side panel light default and Dark from the menu. `pnpm check` passes.
+  `extension/dist` rebuilt with `build:dev`.
+
+### 2026-11-06 (later) — Anirudh (Claude Code): video play/download after the call; Hindi findings
+- **Asked by Anirudh:** where is the video after the meeting, and a way to download it.
+  - Gateway: `GET /v1/dev/sessions/{id}/video/{partId}?download=1` answers with
+    `content-disposition: attachment` (test added). **Restart the local gateway** to get it.
+  - Service worker stores the newest recording (`lastRecording` in `chrome.storage.local`).
+  - Side panel: Processing and Done show a **Recording** card (one row per video part: **Play**
+    opens Chrome's player in a tab, **Download** saves the file; refreshes every 5 s while
+    fragments upload). Ready shows **Last recording · {day time}** with the same rows. Local-only
+    builds list the blobs on this computer instead. Only URLs on the built-in gateway are linked.
+  - TODO(S4-17, S2-14): the library meeting page with the finalized MP4 replaces this.
+  - Checked in the built-in browser against a throwaway gateway (port 8797, scratch data) with a
+    synthetic 10 s MP4: Ready and Processing cards, Play URL 200 `video/mp4`, download header.
+    5 new tests; `pnpm check` passes (extension 181, gateway 43). Not checked in real Chrome yet.
+- **Hindi "wrong Roman":** no transliteration exists yet (`session.ts` sends Deepgram's text as
+  both `text` and `rawText`). Anirudh's example was **Hindi heard as wrong English words** — a
+  recognition issue in Deepgram (`language=multi`), not transliteration. Anirudh first chose a
+  rule-based Devanagari→Hinglish converter, then asked for **Gemini** to romanize transcripts and
+  write summaries (open: paid tier for real meetings, live vs after the call — see next entry).
+
+### 2026-11-06 (later) — Anirudh (Claude Code): "nothing works" after the UI build — local-only build
+- Cause: my verification builds ran plain `pnpm build`, which writes `extension/dist` **without**
+  `MINUTES_GATEWAY_URL`, so the loaded extension recorded locally only — no stream, no live
+  transcript, no video upload (the panel's "Saved on this computer" was the only hint).
+- Fixes: `pnpm --filter @meetyou/extension build:dev` (gateway `http://127.0.0.1:8787`) added and
+  documented in `extension/README.md`; the side panel now shows a warning banner in Ready and
+  Recording when the build has no gateway. `dist/` rebuilt with the gateway.
+- To test: run the gateway (`node --env-file=.env.bench backend/apps/gateway/src/main.ts`), reload
+  the extension in `chrome://extensions`, **then reload the Meet tab** (new content script: prompt
+  and pill), open the panel from the toolbar icon, Start.
+- Also stopped a leftover local gateway from 2026-11-05 on port 8797 (a smoke test of mine).
+
+### 2026-11-06 (later) — Anirudh (Claude Code): Meet prompt restyled to DESIGN §8.2 (S4-04)
+- `extension/src/content/prompt-chip.ts` (Gaurav's S1-09 prototype; behaviour unchanged): glass
+  card 300 px, radius 18, brand tile 26 px with the olive dot, 14/600 title, 13 px body,
+  **olive Start** (flex 1, 40 px) before **Not now** (secondary on glass), colours from
+  `@meetyou/design-tokens`, focus ring, reduced motion/transparency. Built with `createElement`
+  instead of `innerHTML`. Copy says "Minutes" (DESIGN), not "MeetYou".
+- Reminder line follows the Record video setting (`settings.recordVideo`, read and watched in the
+  content script): "Audio and the Meet tab's video will be recorded." / "Audio will be recorded."
+  TODO(S4-12): also audio-only when retention is "Delete after notes".
+- Pill matched to the handoff: live dot gets the `ember-line` border, timer in `ink-3`.
+- Checked in the built-in browser harness: look, video-off reminder, real Start and Not now
+  clicks. 1 new test; `pnpm check` passes (extension 176 tests).
+- **Not done:** shift left of Meet's right-hand panel when open (§8.2) — needs a verified selector
+  for that panel in `adapters/meet/selectors.ts`; real-Meet checks of both overlays.
+
+### 2026-11-06 (later) — Anirudh (Claude Code): Meet recording pill (S4-04, DESIGN §8.4)
+- `extension/src/content/recording-pill.ts`: glass pill in closed Shadow DOM on the recorded Meet
+  tab — status dot (ember pulse / white paused / amber / red), "Taking notes" + timer + `video`
+  icon, "Paused", "Reconnecting — audio saved", "Recording stopped"; hidden before start, while
+  finishing and after. **Draggable** (snaps to the nearest corner; bottom corners sit 96 px up,
+  above Meet's control bar), **collapsible** to the dot, position and collapse remembered in
+  `chrome.storage.local` (`pill.layout`). Click opens the side panel via the new
+  `pill.open-sidepanel` message (same user-gesture path as the prompt chip). Untrusted clicks and
+  the click after a drag are ignored. Colours and pulse from `@meetyou/design-tokens`; reduced
+  motion and reduced transparency handled. Logic in `pill-model.ts` (5 tests).
+- The service worker's `recording.state` message to the Meet tab (and the `meet.page-ready` reply)
+  now carries `startedAt` and `video` as well as `status`. `formatClock` moved to `src/format.ts`.
+- Checked in the built-in browser with a bundled harness over a dark Meet-like page: every state,
+  real mouse drag to bottom-right (saved), click (panel request sent), collapse and expand. Found
+  and fixed: a fast drag that left the pill never ended (move/up now followed on the window).
+  **Not checked on real Meet yet** (layouts: grid, spotlight, side panels open — S4-04 acceptance;
+  whether the pill click counts as a user gesture for `sidePanel.open`).
+- `pnpm check` passes (extension 175 tests).
+
+### 2026-11-06 (later) — Anirudh (Claude Code): side panel UI (S4-05, S4-08, S4-17 parts), `shared/ui`
+**Decision (Anirudh):** the side panel uses React with a shared component package, so the panel and
+the library web app share DESIGN §6 components (new deps in `extension`: react/react-dom 19.1.10,
+@types/react(-dom) 19.3.0 — same versions as `web/`).
+- **`shared/ui` (`@meetyou/ui`)**: Button, Card, StatusPill, ChipGroup, Segmented, **Switch (new,
+  §6.4)**, Checkbox, SearchInput, SkeletonRows, Banner, CitationChip, Icon (+ video-off, arrows),
+  Toast, and `styles.css` (base + §6 component CSS). Moved out of `web/src/components`; `web/`
+  imports `@meetyou/ui` (its own CSS keeps only shell and screens).
+- **Side panel rebuilt** (`extension/src/sidepanel/`, `main.tsx` entry; esbuild `jsx: automatic`,
+  bundled fonts as files, React production build): header with state dot + label + timer, Pause /
+  Stop, overflow menu; **Ready** with recording options (Record video switch, stored as
+  `settings.recordVideo`, was `dev.recordVideo`); **Recording** with lane meters + connection text,
+  video status line, Transcript / My notes tabs, interim-then-final lines, "You" in olive, speaker
+  names, paused marker, Jump to live; **notes composer** (Note/Decision/Action/Question chips, typed
+  `DECISION:` / `ACTION:` / `QUESTION:` / `IMPORTANT:` prefixes, notes kept per session in
+  `chrome.storage.local`); **Processing** (three steps, honest "Notes aren't switched on yet" line,
+  "Uploading video — N%" row, **Done**); **Ready** and **Error** (Start again / Dismiss).
+  §9 banners: reconnecting, mic lost, mic missing at start, video stopped, Meet tab silent ≥ 15 s;
+  "Back online — catching up" toast. New `recording.dismiss` message returns processing / ready /
+  error to Ready (processing goes on in the backend).
+- Developer controls (Meet state, selector health, gateway link, video files, delete local video)
+  moved behind the overflow menu → **Developer details**; `capture-controls.ts` and the old
+  `index.ts` / `styles.css` removed.
+- Checked in the built-in browser with a stubbed `chrome` API and synthetic data at 320, 380 and
+  480 px (no horizontal scroll): every view above, note entry with a typed prefix, tab switch,
+  banners, upload row, developer view, Jump to live. **Not checked in Chrome on a real call yet.**
+- `pnpm check` passes (extension 170 tests; new: panel model, transcript model, notes, dismiss).
+- **Still to build (TODOs in code):** Consent step (needs S4-07 posting, Gaurav), Video quality
+  segmented + "Data saver" line (offscreen must report quality), retention lock (S4-12), Stop and
+  delete + Consent log in the overflow menu, Choose microphone, timer and note time minus paused time
+  (session clock), notes sync (S4-06), processing steps from the pipeline (S3-03), Open notes
+  (S4-14), Too short / Failed processing states, transcript delayed state (needs gateway health),
+  Roman interim (S2-05). Next UI steps: recording pill (§8.4), onboarding (§7), web transcript /
+  video / consent log / Settings.
+
+### 2026-11-06 (later) — Anirudh (Claude Code): rule — every feature gets its UI
+**Decision (Anirudh):** every user-facing feature ships with its UI (DESIGN.md), or a Stage 4 task
+naming its DESIGN section; developer controls do not count. Added as item 8 of the plan's definition
+of done (§16). Current gaps, all Anirudh's UI: side panel per DESIGN §8.5–§8.7 (today's panel is a
+developer control: live transcript, levels, video upload, link state), Meet recording pill (§8.4),
+onboarding and sign-in (§7, S4-03, needs S2-02 login), failure states (§9, S4-08), video player and
+upload state (S4-17), settings (§15, S4-12), echo-line toggle and speaker labels in the transcript
+(§12.5), consent notice and log (§8.5, §13.4).
+
+### 2026-11-06 (later) — Anirudh (Claude Code): library web app started (React + Vite)
+**Decision (Anirudh):** the library web app uses **React + Vite** (react 19.1.10, vite 8.3.5,
+@vitejs/plugin-react 6.1.2 — all at least two weeks old). Recorded in AGENTS §9 and ARCHITECTURE §25.
+- `web/`: shell with sidebar; Home, Meetings (search, template chips, table), Meeting detail (notes
+  with legend, anchored sections, decisions, open questions, numbered citation chips and citation
+  card; transcript with cited-line highlight; action items with Undo toast; processing state) and
+  Action items, following DESIGN §3, §6, §10–§14 and tokens only. Runs on a mock API with synthetic
+  data shaped by `shared/contracts` (S4-01); the real client comes with S2-09 (S4-14).
+- Checked in the built-in browser at 1440×900 and 800 px: navigation, citation selection, "Show in
+  transcript" highlight, search filtering, action items. Production build works (215 kB JS).
+- `pnpm check` passes (364 tests; web 6 logic tests). Not yet: share/regenerate/rename, video
+  player, settings, setup card, dark-mode and accessibility QA, component render tests (needs a DOM
+  test library — will ask before adding).
+
+### 2026-11-06 — Anirudh (Claude Code): S2-03 provider layer and S2-06 job queue
+**Decision (Anirudh):** queue tests on PGlite over TCP (`@electric-sql/pglite-socket` 0.2.14, dev
+only); PGlite raised to 0.5.11 to match its peer requirement. graphile-worker 0.18.0 per ADR-0005.
+- **S2-03** `backend/packages/providers`: STT streaming/batch, LLM and transliterator interfaces;
+  capability descriptors; registry from env; the free-Gemini-key guard (refused outside local/ci).
+  The gateway's Deepgram adapter moved here (git history kept) and gained a Deepgram pre-recorded
+  adapter for the post-meeting pass (params and response verified against Deepgram's docs; raw
+  bytes as the S0 benchmark sent them). The gateway now builds STT through `createProviders`.
+- **S2-06** `backend/packages/queue`: `enqueue(tx, …)` in the caller's transaction (ADR-0005 check 1
+  verified by test: rolled-back jobs never run), typed tasks with zod payloads, job keys, `run_at`,
+  8 attempts then dead letter into `failed_jobs` (migration 0003; insert-only for the app; error
+  class name only). A spike first confirmed graphile-worker runs on PGlite-socket; a probe confirmed
+  the test connections run as `meetyou_app` with RLS enforced.
+- `pnpm check` passes (358 tests).
+- **For Gaurav:** S2-10 (retention/deletion jobs) can now `defineTask` + `enqueue` inside
+  `Db.inWorkspace`; the deletion grace is `runAt: execute_after`.
 
 ### 2026-11-05 (night, review 2) — Anirudh (Claude Code): second code review and fixes
 Three parallel reviews of the code added since the first review (db + auth, S1-08/S1-09, video and

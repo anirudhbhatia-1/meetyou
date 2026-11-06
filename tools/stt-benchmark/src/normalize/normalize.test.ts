@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { transliterate, transliterateWord } from './devanagari.ts';
+import { transliterate, transliterateWord } from '@meetyou/hinglish';
 import { Normalizer, loadCanonicalList } from './index.ts';
 
 describe('devanagari → roman', () => {

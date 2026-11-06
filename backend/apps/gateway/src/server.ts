@@ -1,14 +1,21 @@
+import { createReadStream } from 'node:fs';
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http';
 import type { Duplex } from 'node:stream';
 
+import type { StreamTokenVerification } from '@meetyou/auth';
 import { newUlid, SignVideoFragmentsRequest } from '@meetyou/contracts';
+import { createMeetingForSession, glossaryTerms, meetingForSession, type Db } from '@meetyou/db';
+import type { DisplayTextPolicy } from '@meetyou/hinglish';
 import { WebSocketServer } from 'ws';
 
 import type { ChunkStore } from './chunk-store.ts';
+import { LocalVideoFinalizer } from './local-finalizer.ts';
 import { errorCode, log } from './log.ts';
+import { MemorySessionRegistry, type SessionRecord, type SessionRegistry } from './registry.ts';
 import { videoExtension } from './session-check.ts';
 import { StreamSession } from './session.ts';
-import type { SttProvider } from './stt/types.ts';
+import type { SttProvider } from '@meetyou/providers';
+import { DbSink, FileSink, type SessionSink } from './sinks.ts';
 import { DevTokenIssuer, DevVideoSigner } from './tokens.ts';
 
 /** Matches the extension's stream client (extension/src/offscreen/stream-client.ts). */
@@ -31,6 +38,9 @@ const VIDEO_PUT_PATH = /^\/v1\/dev\/video\/([A-Za-z0-9_-]+)$/;
 const VIDEO_LIST_PATH = /^\/v1\/dev\/sessions\/(ses_[0-9A-HJKMNP-TV-Z]{26})\/video$/;
 const VIDEO_PART_PATH =
   /^\/v1\/dev\/sessions\/(ses_[0-9A-HJKMNP-TV-Z]{26})\/video\/(vp_[0-9A-HJKMNP-TV-Z]{26})$/;
+const VIDEO_FILE_PATH =
+  /^\/v1\/dev\/sessions\/(ses_[0-9A-HJKMNP-TV-Z]{26})\/video\/(playback|poster)$/;
+const FINALIZE_PATH = /^\/v1\/dev\/sessions\/(ses_[0-9A-HJKMNP-TV-Z]{26})\/video:finalize$/;
 
 /** Fragments 0..n-1 without a hole: what plays (each MediaRecorder part starts at fragment 0). */
 export function playableFragments(indices: readonly number[]): number {
@@ -49,6 +59,21 @@ export interface GatewayOptions {
   videoSigner?: DevVideoSigner;
   /** Overrides ENDED_SESSION_TTL_MS (tests). */
   endedSessionTtlMs?: number;
+  /** Shared session state (S2-04); in-memory (single instance) when absent. */
+  registry?: SessionRegistry;
+  /** Verifies API-issued JWT stream tokens (ADR-0004 §4.4); without it only dev tokens work. */
+  streamTokens?: StreamTokenVerification;
+  /** Meetings, segments and usage in Postgres; files next to the audio when absent. */
+  db?: Db;
+  /** Overrides where results go (tests); derived from `db` otherwise. */
+  sink?: SessionSink;
+  display?: DisplayTextPolicy;
+  /**
+   * Who runs `video.finalize`: `queue` enqueues it when a meeting ends (worker, needs `db`),
+   * `local` runs it in this process once uploads are complete (dev), `off` never.
+   * Default: `queue` with a database, `local` without.
+   */
+  videoFinalize?: 'queue' | 'local' | 'off';
 }
 
 export interface Gateway {
@@ -152,7 +177,18 @@ export function tokenFromProtocols(header: string | undefined): string | null {
 export function createGateway(options: GatewayOptions): Gateway {
   const tokens = options.tokens ?? new DevTokenIssuer();
   const workspaceId = options.workspaceId ?? 'dev';
+  /** Sessions held by this instance; the registry knows every session (§6.2). */
   const sessions = new Map<string, StreamSession>();
+  const registry = options.registry ?? new MemorySessionRegistry();
+  const finalizeMode = options.videoFinalize ?? (options.db === undefined ? 'local' : 'queue');
+  const finalizer = finalizeMode === 'local' ? new LocalVideoFinalizer(options.store) : null;
+  const sink =
+    options.sink ??
+    (options.db === undefined
+      ? new FileSink(options.store)
+      : new DbSink(options.db, options.store, { enqueueVideoFinalize: finalizeMode === 'queue' }));
+  /** Takeovers in progress, so two connections for one session build it once. */
+  const loading = new Map<string, Promise<StreamSession | null>>();
   const wss = new WebSocketServer({
     noServer: true,
     maxPayload: MAX_FRAME_BYTES,
@@ -172,15 +208,133 @@ export function createGateway(options: GatewayOptions): Gateway {
         sessions.delete(id);
         void session.shutdown();
         log('session.evicted', { sessionId: id });
+        // Never connected anywhere (no codec yet): given up for good, so no instance revives it.
+        // One that streamed before stays in the registry, and a late reconnect still resumes.
+        void registry
+          .get(id)
+          .then((record) =>
+            record !== null && record.codec === null
+              ? registry.update(id, { ended: true, endedAt: Date.now() })
+              : undefined,
+          )
+          .catch((error: unknown) => {
+            log('registry.update_failed', { sessionId: id, code: errorCode(error) });
+          });
       }
     },
     Math.min(10 * 60 * 1000, abandonedTtlMs),
   );
   sweep.unref();
 
+  const holdSession = (record: SessionRecord): StreamSession => {
+    const { sessionId } = record;
+    const session = new StreamSession({
+      sessionId,
+      workspaceId: record.workspaceId,
+      meetingId: record.meetingId,
+      store: options.store,
+      stt: options.stt,
+      sink,
+      ...(options.display !== undefined ? { display: options.display } : {}),
+      keyterms: record.keyterms,
+      resume: { codec: record.codec, needsBatch: record.needsBatch },
+      onState: (patch) => {
+        registry.update(sessionId, patch).catch((error: unknown) => {
+          log('registry.update_failed', { sessionId, code: errorCode(error) });
+        });
+      },
+      onEnded: () => {
+        // Uploads may already be complete (short call, fast network).
+        void finalizer?.request(record.workspaceId, record.meetingId);
+        const timer = setTimeout(() => {
+          evictions.delete(sessionId);
+          sessions.delete(sessionId);
+        }, options.endedSessionTtlMs ?? ENDED_SESSION_TTL_MS);
+        timer.unref();
+        evictions.set(sessionId, timer);
+      },
+    });
+    sessions.set(sessionId, session);
+    return session;
+  };
+
+  /**
+   * The session for a connection: held here, or taken over from the registry (another instance
+   * held it and died, §6.2), or — first connect of an API-created session — built from its
+   * meeting row. Ended sessions are not taken over. `tokenWorkspace` must match when given.
+   */
+  const sessionFor = async (
+    sessionId: string,
+    tokenWorkspace?: string,
+  ): Promise<StreamSession | null> => {
+    const held = sessions.get(sessionId);
+    if (held !== undefined) {
+      return tokenWorkspace === undefined || held.workspaceId === tokenWorkspace ? held : null;
+    }
+    const pending = loading.get(sessionId);
+    if (pending !== undefined) return pending;
+    const load = (async () => {
+      let record = await registry.get(sessionId);
+      if (record === null && tokenWorkspace !== undefined && options.db !== undefined) {
+        const db = options.db;
+        const meeting = await db.inWorkspace(tokenWorkspace, (tx) =>
+          meetingForSession(tx, sessionId),
+        );
+        if (meeting === undefined || meeting.endedAt !== null) return null;
+        record = {
+          sessionId,
+          workspaceId: tokenWorkspace,
+          meetingId: meeting.id,
+          codec: null,
+          ended: false,
+          endedAt: null,
+          stt: 'ok',
+          needsBatch: false,
+          keyterms: await db.inWorkspace(tokenWorkspace, glossaryTerms),
+          createdAt: Date.now(),
+        };
+        await registry.create(record);
+      }
+      if (record === null || record.ended) return null;
+      if (tokenWorkspace !== undefined && record.workspaceId !== tokenWorkspace) return null;
+      log('session.taken_over', { sessionId });
+      return sessions.get(sessionId) ?? holdSession(record);
+    })();
+    loading.set(sessionId, load);
+    try {
+      return await load;
+    } finally {
+      loading.delete(sessionId);
+    }
+  };
+
+  /** Where a session's video lives: its workspace and meeting (any instance, via the registry). */
+  const videoTarget = async (
+    sessionId: string,
+  ): Promise<{ workspaceId: string; meetingId: string; ended: boolean } | null> => {
+    const held = sessions.get(sessionId);
+    if (held !== undefined) {
+      return { workspaceId: held.workspaceId, meetingId: held.meetingId, ended: held.ended };
+    }
+    const record = await registry.get(sessionId);
+    return record === null
+      ? null
+      : { workspaceId: record.workspaceId, meetingId: record.meetingId, ended: record.ended };
+  };
+
   /** Dev stand-in for `fragments:sign` (ADR-0011 §3.3): URLs only for a session this gateway holds. */
   const signVideo = async (req: IncomingMessage, res: ServerResponse, sessionId: string) => {
-    if (!sessions.has(sessionId)) throw new HttpError(404, 'not_found');
+    // Held here, or known and not past the ended grace period (late uploads, ADR-0011 §3.3).
+    if (!sessions.has(sessionId)) {
+      const record = await registry.get(sessionId);
+      const graceMs = options.endedSessionTtlMs ?? ENDED_SESSION_TTL_MS;
+      if (
+        record === null ||
+        (record.ended && (record.endedAt === null || Date.now() - record.endedAt > graceMs))
+      ) {
+        throw new HttpError(404, 'not_found');
+      }
+    }
     let body: unknown;
     try {
       body = JSON.parse((await readBody(req, MAX_SIGN_BODY_BYTES)).toString('utf8'));
@@ -211,11 +365,13 @@ export function createGateway(options: GatewayOptions): Gateway {
     if (mediaType(req.headers['content-type']) !== upload.contentType) {
       throw new HttpError(400, 'content_type_mismatch');
     }
+    const target = await videoTarget(upload.sessionId);
+    if (target === null) throw new HttpError(404, 'not_found');
     const bytes = await readBody(req, MAX_VIDEO_FRAGMENT_BYTES);
     if (bytes.length === 0) throw new HttpError(400, 'empty_fragment');
     await options.store.putVideoFragment({
-      workspaceId,
-      meetingId: upload.sessionId,
+      workspaceId: target.workspaceId,
+      meetingId: target.meetingId,
       partId: upload.partId,
       index: upload.index,
       bytes,
@@ -227,48 +383,131 @@ export function createGateway(options: GatewayOptions): Gateway {
       bytes: bytes.length,
     });
     json(req, res, 200, { ok: true });
+    // The last late fragment of an ended meeting completes it (ADR-0011 §3.4).
+    if (target.ended) void finalizer?.request(target.workspaceId, target.meetingId);
   };
 
   /**
-   * Dev playback of uploaded video (the side panel's "Show last video"): the uploader deletes local
-   * fragments after upload, so the joined part is served from here. Works from disk, also after a
-   * restart. TODO(S2-14): signed playback URL of the finalized MP4 (`GET /meetings/{id}/video`).
+   * Dev playback of uploaded video (the side panel's Recording card). Before finalize the parts are
+   * served with their fragments joined; after it, `playback.mp4` (with Range, so the player seeks)
+   * and `poster.jpg`. Works from disk, also after a restart. `?download=1` saves instead of plays.
+   * TODO(S2-14): in staging the API returns signed Cloud Storage URLs (`GET /meetings/{id}/video`).
    */
-  const getVideo = async (req: IncomingMessage, res: ServerResponse, path: string) => {
+  const getVideo = async (
+    req: IncomingMessage,
+    res: ServerResponse,
+    path: string,
+    download: boolean,
+  ) => {
+    const host = req.headers.host ?? 'localhost';
     const list = VIDEO_LIST_PATH.exec(path);
     if (list?.[1] !== undefined) {
       const sessionId = list[1];
-      const parts = await options.store.listVideo(workspaceId, sessionId);
+      const target = await videoTarget(sessionId);
+      if (target === null) {
+        json(req, res, 200, { parts: [], playback: null });
+        return;
+      }
+      const playback = await options.store.videoFile(
+        target.workspaceId,
+        target.meetingId,
+        'playback.mp4',
+      );
+      const parts = await options.store.listVideo(target.workspaceId, target.meetingId);
       json(req, res, 200, {
         parts: parts.map(({ partId, indices }) => ({
           partId,
           fragments: indices.length,
           playableFragments: playableFragments(indices),
-          url: `http://${req.headers.host ?? 'localhost'}/v1/dev/sessions/${sessionId}/video/${partId}`,
+          url: `http://${host}/v1/dev/sessions/${sessionId}/video/${partId}`,
         })),
+        playback:
+          playback === null
+            ? null
+            : {
+                url: `http://${host}/v1/dev/sessions/${sessionId}/video/playback`,
+                posterUrl: `http://${host}/v1/dev/sessions/${sessionId}/video/poster`,
+                bytes: playback.bytes,
+              },
       });
+      return;
+    }
+    const file = VIDEO_FILE_PATH.exec(path);
+    if (file?.[1] !== undefined && file[2] !== undefined) {
+      const name = file[2] === 'playback' ? 'playback.mp4' : 'poster.jpg';
+      await sendVideoFile(req, res, file[1], name, download);
       return;
     }
     const part = VIDEO_PART_PATH.exec(path);
     const sessionId = part?.[1];
     const partId = part?.[2];
     if (sessionId === undefined || partId === undefined) throw new HttpError(404, 'not_found');
-    const stored = (await options.store.listVideo(workspaceId, sessionId)).find(
-      (p) => p.partId === partId,
-    );
+    const target = await videoTarget(sessionId);
+    if (target === null) throw new HttpError(404, 'not_found');
+    const { workspaceId: ws, meetingId } = target;
+    const stored = (await options.store.listVideo(ws, meetingId)).find((p) => p.partId === partId);
     const count = stored === undefined ? 0 : playableFragments(stored.indices);
     if (count === 0) throw new HttpError(404, 'not_found');
-    const first = await options.store.readVideoFragment(workspaceId, sessionId, partId, 0);
-    const type = videoExtension(first.subarray(0, 8)) === 'webm' ? 'video/webm' : 'video/mp4';
-    res.writeHead(200, { 'content-type': type, ...devCors(req) });
+    const first = await options.store.readVideoFragment(ws, meetingId, partId, 0);
+    const ext = videoExtension(first.subarray(0, 8)) === 'webm' ? 'webm' : 'mp4';
+    const type = `video/${ext}`;
+    // IDs are checked by the path patterns above, so the file name needs no escaping.
+    const disposition = download
+      ? { 'content-disposition': `attachment; filename="minutes-${sessionId}-${partId}.${ext}"` }
+      : {};
+    res.writeHead(200, { 'content-type': type, ...disposition, ...devCors(req) });
     // One fragment at a time, waiting for the player to drain: an hour-long part is ~470 MB and
     // must not pile up in memory; a closed tab stops the reads.
     if (!(await writeWithBackpressure(res, first))) return;
     for (let i = 1; i < count; i++) {
-      const chunk = await options.store.readVideoFragment(workspaceId, sessionId, partId, i);
+      const chunk = await options.store.readVideoFragment(ws, meetingId, partId, i);
       if (!(await writeWithBackpressure(res, chunk))) return;
     }
     res.end();
+  };
+
+  /** A finalized file, with single-range support (players seek with `Range: bytes=…`). */
+  const sendVideoFile = async (
+    req: IncomingMessage,
+    res: ServerResponse,
+    sessionId: string,
+    name: 'playback.mp4' | 'poster.jpg',
+    download: boolean,
+  ) => {
+    const target = await videoTarget(sessionId);
+    const file =
+      target === null
+        ? null
+        : await options.store.videoFile(target.workspaceId, target.meetingId, name);
+    if (file === null) throw new HttpError(404, 'not_found');
+    const range = parseRange(req.headers.range, file.bytes);
+    if (range === 'invalid') {
+      res.writeHead(416, { 'content-range': `bytes */${file.bytes}`, ...devCors(req) });
+      res.end();
+      return;
+    }
+    const { start, end } = range ?? { start: 0, end: file.bytes - 1 };
+    res.writeHead(range === null ? 200 : 206, {
+      'content-type': name === 'poster.jpg' ? 'image/jpeg' : 'video/mp4',
+      'accept-ranges': 'bytes',
+      'content-length': String(end - start + 1),
+      ...(range === null ? {} : { 'content-range': `bytes ${start}-${end}/${file.bytes}` }),
+      ...(download
+        ? { 'content-disposition': `attachment; filename="minutes-${sessionId}-${name}"` }
+        : {}),
+      ...devCors(req),
+    });
+    await new Promise<void>((resolve, reject) => {
+      const stream = createReadStream(file.path, { start, end });
+      stream.once('error', reject);
+      stream.once('end', () => resolve());
+      // A closed player stops the read.
+      res.once('close', () => {
+        stream.destroy();
+        resolve();
+      });
+      stream.pipe(res);
+    });
   };
 
   const handle = async (req: IncomingMessage, res: ServerResponse): Promise<void> => {
@@ -286,7 +525,7 @@ export function createGateway(options: GatewayOptions): Gateway {
       return;
     }
     if (req.method === 'GET') {
-      await getVideo(req, res, url.pathname);
+      await getVideo(req, res, url.pathname, url.searchParams.get('download') === '1');
       return;
     }
     const putToken = VIDEO_PUT_PATH.exec(url.pathname)?.[1];
@@ -295,6 +534,15 @@ export function createGateway(options: GatewayOptions): Gateway {
       return;
     }
     if (req.method !== 'POST') throw new HttpError(404, 'not_found');
+    const finalizeSession = FINALIZE_PATH.exec(url.pathname)?.[1];
+    if (finalizeSession !== undefined) {
+      // Dev: finalize now with whatever arrived (stands in for the 24 h cap, ADR-0011 §3.4).
+      const target = await videoTarget(finalizeSession);
+      if (target === null || finalizer === null) throw new HttpError(404, 'not_found');
+      void finalizer.request(target.workspaceId, target.meetingId, true);
+      json(req, res, 202, { accepted: true });
+      return;
+    }
     const signSession = SIGN_PATH.exec(url.pathname)?.[1];
     if (signSession !== undefined) {
       await signVideo(req, res, signSession);
@@ -302,23 +550,38 @@ export function createGateway(options: GatewayOptions): Gateway {
     }
     if (url.pathname === '/v1/dev/sessions') {
       const sessionId = `ses_${newUlid()}`;
-      sessions.set(
+      // With a database the dev session records into a real meeting row (DEV_WORKSPACE_ID); the
+      // API's `POST /sessions` does the same for real users (S2-09).
+      let meetingId = sessionId;
+      let keyterms: string[] = [];
+      if (options.db !== undefined) {
+        meetingId = `mtg_${newUlid()}`;
+        const id = meetingId;
+        await options.db.inWorkspace(workspaceId, (tx) =>
+          createMeetingForSession(tx, {
+            id,
+            workspaceId,
+            sessionId,
+            externalMeetingCode: null,
+            startedAt: new Date(),
+          }),
+        );
+        keyterms = await options.db.inWorkspace(workspaceId, glossaryTerms);
+      }
+      const record: SessionRecord = {
         sessionId,
-        new StreamSession({
-          sessionId,
-          workspaceId,
-          store: options.store,
-          stt: options.stt,
-          onEnded: () => {
-            const timer = setTimeout(() => {
-              evictions.delete(sessionId);
-              sessions.delete(sessionId);
-            }, options.endedSessionTtlMs ?? ENDED_SESSION_TTL_MS);
-            timer.unref();
-            evictions.set(sessionId, timer);
-          },
-        }),
-      );
+        workspaceId,
+        meetingId,
+        codec: null,
+        ended: false,
+        endedAt: null,
+        stt: 'ok',
+        needsBatch: false,
+        keyterms,
+        createdAt: Date.now(),
+      };
+      await registry.create(record);
+      holdSession(record);
       const host = req.headers.host ?? 'localhost';
       log('session.created', { sessionId });
       json(req, res, 201, { sessionId, streamUrl: `ws://${host}/v1/stream` });
@@ -326,7 +589,7 @@ export function createGateway(options: GatewayOptions): Gateway {
     }
     const match = /^\/v1\/dev\/sessions\/([A-Za-z0-9_]+)\/stream-token$/.exec(url.pathname);
     const sessionId = match?.[1];
-    if (sessionId !== undefined && sessions.has(sessionId)) {
+    if (sessionId !== undefined && (await sessionFor(sessionId)) !== null) {
       json(req, res, 201, { streamToken: tokens.issue(sessionId) });
       return;
     }
@@ -351,10 +614,32 @@ export function createGateway(options: GatewayOptions): Gateway {
     });
   });
 
+  /** The session a stream token admits to, with the token's workspace for JWTs; null if refused. */
+  const admit = async (token: string): Promise<StreamSession | null> => {
+    if (options.streamTokens !== undefined && token.split('.').length === 3) {
+      let claims;
+      try {
+        claims = await options.streamTokens.verifyStreamToken(token);
+      } catch {
+        return null;
+      }
+      // Single use (ADR-0004 §4.4): a replayed token is refused on every instance.
+      if (!(await registry.spendTokenId(claims.jti, claims.expiresAt.getTime() - Date.now()))) {
+        log('stream.token_replayed', { sessionId: claims.sessionId });
+        return null;
+      }
+      return sessionFor(claims.sessionId, claims.workspaceId);
+    }
+    if (!options.devEndpoints) return null;
+    const sessionId = tokens.consume(token);
+    return sessionId === null ? null : sessionFor(sessionId);
+  };
+
   server.on('upgrade', (req: IncomingMessage, socket: Duplex, head: Buffer) => {
     // Parsed defensively: an exception in this listener would crash the process and every session.
     const path = (req.url ?? '/').split('?')[0];
-    if (!allowedHost(req.headers.host)) {
+    // Loopback only for the dev gateway (DNS rebinding); a deployed gateway sits behind its own host.
+    if (options.devEndpoints && !allowedHost(req.headers.host)) {
       reject(socket, 403, 'Forbidden');
       return;
     }
@@ -368,17 +653,23 @@ export function createGateway(options: GatewayOptions): Gateway {
       return;
     }
     const token = tokenFromProtocols(req.headers['sec-websocket-protocol']);
-    const sessionId = token === null ? null : tokens.consume(token);
-    const session = sessionId === null ? undefined : sessions.get(sessionId);
-    if (session === undefined) {
-      log('stream.unauthorized', {});
-      reject(socket, 401, 'Unauthorized');
-      return;
-    }
-    wss.handleUpgrade(req, socket, head, (ws) => {
-      log('stream.connected', { sessionId: session.sessionId });
-      session.attach(ws);
-    });
+    (token === null ? Promise.resolve(null) : admit(token))
+      .then((session) => {
+        if (session === null) {
+          log('stream.unauthorized', {});
+          reject(socket, 401, 'Unauthorized');
+          return;
+        }
+        wss.handleUpgrade(req, socket, head, (ws) => {
+          log('stream.connected', { sessionId: session.sessionId });
+          session.attach(ws);
+        });
+      })
+      .catch((error: unknown) => {
+        // Registry or database unreachable: the client retries with backoff.
+        log('stream.admit_failed', { code: errorCode(error) });
+        reject(socket, 503, 'Service Unavailable');
+      });
   });
 
   return {
@@ -391,7 +682,31 @@ export function createGateway(options: GatewayOptions): Gateway {
       evictions.clear();
       clearInterval(sweep);
       await Promise.all([...sessions.values()].map((s) => s.shutdown()));
+      if (options.registry === undefined) await registry.close();
       await new Promise<void>((resolve) => server.close(() => resolve()));
     },
   };
+}
+
+/** One `bytes=start-end` range (open-ended and suffix forms); null without a header. */
+export function parseRange(
+  header: string | undefined,
+  size: number,
+): { start: number; end: number } | null | 'invalid' {
+  if (header === undefined) return null;
+  const match = /^bytes=(\d*)-(\d*)$/.exec(header.trim());
+  if (match === null) return 'invalid';
+  const [, from = '', to = ''] = match;
+  if (from === '' && to === '') return 'invalid';
+  let start: number;
+  let end: number;
+  if (from === '') {
+    start = Math.max(0, size - Number(to));
+    end = size - 1;
+  } else {
+    start = Number(from);
+    end = to === '' ? size - 1 : Math.min(Number(to), size - 1);
+  }
+  if (start > end || start >= size) return 'invalid';
+  return { start, end };
 }

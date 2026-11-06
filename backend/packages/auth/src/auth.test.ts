@@ -14,7 +14,7 @@ import { exchangeGoogleCode, GOOGLE_TOKEN_ENDPOINT, type GoogleConfig } from './
 import { generateSigningJwk, loadKeyRing } from './keys.ts';
 import { authenticate } from './middleware.ts';
 import { AuthService, hashRefreshToken } from './service.ts';
-import { TokenService } from './tokens.ts';
+import { StreamTokenVerifier, TokenService } from './tokens.ts';
 
 const CLIENT_ID = 'client-123.apps.googleusercontent.com';
 const REDIRECT = 'https://abcdefghijklmnop.chromiumapp.org/oauth2';
@@ -94,8 +94,13 @@ describe('TokenService (ADR-0004 §4.2)', () => {
     const tokens = await tokenService(() => now);
     const access = (await tokens.issueAccessToken({ userId: 'u', workspaceId: 'w', scope: 'user' }))
       .token;
-    const stream = (await tokens.issueStreamToken({ sessionId: 'ses_1', lanes: ['me', 'them'] }))
-      .token;
+    const stream = (
+      await tokens.issueStreamToken({
+        sessionId: 'ses_1',
+        workspaceId: 'ws_1',
+        lanes: ['me', 'them'],
+      })
+    ).token;
 
     await expect(tokens.verifyAccessToken(stream)).rejects.toMatchObject({ code: 'invalid_token' });
     await expect(tokens.verifyStreamToken(access)).rejects.toMatchObject({ code: 'invalid_token' });
@@ -128,11 +133,44 @@ describe('TokenService (ADR-0004 §4.2)', () => {
     expect(after.jwks.keys.every((k) => k.d === undefined)).toBe(true);
   });
 
+  it('verifies stream tokens from the public JWKS alone (gateway, no signing key)', async () => {
+    const tokens = await tokenService();
+    const verifier = new StreamTokenVerifier(tokens.jwks);
+    const { token } = await tokens.issueStreamToken({
+      sessionId: 'ses_1',
+      workspaceId: 'ws_1',
+      lanes: ['them'],
+    });
+    expect(await verifier.verifyStreamToken(token)).toMatchObject({
+      sessionId: 'ses_1',
+      workspaceId: 'ws_1',
+      lanes: ['them'],
+    });
+    const access = (
+      await tokens.issueAccessToken({ userId: 'u', workspaceId: 'ws_1', scope: 'user' })
+    ).token;
+    await expect(verifier.verifyStreamToken(access)).rejects.toMatchObject({
+      code: 'invalid_token',
+    });
+    const other = new StreamTokenVerifier((await tokenService()).jwks);
+    await expect(other.verifyStreamToken(token)).rejects.toMatchObject({ code: 'invalid_token' });
+    expect(() => new StreamTokenVerifier({ keys: [{ kty: 'EC', d: 'secret' }] })).toThrow();
+  });
+
   it('issues single-use stream tokens bound to a session (ADR-0004 §4.4)', async () => {
     const tokens = await tokenService();
-    const a = await tokens.issueStreamToken({ sessionId: 'ses_1', lanes: ['me', 'them'] });
-    const b = await tokens.issueStreamToken({ sessionId: 'ses_1', lanes: ['them'] });
+    const a = await tokens.issueStreamToken({
+      sessionId: 'ses_1',
+      workspaceId: 'ws_1',
+      lanes: ['me', 'them'],
+    });
+    const b = await tokens.issueStreamToken({
+      sessionId: 'ses_1',
+      workspaceId: 'ws_1',
+      lanes: ['them'],
+    });
     const claims = await tokens.verifyStreamToken(a.token);
+    expect(claims.workspaceId).toBe('ws_1');
     expect(claims).toMatchObject({ sessionId: 'ses_1', lanes: ['me', 'them'] });
     expect(claims.jti).not.toBe((await tokens.verifyStreamToken(b.token)).jti);
   });

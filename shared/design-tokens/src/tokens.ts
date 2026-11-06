@@ -3,6 +3,10 @@
  * tokens.test.ts keeps the two in sync and checks WCAG contrast.
  */
 
+/**
+ * Accent (the `olive*` tokens): **orange** since 2026-11-06 (Anirudh), replacing the original
+ * olive green. Token names stay `olive*` so components keep working; the values are orange.
+ */
 export const lightColors = {
   paper: '#f6f5ef',
   paper2: '#fbfaf6',
@@ -16,14 +20,14 @@ export const lightColors = {
   stroke: '#d6d5cf',
   controlLine: '#8a8a83',
   strokeOff: '#c9c8c1',
-  olive: '#566a0a',
-  oliveHover: '#46570a',
-  oliveInk: '#3f4e05',
-  oliveLine: '#7a8c1f',
-  oliveTint: '#e7ebd2',
-  oliveWash: '#f3f5e6',
-  oliveHl: '#eef2dc',
-  matchHl: '#e2e8c4',
+  olive: '#c2410c',
+  oliveHover: '#9a3412',
+  oliveInk: '#7c2d12',
+  oliveLine: '#ea580c',
+  oliveTint: '#ffedd5',
+  oliveWash: '#fff7ed',
+  oliveHl: '#fff1e3',
+  matchHl: '#fed7aa',
   ember: '#e0603f',
   emberLine: '#bd4a30',
   emberHalo: '#f9dcd2',
@@ -55,14 +59,14 @@ export const darkColors: Record<ColorToken, string> = {
   stroke: '#3a3b34',
   controlLine: '#77776f',
   strokeOff: '#4a4b44',
-  olive: '#8aa12a',
-  oliveHover: '#9bb33a',
-  oliveInk: '#d6e3a0',
-  oliveLine: '#a3b84a',
-  oliveTint: '#2a3112',
-  oliveWash: '#23281a',
-  oliveHl: '#2d3416',
-  matchHl: '#3a4419',
+  olive: '#fb923c',
+  oliveHover: '#fdba74',
+  oliveInk: '#fed7aa',
+  oliveLine: '#f97316',
+  oliveTint: '#3b2010',
+  oliveWash: '#2a1a10',
+  oliveHl: '#3f2412',
+  matchHl: '#4a2a12',
   warnBg: '#3a2119',
   warnInk: '#f2b8a6',
   amberBg: '#33270f',

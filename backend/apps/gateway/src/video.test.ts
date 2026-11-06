@@ -192,6 +192,13 @@ describe('dev video playback (side panel "Show last video")', () => {
     expect(video.headers.get('content-type')).toBe('video/mp4');
     // Fragment 3 sits after a gap (2 is missing), so only 0..1 are joined.
     expect([...new Uint8Array(await video.arrayBuffer())]).toEqual([...mp4Head, 9, 9]);
+    expect(video.headers.get('content-disposition')).toBeNull();
+
+    const saved = await fetch(`${parts[0]?.url ?? ''}?download=1`);
+    expect(saved.headers.get('content-disposition')).toBe(
+      `attachment; filename="minutes-${sessionId}-${PART}.mp4"`,
+    );
+    expect([...new Uint8Array(await saved.arrayBuffer())]).toEqual([...mp4Head, 9, 9]);
   });
 
   it('answers 404 for a part with nothing playable', async () => {
@@ -199,7 +206,7 @@ describe('dev video playback (side panel "Show last video")', () => {
     expect((await fetch(`${base}/v1/dev/sessions/${sessionId}/video/${PART}`)).status).toBe(404);
     expect(
       (await (await fetch(`${base}/v1/dev/sessions/${sessionId}/video`)).json()) as unknown,
-    ).toEqual({ parts: [] });
+    ).toEqual({ parts: [], playback: null });
   });
 
   it('counts playable fragments from 0 up to the first gap', () => {

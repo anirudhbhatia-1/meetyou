@@ -1,0 +1,17 @@
+{
+  "name": "@meetyou/hinglish",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Hinglish text helpers: canonical spelling list (S0-03), Devanagari → Roman transliteration, display-text spelling normalization (ARCHITECTURE §8.1). Used by the gateway assembler, the STT benchmark and search (S3-09).",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "zod": "^4.6.7"
+  }
+}

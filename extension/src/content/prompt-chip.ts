@@ -1,9 +1,13 @@
+import { lightColors as c, fonts, radius } from '@meetyou/design-tokens';
+
 /**
- * Prompt chip prototype in Shadow DOM (Task S1-09, DESIGN §8.2, ARCHITECTURE §26.2).
+ * Meet prompt in Shadow DOM (S1-09 prototype, restyled to DESIGN §8.2 in S4-04).
  *
  * Appears when `in_call` is detected on meet.google.com. Encapsulated entirely in Shadow DOM
- * so Google Meet styles cannot leak in or break its appearance. Tests user gesture entry points
- * for sidePanel.open() and tabCapture.
+ * so Google Meet styles cannot leak in or break its appearance. Its Start click is the user
+ * gesture for sidePanel.open() and tabCapture (ARCHITECTURE §26.2).
+ * TODO(S4-04): shift left of Meet's right-hand panel when it is open (§8.2) — needs a selector
+ * for that panel in adapters/meet/selectors.ts, verified on real Meet.
  */
 
 export interface PromptChipCallbacks {
@@ -17,9 +21,16 @@ const ACTIVE_STATUSES = new Set(['starting', 'recording', 'paused', 'reconnectin
 /** Problems reported back by the service worker after a chip action. */
 export type PromptProblem = 'start_failed' | 'panel_failed';
 
+/** Pre-recording reminder (§8.2, FR-CAP-14): says whether the screen is recorded too. */
+export function reminderText(recordVideo: boolean): string {
+  return recordVideo
+    ? "Audio and the Meet tab's video will be recorded."
+    : 'Audio will be recorded.';
+}
+
 const PROBLEM_TEXT: Record<PromptProblem, string> = {
-  start_failed: 'Recording did not start. Click the MeetYou icon in the toolbar to start.',
-  panel_failed: 'Recording started. Open MeetYou from the toolbar to see notes.',
+  start_failed: 'Recording did not start. Click the Minutes icon in the toolbar to start.',
+  panel_failed: 'Recording started. Open Minutes from the toolbar to see notes.',
 };
 
 export class PromptChip {
@@ -33,6 +44,9 @@ export class PromptChip {
   private meetingCode: string | null = null;
   private liveRegion: HTMLElement | null = null;
   private problemEl: HTMLElement | null = null;
+  private reminderEl: HTMLElement | null = null;
+  // TODO(S4-12): also off when retention is "Delete after notes" (ADR-0011 §3.5).
+  private recordVideo = true;
   private readonly boundOnKeyDown: (e: KeyboardEvent) => void;
 
   constructor(doc: Document = document, callbacks: PromptChipCallbacks) {
@@ -160,6 +174,12 @@ export class PromptChip {
     }
   }
 
+  /** The "Record video" setting, so the reminder says what will be recorded. */
+  public setRecordVideo(recordVideo: boolean): void {
+    this.recordVideo = recordVideo;
+    if (this.reminderEl !== null) this.reminderEl.textContent = reminderText(recordVideo);
+  }
+
   public isMounted(): boolean {
     return this.host !== null && this.doc.body.contains(this.host);
   }
@@ -174,142 +194,58 @@ export class PromptChip {
 
   private render(): void {
     if (this.shadow === null) return;
+    const el = <K extends keyof HTMLElementTagNameMap>(
+      tag: K,
+      className: string,
+      text = '',
+    ): HTMLElementTagNameMap[K] => {
+      const node = this.doc.createElement(tag);
+      node.className = className;
+      node.textContent = text;
+      return node;
+    };
 
     const style = this.doc.createElement('style');
-    style.textContent = `
-      :host {
-        all: initial;
-        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-      }
-      .prompt-card {
-        box-sizing: border-box;
-        width: min(320px, calc(100vw - 36px));
-        background: rgba(251, 250, 246, 0.94);
-        backdrop-filter: blur(12px);
-        -webkit-backdrop-filter: blur(12px);
-        border: 1px solid rgba(17, 18, 14, 0.12);
-        border-radius: 18px;
-        padding: 16px;
-        box-shadow: 0 8px 32px rgba(0, 0, 0, 0.16);
-        color: #11120e;
-        display: flex;
-        flex-direction: column;
-        gap: 10px;
-        animation: prompt-fade-in 0.2s cubic-bezier(0.16, 1, 0.3, 1);
-      }
-      @keyframes prompt-fade-in {
-        from { opacity: 0; transform: translateY(-6px); }
-        to { opacity: 1; transform: translateY(0); }
-      }
-      .prompt-header {
-        display: flex;
-        align-items: center;
-        gap: 8px;
-      }
-      .prompt-logo {
-        width: 22px;
-        height: 22px;
-        border-radius: 6px;
-        background: #11120e;
-        color: #f6f5ef;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        font-size: 12px;
-        font-weight: 700;
-        flex-shrink: 0;
-      }
-      .prompt-title {
-        font-size: 14px;
-        font-weight: 600;
-        color: #11120e;
-        margin: 0;
-        line-height: 1.25;
-      }
-      .prompt-body {
-        font-size: 12px;
-        line-height: 1.45;
-        color: #3a3b35;
-        margin: 0;
-      }
-      .prompt-reminder {
-        font-size: 11px;
-        color: #74756d;
-        margin: 0;
-      }
-      .prompt-actions {
-        display: flex;
-        gap: 8px;
-        margin-top: 4px;
-      }
-      .btn {
-        box-sizing: border-box;
-        border: none;
-        cursor: pointer;
-        font-size: 13px;
-        font-weight: 600;
-        padding: 8px 14px;
-        border-radius: 999px;
-        transition: background 0.15s ease, transform 0.05s ease;
-        text-align: center;
-      }
-      .btn:active {
-        transform: scale(0.98);
-      }
-      .btn-secondary {
-        background: rgba(17, 18, 14, 0.07);
-        color: #2a2b26;
-        flex: 1;
-      }
-      .btn-secondary:hover {
-        background: rgba(17, 18, 14, 0.12);
-      }
-      .btn-primary {
-        background: #11120e;
-        color: #ffffff;
-        flex: 1.2;
-      }
-      .btn-primary:hover {
-        background: #2a2b26;
-      }
-      .sr-only {
-        position: absolute;
-        width: 1px;
-        height: 1px;
-        overflow: hidden;
-        clip: rect(0 0 0 0);
-        white-space: nowrap;
-      }
-    `;
+    style.textContent = PROMPT_CSS;
 
-    const container = this.doc.createElement('div');
-    container.className = 'prompt-card';
+    const container = el('div', 'prompt-card');
     container.setAttribute('role', 'dialog');
     container.setAttribute('aria-labelledby', 'prompt-heading');
 
-    container.innerHTML = `
-      <div class="prompt-header">
-        <div class="prompt-logo">M</div>
-        <h3 id="prompt-heading" class="prompt-title">Take notes for this call?</h3>
-      </div>
-      <p class="prompt-body">Nothing joins the call. Recording starts only when you press Start.</p>
-      <p class="prompt-reminder">Audio and the Meet tab's video will be recorded.</p>
-      <div class="prompt-actions">
-        <button type="button" class="btn btn-secondary" id="not-now-btn">Not now</button>
-        <button type="button" class="btn btn-primary" id="start-btn">Start</button>
-      </div>
-    `;
+    const header = el('div', 'prompt-header');
+    const tile = el('div', 'prompt-tile');
+    tile.setAttribute('aria-hidden', 'true');
+    tile.appendChild(el('span', 'prompt-tile-dot'));
+    const title = el('h3', 'prompt-title', 'Take notes for this call?');
+    title.id = 'prompt-heading';
+    header.appendChild(tile);
+    header.appendChild(title);
+
+    const body = el(
+      'p',
+      'prompt-body',
+      'Nothing joins the call. Recording starts only when you press Start.',
+    );
+    const reminder = el('p', 'prompt-reminder', reminderText(this.recordVideo));
+    this.reminderEl = reminder;
+
+    const actions = el('div', 'prompt-actions');
+    const startBtn = el('button', 'btn btn-primary', 'Start');
+    startBtn.type = 'button';
+    startBtn.id = 'start-btn';
+    const notNowBtn = el('button', 'btn btn-secondary', 'Not now');
+    notNowBtn.type = 'button';
+    notNowBtn.id = 'not-now-btn';
+    actions.appendChild(startBtn);
+    actions.appendChild(notNowBtn);
 
     // Synthetic clicks from page scripts (`isTrusted === false`) must not start a recording.
-    const notNowBtn = container.querySelector('#not-now-btn');
-    notNowBtn?.addEventListener('click', (e) => {
+    notNowBtn.addEventListener('click', (e) => {
       e.stopPropagation();
       if (e.isTrusted === false) return;
       this.dismiss();
     });
-
-    const startBtn = container.querySelector('#start-btn');
-    startBtn?.addEventListener('click', (e) => {
+    startBtn.addEventListener('click', (e) => {
       e.stopPropagation();
       if (e.isTrusted === false) return;
       if (this.problemEl !== null) this.problemEl.textContent = '';
@@ -317,15 +253,18 @@ export class PromptChip {
       this.callbacks.onStart();
     });
 
-    const problem = this.doc.createElement('p');
-    problem.className = 'prompt-reminder';
+    const problem = el('p', 'prompt-problem');
     problem.setAttribute('role', 'status');
-    container.appendChild(problem);
     this.problemEl = problem;
 
-    const live = this.doc.createElement('div');
+    container.appendChild(header);
+    container.appendChild(body);
+    container.appendChild(reminder);
+    container.appendChild(actions);
+    container.appendChild(problem);
+
+    const live = el('div', 'sr-only');
     live.setAttribute('aria-live', 'polite');
-    live.className = 'sr-only';
     this.liveRegion = live;
 
     this.shadow.appendChild(style);
@@ -333,3 +272,81 @@ export class PromptChip {
     this.shadow.appendChild(live);
   }
 }
+
+/** DESIGN §8.2 over Meet's dark UI: §5.6 glass, §6.1 buttons; colours from design tokens. */
+const PROMPT_CSS = `
+  :host { all: initial; }
+  .prompt-card {
+    box-sizing: border-box;
+    width: min(300px, calc(100vw - 36px));
+    padding: 16px;
+    border-radius: ${radius.prompt}px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    color: ${c.ink};
+    font: 400 14px/1.45 ${fonts.sans};
+    background: rgba(251, 250, 246, 0.62);
+    backdrop-filter: blur(22px) saturate(1.7);
+    -webkit-backdrop-filter: blur(22px) saturate(1.7);
+    border: 1px solid rgba(255, 255, 255, 0.75);
+    box-shadow: 0 12px 40px rgba(0, 0, 0, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.7);
+  }
+  .prompt-header { display: flex; align-items: center; gap: 10px; }
+  .prompt-tile {
+    width: 26px;
+    height: 26px;
+    flex: none;
+    box-sizing: border-box;
+    border-radius: 8px;
+    background: ${c.surface};
+    border: 1px solid ${c.stroke};
+    display: grid;
+    place-items: center;
+  }
+  .prompt-tile-dot { width: 9px; height: 9px; border-radius: 50%; background: ${c.olive}; }
+  .prompt-title { margin: 0; font-size: 14px; font-weight: 600; line-height: 1.3; }
+  .prompt-body { margin: 0; font-size: 13px; color: #3a3b35; }
+  .prompt-reminder, .prompt-problem { margin: 0; font-size: 12px; color: ${c.muted}; }
+  .prompt-problem:empty { display: none; }
+  .prompt-actions { display: flex; gap: 8px; }
+  .btn {
+    all: unset;
+    box-sizing: border-box;
+    min-height: 40px;
+    padding: 0 16px;
+    border-radius: 999px;
+    font: 500 14px ${fonts.sans};
+    text-align: center;
+    cursor: pointer;
+    transition: background 150ms;
+  }
+  .btn:focus-visible { outline: 2px solid ${c.oliveLine}; outline-offset: 2px; }
+  .btn-primary { flex: 1; background: ${c.olive}; color: ${c.onOlive}; }
+  .btn-primary:hover { background: ${c.oliveHover}; }
+  .btn-secondary {
+    background: rgba(255, 255, 255, 0.5);
+    border: 1px solid rgba(17, 18, 14, 0.15);
+    color: ${c.ink};
+  }
+  .btn-secondary:hover { background: rgba(255, 255, 255, 0.7); }
+  @media (prefers-reduced-motion: reduce) {
+    .btn { transition: none; }
+  }
+  @media (prefers-reduced-transparency: reduce) {
+    .prompt-card {
+      background: ${c.surface};
+      backdrop-filter: none;
+      -webkit-backdrop-filter: none;
+      border-color: ${c.stroke};
+    }
+  }
+  .sr-only {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    white-space: nowrap;
+  }
+`;

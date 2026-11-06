@@ -32,6 +32,11 @@ MINUTES_GATEWAY_URL=http://127.0.0.1:8787 pnpm --filter @meetyou/extension build
 | `DATA_DIR` | `backend/apps/gateway/.data` | Chunk storage (gitignored; holds real voices during dev) |
 | `STT_PROVIDER` | `none` | `deepgram` for live transcripts; `none` calls no vendor |
 | `DEEPGRAM_API_KEY` | — | Needed for `deepgram`; keep it in `.env.bench`, never in code |
+| `DISPLAY_TEXT` | `as_provided` | `roman_rules` turns Devanagari into Roman Hinglish (D-01) |
+| `REDIS_URL` | — | Shared session state for several instances (S2-04); in-memory when unset |
+| `DATABASE_URL` | — | Segments, usage, meetings in Postgres (application role); files when unset |
+| `DEV_WORKSPACE_ID` | — | Needed with `DATABASE_URL`: the workspace dev sessions record into |
+| `STREAM_TOKEN_JWKS` | — | Public JWKS of the API, to accept real (JWT) stream tokens |
 
 ## Tools (S1-11 measurements)
 
@@ -39,6 +44,8 @@ MINUTES_GATEWAY_URL=http://127.0.0.1:8787 pnpm --filter @meetyou/extension build
 |---|---|
 | `node backend/apps/gateway/src/check-session.ts [sessionId] [--join]` | Loss check of a recorded session from `.data` (latest if no ID): missing frames, duplicates, pause gaps, usage and cost, uploaded video parts and missing fragments. `--join` writes each part as a playable `video/{partId}.mp4` in `.data`. Exit code 1 on loss |
 | `node backend/apps/gateway/src/load-test.ts [sessions] [seconds] [opus\|pcm16]` | Starts a gateway with STT off on a temp dir and measures CPU/RSS under N synthetic sessions (§26.2 Q6) |
+| `node backend/apps/gateway/src/record-fixture.ts [out.json]` | Records the synthetic standup (shared/fixtures) through the real gateway with a scripted STT provider (S2-13) |
+| `POST /v1/dev/sessions/{id}/video:finalize` | Runs `video.finalize` now with the fragments that arrived (otherwise automatic once an ended session has every fragment) |
 | `node --env-file=.env.bench backend/apps/gateway/src/backlog-speed.ts <wav> [seconds] [speed] [pcm16\|ogg_opus]` | Streams a public 16 kHz WAV to Deepgram faster than real time (§26.2 Q5). Paid API; Ogg mode needs ffmpeg |
 
 ## What is here and what is not yet
@@ -59,8 +66,10 @@ MINUTES_GATEWAY_URL=http://127.0.0.1:8787 pnpm --filter @meetyou/extension build
 - Opus is not decoded (ADR-0003 §3.1): packets are wrapped in Ogg for storage and for STT.
 - Cost per session (AGENTS §3 rule 10): `usage.json` next to the chunks — stored audio per lane,
   STT minutes per lane, bytes, connections, estimated cost from the provider's list price.
-- Not yet: Cloud Storage (after S1-10), Redis session state, JWT stream tokens, transliteration
-  of segment text, storing segments and events, health messages, a usage table, video finalize
-  (concat + faststart MP4, S2-14). Each is marked
-  `TODO` in the code.
+- S2 (2026-11-06): transcript assembler (`assembler.ts`), results to Postgres or files
+  (`sinks.ts`), session registry with Redis takeover (`registry.ts`), JWT stream tokens, STT
+  `health` and batch-later marking, glossary key terms, video part timing, `video.finalize`
+  (`@meetyou/video`; in-process locally via `local-finalizer.ts`).
+- Not yet: the Cloud Storage chunk store and V4 signed URLs (staging), Memorystore, the API's
+  `/sessions` and `/meetings/{id}/video` (S2-09, Gaurav). Each is marked `TODO` in the code.
 - Logs carry IDs, counts and codes only (AGENTS §7).

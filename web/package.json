@@ -1,0 +1,28 @@
+{
+  "name": "@meetyou/web",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Library web app (D-07): Home, Meetings, Meeting detail, Action items, Settings. React + Vite; mock API until S2-09 (S4-01, S4-02, S4-09).",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "typecheck": "tsc -p tsconfig.json",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@meetyou/contracts": "workspace:*",
+    "@meetyou/design-tokens": "workspace:*",
+    "@meetyou/ui": "workspace:*",
+    "react": "19.1.10",
+    "react-dom": "19.1.10",
+    "zod": "^4.6.7"
+  },
+  "devDependencies": {
+    "@types/react": "19.3.0",
+    "@types/react-dom": "19.3.0",
+    "@vitejs/plugin-react": "6.1.2",
+    "vite": "8.3.5"
+  }
+}

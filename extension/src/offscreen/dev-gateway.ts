@@ -118,8 +118,18 @@ const DevVideoParts = z.object({
       url: z.string().regex(/^https?:\/\//),
     }),
   ),
+  /** The finalized file (S2-14), once `video.finalize` ran; parts are then gone. */
+  playback: z
+    .object({
+      url: z.string().regex(/^https?:\/\//),
+      posterUrl: z.string().regex(/^https?:\/\//),
+      bytes: z.number().int().nonnegative(),
+    })
+    .nullable()
+    .optional(),
 });
 export type DevVideoPart = z.infer<typeof DevVideoParts>['parts'][number];
+export type DevVideoState = z.infer<typeof DevVideoParts>;
 
 /**
  * Video parts the dev gateway holds for a session, each with a URL that plays the uploaded part
@@ -127,8 +137,13 @@ export type DevVideoPart = z.infer<typeof DevVideoParts>['parts'][number];
  * TODO(S2-14): replace with `GET /v1/meetings/{id}/video` (signed URL of the finalized MP4).
  */
 export async function listDevVideo(baseUrl: string, sessionId: string): Promise<DevVideoPart[]> {
+  return (await devVideoState(baseUrl, sessionId)).parts;
+}
+
+/** Parts still in fragments, and the finalized playback file once it exists. */
+export async function devVideoState(baseUrl: string, sessionId: string): Promise<DevVideoState> {
   const url = new URL(`/v1/dev/sessions/${encodeURIComponent(sessionId)}/video`, baseUrl);
   const response = await fetch(url.href, { signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS) });
   if (!response.ok) throw new Error(`HTTP ${response.status}`);
-  return DevVideoParts.parse(await response.json()).parts;
+  return DevVideoParts.parse(await response.json());
 }

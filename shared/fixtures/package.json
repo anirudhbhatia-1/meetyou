@@ -1,0 +1,19 @@
+{
+  "name": "@meetyou/fixtures",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Synthetic test fixtures (S2-13): a scripted Hinglish meeting, recorded gateway WebSocket sessions and a replayer for tests and UI mocks, and a script that makes synthetic TTS audio locally. Nothing here comes from a real meeting.",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json",
+    "test": "vitest run",
+    "audio": "node src/make-audio.ts"
+  },
+  "dependencies": {
+    "@meetyou/contracts": "workspace:*",
+    "zod": "^4.6.7"
+  }
+}

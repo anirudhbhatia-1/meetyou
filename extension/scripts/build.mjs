@@ -21,7 +21,13 @@ const common = {
   outdir: 'dist',
   legalComments: 'none',
   logLevel: 'warning',
+  jsx: 'automatic',
+  // Bundled fonts imported by page CSS (design-tokens/fonts.css), emitted next to the bundle.
+  loader: { '.woff': 'file', '.woff2': 'file' },
+  assetNames: 'assets/[name]-[hash]',
   define: {
+    // React's production build; the extension never ships its development warnings.
+    'process.env.NODE_ENV': JSON.stringify('production'),
     __GATEWAY_URL__: JSON.stringify(gatewayUrl),
     __AUDIO_CODEC__: JSON.stringify(audioCodec),
   },
@@ -33,8 +39,7 @@ await build({
   entryPoints: [
     'src/background/service-worker.ts',
     'src/offscreen/index.ts',
-    'src/sidepanel/index.ts',
-    'src/sidepanel/capture-controls.ts',
+    'src/sidepanel/main.tsx',
     'src/onboarding/index.ts',
   ],
 });

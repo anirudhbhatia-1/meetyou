@@ -3,6 +3,7 @@ import {
   PROTOCOL_VERSION,
   ServerMessage,
   type AudioFormat,
+  type CaptureEvent,
   type ClientMessage,
 } from '@meetyou/contracts';
 
@@ -87,6 +88,7 @@ export class StreamClient {
   #endSent = false;
   /** Pause/resume while offline, sent after the next `ready` so pause gaps stay known (§5.5). */
   #pendingControls: ClientMessage[] = [];
+  #eventSeq = 0;
 
   constructor(options: StreamClientOptions) {
     this.#o = options;
@@ -115,6 +117,19 @@ export class StreamClient {
   frameWritten(lane: Lane, seq: number): void {
     this.#written[lane] = Math.max(this.#written[lane], seq);
     if (this.#online) void this.#pump(lane);
+  }
+
+  /**
+   * A capture event for the gateway (e.g. video part timing, ADR-0011 §3.4). Queued with the
+   * controls while offline; `seq` lets the gateway ignore a resend.
+   */
+  event(event: CaptureEvent): void {
+    const message: ClientMessage = { type: 'event', seq: this.#eventSeq++, event };
+    if (!this.#online) {
+      this.#pendingControls.push(message);
+      return;
+    }
+    this.#sendJson(message);
   }
 
   control(action: 'pause' | 'resume' | 'end', at: number): void {

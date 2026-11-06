@@ -6,6 +6,7 @@ import {
   type LaneFlags,
   type MeetCallState,
   type StreamLink,
+  type SttHealth,
   type VideoStatus,
 } from '../messages.ts';
 
@@ -55,6 +56,8 @@ export interface CaptureState {
   micError: string | null;
   link: StreamLink;
   video: VideoStatus;
+  /** Live transcript health; `degraded`/`down` = transcript delayed (DESIGN §9). */
+  stt: SttHealth;
   error: CaptureError | null;
 }
 
@@ -72,6 +75,7 @@ export type CaptureEvent =
   | { type: 'resumed' }
   | { type: 'link_changed'; link: StreamLink }
   | { type: 'video_changed'; video: VideoStatus }
+  | { type: 'stt_changed'; stt: SttHealth }
   | { type: 'mic_lost' }
   | { type: 'call_joined' }
   | { type: 'stop_requested' }
@@ -93,6 +97,7 @@ export const IDLE_CAPTURE: CaptureState = {
   micError: null,
   link: 'off',
   video: 'off',
+  stt: 'ok',
   error: null,
 };
 
@@ -169,6 +174,9 @@ export function nextCaptureState(state: CaptureState, event: CaptureEvent): Capt
     case 'video_changed':
       if (!CAPTURING.has(state.status)) return state;
       return { ...state, video: event.video };
+    case 'stt_changed':
+      if (!CAPTURING.has(state.status) || state.stt === event.stt) return state;
+      return { ...state, stt: event.stt };
     case 'call_joined':
       if (!CAPTURING.has(state.status) || state.callJoined) return state;
       return { ...state, callJoined: true };
@@ -190,12 +198,16 @@ export function nextCaptureState(state: CaptureState, event: CaptureEvent): Capt
         meetingCode: null,
         link: 'off',
         video: 'off',
+        stt: 'ok',
       };
     case 'processed':
       if (state.status !== 'processing') return state;
       return { ...state, status: 'ready' };
     case 'dismissed':
-      if (state.status !== 'ready' && state.status !== 'error') return state;
+      // Processing goes on in the backend; dismissing only returns this panel to Ready.
+      if (state.status !== 'processing' && state.status !== 'ready' && state.status !== 'error') {
+        return state;
+      }
       return IDLE_CAPTURE;
     case 'failed':
       return { ...IDLE_CAPTURE, status: 'error', error: event.error };
@@ -224,6 +236,7 @@ const ERRORS = new Set<string>([
 ]);
 const LINKS = new Set<string>(['off', 'connecting', 'online', 'reconnecting']);
 const VIDEO = new Set<string>(['off', 'recording', 'unsupported', 'failed']);
+const STT = new Set<string>(['ok', 'degraded', 'down']);
 
 /** Reads a stored state; anything malformed falls back to idle rather than trusting it. */
 export function parseCaptureState(raw: unknown): CaptureState {
@@ -241,6 +254,7 @@ export function parseCaptureState(raw: unknown): CaptureState {
     micError: typeof r.micError === 'string' ? r.micError : null,
     link: typeof r.link === 'string' && LINKS.has(r.link) ? (r.link as StreamLink) : 'off',
     video: typeof r.video === 'string' && VIDEO.has(r.video) ? (r.video as VideoStatus) : 'off',
+    stt: typeof r.stt === 'string' && STT.has(r.stt) ? (r.stt as SttHealth) : 'ok',
     error: typeof r.error === 'string' && ERRORS.has(r.error) ? (r.error as CaptureError) : null,
   };
 }

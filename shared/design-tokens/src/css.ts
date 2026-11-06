@@ -14,14 +14,18 @@ function block(colors: Record<string, string>, indent: string): string {
     .join('\n');
 }
 
-/** Builds tokens.css. Dark mode follows the system unless a page forces a theme (DESIGN §16). */
+/**
+ * Builds tokens.css. Light is the default; dark applies only when the page sets
+ * `<html data-theme="dark">` from the user's Appearance setting (Anirudh, 2026-11-06 — no longer
+ * follows the system theme; DESIGN §16).
+ */
 export function buildTokensCss(): string {
   const radii = Object.entries(radius)
     .map(([k, v]) => `  ${cssVarName(`radius-${k}`)}: ${v}px;`)
     .join('\n');
   return `/* Generated from tokens.ts by \`pnpm --filter @meetyou/design-tokens build:css\`. Do not edit. */
 :root {
-  color-scheme: light dark;
+  color-scheme: light;
 ${block(lightColors, '  ')}
   --font-serif: ${fonts.serif};
   --font-sans: ${fonts.sans};
@@ -35,16 +39,8 @@ ${radii}
   --focus-ring: 2px solid var(--olive-line);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root:not([data-theme='light']) {
-${block(darkColors, '    ')}
-    --glass-bg: rgba(31, 32, 27, 0.6);
-    --glass-sheet-bg: rgba(31, 32, 27, 0.78);
-    --glass-edge: rgba(255, 255, 255, 0.08);
-  }
-}
-
 :root[data-theme='dark'] {
+  color-scheme: dark;
 ${block(darkColors, '  ')}
   --glass-bg: rgba(31, 32, 27, 0.6);
   --glass-sheet-bg: rgba(31, 32, 27, 0.78);

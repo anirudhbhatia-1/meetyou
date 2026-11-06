@@ -1,5 +1,5 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest';
-import { PromptChip } from './prompt-chip.ts';
+import { PromptChip, reminderText } from './prompt-chip.ts';
 
 class MockElement {
   public id = '';
@@ -297,5 +297,18 @@ describe('PromptChip', () => {
     chip.unmount();
     expect(chip.isMounted()).toBe(false);
     expect(doc.getElementById('meetyou-prompt-root')).toBeNull();
+  });
+
+  it('says whether video is recorded, and follows the setting (DESIGN §8.2)', () => {
+    chip.updateCallState('in_call');
+    const reminder = (): string | undefined =>
+      doc
+        .getElementById('meetyou-prompt-root')
+        ?.shadow?.children.flatMap((c) => c.children)
+        .find((c) => c.className === 'prompt-reminder')?.textContent;
+    expect(reminder()).toBe(reminderText(true));
+    chip.setRecordVideo(false);
+    expect(reminder()).toBe('Audio will be recorded.');
+    expect(reminderText(true)).toBe("Audio and the Meet tab's video will be recorded.");
   });
 });

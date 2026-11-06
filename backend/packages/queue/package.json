@@ -1,0 +1,28 @@
+{
+  "name": "@meetyou/queue",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Transactional job creation, worker runtime and dead-letter handling on graphile-worker (ADR-0005, S2-06).",
+  "exports": {
+    ".": "./src/index.ts",
+    "./testing": "./src/testing.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@meetyou/db": "workspace:*",
+    "graphile-worker": "0.18.0",
+    "kysely": "0.29.7",
+    "pg": "8.23.1",
+    "zod": "^4.6.7"
+  },
+  "devDependencies": {
+    "@electric-sql/pglite": "0.5.11",
+    "@electric-sql/pglite-socket": "0.2.14",
+    "@types/pg": "8.23.1",
+    "@meetyou/contracts": "workspace:*"
+  }
+}

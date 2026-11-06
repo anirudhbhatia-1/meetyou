@@ -6,14 +6,20 @@
   "scripts": {
     "build": "node scripts/build.mjs",
     "typecheck": "pnpm exec tsc -p tsconfig.json",
-    "test": "vitest run"
+    "test": "vitest run",
+    "build:dev": "MINUTES_GATEWAY_URL=http://127.0.0.1:8787 node scripts/build.mjs"
   },
   "devDependencies": {
+    "@types/react": "19.3.0",
+    "@types/react-dom": "19.3.0",
     "esbuild": "0.28.2"
   },
   "dependencies": {
     "@meetyou/contracts": "workspace:*",
     "@meetyou/design-tokens": "workspace:*",
+    "@meetyou/ui": "workspace:*",
+    "react": "19.1.10",
+    "react-dom": "19.1.10",
     "zod": "^4.6.7"
   }
 }

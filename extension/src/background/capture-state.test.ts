@@ -160,6 +160,25 @@ describe('nextCaptureState', () => {
     expect(nextCaptureState(failed, { type: 'dismissed' })).toEqual(IDLE_CAPTURE);
   });
 
+  it('tracks live transcript health while capturing and resets it after stop', () => {
+    const rec = recording();
+    const delayed = nextCaptureState(rec, { type: 'stt_changed', stt: 'degraded' });
+    expect(delayed.stt).toBe('degraded');
+    expect(nextCaptureState(delayed, { type: 'stt_changed', stt: 'degraded' })).toBe(delayed);
+    const processing = run(delayed, { type: 'stop_requested' }, { type: 'stopped' });
+    expect(processing.stt).toBe('ok');
+    expect(nextCaptureState(IDLE_CAPTURE, { type: 'stt_changed', stt: 'down' })).toBe(IDLE_CAPTURE);
+    expect(parseCaptureState({ ...delayed, stt: 'bogus' }).stt).toBe('ok');
+  });
+
+  it('dismisses processing back to idle, but never a live recording', () => {
+    const processing = run(recording(), { type: 'stop_requested' }, { type: 'stopped' });
+    expect(processing.status).toBe('processing');
+    expect(nextCaptureState(processing, { type: 'dismissed' })).toEqual(IDLE_CAPTURE);
+    const rec = recording();
+    expect(nextCaptureState(rec, { type: 'dismissed' })).toBe(rec);
+  });
+
   it('does not stop from idle or finish a stop that was never requested', () => {
     expect(nextCaptureState(IDLE_CAPTURE, { type: 'stop_requested' })).toBe(IDLE_CAPTURE);
     const rec = recording();

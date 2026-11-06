@@ -10,14 +10,14 @@ declare namespace chrome {
       documentUrls: readonly string[];
     }): Promise<readonly unknown[]>;
     function sendMessage(message: unknown): Promise<unknown>;
+    type MessageListener = (
+      message: unknown,
+      sender: unknown,
+      sendResponse: (response?: unknown) => void,
+    ) => boolean | undefined;
     const onMessage: {
-      addListener(
-        callback: (
-          message: unknown,
-          sender: unknown,
-          sendResponse: (response?: unknown) => void,
-        ) => boolean | undefined,
-      ): void;
+      addListener(callback: MessageListener): void;
+      removeListener(callback: MessageListener): void;
     };
   }
   namespace tabs {

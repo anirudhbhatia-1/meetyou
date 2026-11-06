@@ -7,7 +7,12 @@ import WebSocket from 'ws';
 
 import { MemoryChunkStore, type AudioChunk } from './chunk-store.ts';
 import { allowedHost, createGateway, SUBPROTOCOL, type Gateway } from './server.ts';
-import type { SttInput, SttProvider, SttStreamHandlers } from './stt/types.ts';
+import {
+  DEEPGRAM_CAPABILITIES,
+  type SttInput,
+  type SttProvider,
+  type SttStreamHandlers,
+} from '@meetyou/providers';
 
 const PCM = new Uint8Array(3200);
 
@@ -130,6 +135,7 @@ describe('gateway robustness (code review 2026-11-05)', () => {
     let opens = 0;
     const stt: SttProvider = {
       name: 'closing',
+      capabilities: DEEPGRAM_CAPABILITIES,
       usdPerMinute: 0,
       open(_input: SttInput, handlers: SttStreamHandlers) {
         opens += 1;

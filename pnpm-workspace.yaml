@@ -2,6 +2,7 @@ packages:
   - shared/*
   - tools/*
   - extension
+  - web
   - backend/apps/*
   - backend/packages/*
 

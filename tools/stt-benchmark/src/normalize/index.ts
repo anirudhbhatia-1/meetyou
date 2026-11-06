@@ -1,26 +1,10 @@
-import { readFileSync } from 'node:fs';
-import { fileURLToPath } from 'node:url';
-import { z } from 'zod';
-import { transliterate } from './devanagari.ts';
+import { CANONICAL_LIST, transliterate, type CanonicalList } from '@meetyou/hinglish';
 
-const CanonicalList = z.object({
-  version: z.string(),
-  entries: z.array(
-    z.object({
-      canonical: z.string(),
-      variants: z.array(z.string()),
-      ambiguous: z.array(z.string()).optional(),
-    }),
-  ),
-  splits: z.record(z.string(), z.string()),
-  fillers: z.array(z.string()),
-});
-export type CanonicalList = z.infer<typeof CanonicalList>;
+export type { CanonicalList };
 
-export function loadCanonicalList(
-  path = fileURLToPath(new URL('../../data/hinglish-canonical.json', import.meta.url)),
-): CanonicalList {
-  return CanonicalList.parse(JSON.parse(readFileSync(path, 'utf8')));
+/** The canonical Hinglish list (S0-03), now shipped by `@meetyou/hinglish`. */
+export function loadCanonicalList(): CanonicalList {
+  return CANONICAL_LIST;
 }
 
 /** Number words that are safe to convert on both sides ("do" is excluded: verb and English word). */

@@ -51,13 +51,16 @@ Requirements:
 - The ARCHITECTURE §9.1 "outbox table + dispatcher" is replaced by transactional job creation; an
   explicit outbox table is only needed if we later publish events to external systems.
 - Database role setup: application role + owner role for the wrapper function (migration).
+  **As built (2026-11-06):** the application role owns both schemas, so `enqueue` calls
+  `graphile_worker.add_job` directly; dead letters are written from the `job:failed` event into an
+  insert-only `failed_jobs` table instead of copying from graphile-worker's tables.
 - If graphile-worker does not fit (e.g. connection limits on Cloud SQL), switch to Option B; the
   `enqueue` helper hides the choice from domain code.
 
 ## 5. Verification before acceptance
 | # | Check | Owner |
 |---|---|---|
-| 1 | `add_job` via `SECURITY DEFINER` wrapper inside a transaction: job visible only after commit, absent after rollback (test) | Anirudh |
+| 1 | `add_job` via `SECURITY DEFINER` wrapper inside a transaction: job visible only after commit, absent after rollback (test) — **done 2026-11-06** (`backend/packages/queue` tests). No wrapper needed: the application role owns graphile-worker's schema too (it runs the migrations) | Anirudh |
 | 2 | Connection usage per worker vs Cloud SQL connection limits for the chosen tier | Anirudh |
 | 3 | Current graphile-worker version supports Postgres version chosen in ADR-0002 check 2 | Anirudh |
 

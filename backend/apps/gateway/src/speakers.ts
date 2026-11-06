@@ -1,4 +1,4 @@
-import type { SttResult, SttWord } from './stt/types.ts';
+import type { SttResult, SttWord } from '@meetyou/providers';
 
 export interface SpeakerRun {
   speaker: number | undefined;

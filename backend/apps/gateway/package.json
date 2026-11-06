@@ -3,18 +3,27 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "Realtime capture gateway (ARCHITECTURE §6): WebSocket ingest, durable 10 s chunks, acks, live STT.",
+  "description": "Realtime capture gateway (ARCHITECTURE \u00a76): WebSocket ingest, durable 10 s chunks, acks, live STT.",
   "scripts": {
     "typecheck": "tsc -p tsconfig.json",
     "test": "vitest run",
     "dev": "node src/main.ts"
   },
   "dependencies": {
+    "@meetyou/auth": "workspace:*",
     "@meetyou/contracts": "workspace:*",
+    "@meetyou/db": "workspace:*",
+    "@meetyou/hinglish": "workspace:*",
+    "@meetyou/providers": "workspace:*",
+    "@meetyou/queue": "workspace:*",
+    "@meetyou/video": "workspace:*",
+    "ioredis": "6.0.0",
     "ws": "^8.22.0",
     "zod": "^4.6.7"
   },
   "devDependencies": {
-    "@types/ws": "^8.18.2"
+    "@meetyou/fixtures": "workspace:*",
+    "@types/ws": "^8.18.2",
+    "kysely": "0.29.7"
   }
 }

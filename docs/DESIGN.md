@@ -146,6 +146,11 @@ Each journey follows PRD §8 and lists the screens involved.
 
 ### 5.1 Colour (light)
 
+> **Accent is orange (Anirudh, 2026-11-06).** The `olive*` tokens below keep their names so the
+> code does not change, but their values are now orange (`olive` = `#c2410c`), replacing the
+> original olive green everywhere: buttons, selection, links, focus ring, meters, citations.
+> `match-hl` is `#fed7aa`. Values live in `shared/design-tokens/src/tokens.ts` (contrast-tested).
+
 | Token | Hex | Use |
 |---|---|---|
 | `paper` | `#f6f5ef` | Page background |
@@ -160,13 +165,13 @@ Each journey follows PRD §8 and lists the screens involved.
 | `stroke` | `#d6d5cf` | Borders of buttons that carry a text label (decorative) |
 | **`control-line`** | `#8a8a83` | **Boundaries that identify a control: text inputs, checkboxes, switch-off track border** — 3.5:1 on white (WCAG 1.4.11) |
 | `stroke-off` | `#c9c8c1` | Switch-off track fill (always with `control-line` border), disabled send |
-| `olive` | `#566a0a` | Primary fill, selected, links, progress |
-| `olive-hover` | `#46570a` | Primary hover |
-| `olive-ink` | `#3f4e05` | Text on olive tint, link hover |
-| `olive-line` | `#7a8c1f` | Selected outlines, focus ring, highlighted card border |
-| `olive-tint` | `#e7ebd2` | Selected nav, chips, "Ready" pill |
-| `olive-wash` | `#f3f5e6` | Current setup step, info banners |
-| `olive-hl` | `#eef2dc` | Cited transcript line highlight |
+| `olive` | `#c2410c` | Primary fill, selected, links, progress |
+| `olive-hover` | `#9a3412` | Primary hover |
+| `olive-ink` | `#7c2d12` | Text on olive tint, link hover |
+| `olive-line` | `#ea580c` | Selected outlines, focus ring, highlighted card border |
+| `olive-tint` | `#ffedd5` | Selected nav, chips, "Ready" pill |
+| `olive-wash` | `#fff7ed` | Current setup step, info banners |
+| `olive-hl` | `#fff1e3` | Cited transcript line highlight |
 | `match-hl` | `#e2e8c4` | Search-match highlight, text selection |
 | `ember` / `ember-line` / `ember-halo` | `#e0603f` / `#bd4a30` / `#f9dcd2` | Recording dot only |
 | `warn-bg` / `warn-ink` | `#fdeee8` / `#9a3d26` | "Writing notes…", live timer |
@@ -255,7 +260,7 @@ star (Phase 2). Bundle as inline SVG.
 
 | # | Component | Specification |
 |---|---|---|
-| 6.1 | **Button** | Primary: `olive` bg, white 500, radius 999, height 36 / 40 / 44 (primary flows), padding 0 16–24, hover `olive-hover`. Secondary: white (or `rgba(255,255,255,.7)` on glass), 1 px `stroke`, `ink`; hover `#f3f2ec`. Ghost: `olive` text, hover `rgba(86,106,10,.08)`. Destructive: `danger` text inline, or filled `danger` in alerts. Icon: 36 px circle, 1 px `stroke`, `aria-label` required. Disabled: opacity .45, `not-allowed`. Focus: `2px solid olive-line`, offset 2, on `:focus-visible` |
+| 6.1 | **Button** | Primary: `olive` bg, white 500, radius 999, height 36 / 40 / 44 (primary flows), padding 0 16–24, hover `olive-hover`. Secondary: white (or `rgba(255,255,255,.7)` on glass), 1 px `stroke`, `ink`; hover `#f3f2ec`. Ghost: `olive` text, hover `olive-wash`. Destructive: `danger` text inline, or filled `danger` in alerts. Icon: 36 px circle, 1 px `stroke`, `aria-label` required. Disabled: opacity .45, `not-allowed`. Focus: `2px solid olive-line`, offset 2, on `:focus-visible` |
 | 6.2 | **Segmented control** | Track `hairline-2`, radius 999, padding 3, gap 2. Option height 32–36, 13–14 px. Selected: white, `ink`, `0 1px 3px rgba(0,0,0,.12)`. Idle: transparent, `#5a5b55`. `role="radiogroup"` / `role="radio"` + `aria-checked` |
 | 6.3 | **Filter / tag chip** | Height 36 (filters) / 30 (note tags), radius 999. Idle white + `stroke` border. Selected `olive-tint`, `olive-line` border, `olive-ink`. Tag chips `aria-pressed` |
 | 6.4 | **Switch** | 50×30 (settings) / 46×28 (sheet), padding 3, `role="switch"` + `aria-checked`. On: `olive` track. Off: `stroke-off` track **with 1 px `control-line` border**. Knob white 24/22 px |
@@ -296,7 +301,7 @@ bg, progress dots (4) at top. Target: under 60 seconds (FEATURES A3).
 - Card: mic icon, "Allow microphone", "Chrome can only ask on this page."
 - Primary **Allow microphone** → calls `getUserMedia` on this visible page (the offscreen document
   cannot prompt).
-- Granted: green-olive check + "Microphone ready" + auto-advance.
+- Granted: accent (orange) check + "Microphone ready" + auto-advance.
 - Denied: "Microphone blocked — you can still record the other side of the call." · link
   "How to turn it on" · secondary **Record 'them' only** (continues; Home setup step 2 stays open).
 
@@ -780,10 +785,14 @@ Name, email (read-only), Sign out.
 | Library offline | Top banner "You're offline. Showing meetings saved on this computer." Actions that need the server are disabled with a tooltip |
 | API error (generic) | Inline banner "Something went wrong. Try again." with retry; never a blank screen |
 
-**Dark appearance [SPEC] (UI-03):** paper `#141511`, paper-2 `#1a1b16`, surface `#1f201b`, ink
-`#f2f1ea`, muted `#a5a59d`, hairline `#2e2f28`, stroke `#3a3b34`, control-line `#77776f`, olive fills
-`#8aa12a` with `#11120e` text, olive-tint `#2a3112`, olive-ink `#d6e3a0`, glass `rgba(31,32,27,.6)`
-with edge `rgba(255,255,255,.08)`. Verify every text pair ≥ 4.5:1 and control boundaries ≥ 3:1.
+**Dark appearance (UI-03):** paper `#141511`, paper-2 `#1a1b16`, surface `#1f201b`, ink
+`#f2f1ea`, muted `#a5a59d`, hairline `#2e2f28`, stroke `#3a3b34`, control-line `#77776f`, accent
+(`olive`) fills `#fb923c` with `#11120e` text, olive-tint `#3b2010`, olive-ink `#fed7aa`, glass
+`rgba(31,32,27,.6)` with edge `rgba(255,255,255,.08)`.
+**Appearance setting (Anirudh, 2026-11-06):** **Light is the default**; the user switches to Dark
+in the web app's Settings → Appearance, or the side panel's "…" menu → Dark theme / Light theme.
+The system theme is not followed. Stored per browser (`localStorage` `minutes.theme`), applied as
+`<html data-theme>`; TODO(S4-12): also saved with the account settings. Verify every text pair ≥ 4.5:1 and control boundaries ≥ 3:1.
 The Meet overlay always uses the light glass (Meet's UI is dark).
 
 ---

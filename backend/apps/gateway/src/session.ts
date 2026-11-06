@@ -3,26 +3,27 @@ import { randomInt } from 'node:crypto';
 import {
   ClientMessage,
   decodeAudioFrame,
-  LanguageTag,
-  newUlid,
   OPUS_PACKET_MS,
   PROTOCOL_VERSION,
-  Segment,
   unpackOpusFrame,
   type AudioFormat,
   type AudioFrame,
+  type CaptureEvent,
   type Lane,
   type ServerMessage,
 } from '@meetyou/contracts';
 import WebSocket from 'ws';
 
+import type { DisplayTextPolicy } from '@meetyou/hinglish';
+
+import { TranscriptAssembler } from './assembler.ts';
 import type { ChunkStore } from './chunk-store.ts';
-import { EchoDetector } from './echo.ts';
 import { LaneChunker, type PendingChunk } from './lane-chunker.ts';
 import { errorCode, log } from './log.ts';
 import { DEFAULT_PRE_SKIP, oggOpusFile, OggOpusWriter } from './ogg.ts';
-import { clusterId, splitBySpeaker, type SpeakerRun } from './speakers.ts';
-import type { SttProvider, SttResult, SttStream } from './stt/types.ts';
+import type { SttProvider, SttResult, SttStream } from '@meetyou/providers';
+import type { SessionPatch } from './registry.ts';
+import { FileSink, type SessionSink, type SessionTarget } from './sinks.ts';
 import { StreamTimeline } from './timeline.ts';
 import { UsageMeter } from './usage.ts';
 
@@ -34,6 +35,12 @@ const MAX_STT_QUEUE = 600;
 export const STT_IDLE_CLOSE_MS = 60_000;
 /** 16 kHz × 2 bytes per sample. */
 const PCM16_BYTES_PER_MS = 32;
+/** After this many provider opens fail in a row, live STT counts as down (ws-protocol `health`). */
+export const STT_DOWN_AFTER_FAILURES = 3;
+/** A lane counts as receiving while a frame arrived within this window. */
+const RECEIVING_WINDOW_MS = 5_000;
+
+type SttHealth = 'ok' | 'degraded' | 'down';
 
 type Codec = AudioFormat['codec'];
 
@@ -70,10 +77,14 @@ function newLaneStt(): LaneStt {
 export class StreamSession {
   readonly sessionId: string;
   readonly workspaceId: string;
+  readonly meetingId: string;
   readonly #store: ChunkStore;
   readonly #stt: SttProvider | null;
   readonly #meter: UsageMeter;
-  readonly #echo = new EchoDetector();
+  readonly #assembler: TranscriptAssembler;
+  readonly #sink: SessionSink;
+  /** Sink writes in order; a failure is logged and the chain goes on (the batch pass re-covers it). */
+  #sinkWrites: Promise<void> = Promise.resolve();
   #codec: Codec | null = null;
   #lanes: Record<Lane, LaneChunker> | null = null;
   readonly #writes: Record<Lane, Promise<void>> = {
@@ -89,20 +100,49 @@ export class StreamSession {
   #idleTimer: ReturnType<typeof setTimeout> | null = null;
   #lastActivityAt = Date.now();
   readonly #onEnded: (() => void) | undefined;
+  readonly #onState: (patch: SessionPatch) => void;
+  readonly #keyterms: readonly string[];
+  #sttHealth: SttHealth = 'ok';
+  #openFailures = 0;
+  #needsBatch = false;
+  readonly #lastFrameAt: Record<Lane, number> = { me: 0, them: 0 };
 
   constructor(options: {
     sessionId: string;
     workspaceId: string;
+    /** The meeting the session records into; the session ID itself without a database. */
+    meetingId?: string;
     store: ChunkStore;
     stt: SttProvider | null;
+    /** Defaults to files next to the audio (local dev). */
+    sink?: SessionSink;
+    /** Display text policy (assembler.ts); default shows the provider's text as is. */
+    display?: DisplayTextPolicy;
     /** Called once the session ended, so the server can forget it. */
     onEnded?: () => void;
+    /** Shared state changes for the session registry (S2-04): codec, ended, STT health. */
+    onState?: (patch: SessionPatch) => void;
+    /** Workspace glossary for the STT provider. */
+    keyterms?: readonly string[];
+    /** State recorded by an earlier instance (takeover after a crash, §6.2). */
+    resume?: { codec: Codec | null; needsBatch: boolean };
   }) {
     this.sessionId = options.sessionId;
     this.#onEnded = options.onEnded;
     this.workspaceId = options.workspaceId;
+    this.meetingId = options.meetingId ?? options.sessionId;
+    this.#onState = options.onState ?? (() => undefined);
+    this.#keyterms = options.keyterms ?? [];
+    this.#codec = options.resume?.codec ?? null;
+    this.#needsBatch = options.resume?.needsBatch ?? false;
     this.#store = options.store;
     this.#stt = options.stt;
+    this.#sink = options.sink ?? new FileSink(options.store);
+    this.#assembler = new TranscriptAssembler({
+      workspaceId: options.workspaceId,
+      meetingId: this.meetingId,
+      ...(options.display !== undefined ? { display: options.display } : {}),
+    });
     this.#meter = new UsageMeter({
       sessionId: options.sessionId,
       workspaceId: options.workspaceId,
@@ -185,6 +225,7 @@ export class StreamSession {
       this.#fail(socket, 'session_ended', false);
       return;
     }
+    if (this.#codec === null) this.#onState({ codec: parsed.format.codec });
     this.#codec = parsed.format.codec;
 
     if (this.#idleTimer !== null) clearTimeout(this.#idleTimer);
@@ -210,6 +251,8 @@ export class StreamSession {
         acceptedFormat: formatFor(this.#codec),
         durableUpTo: { me: lanes.me.durableUpTo, them: lanes.them.durableUpTo },
       });
+      // A reconnecting client learns at once whether live transcription is working.
+      if (this.#sttHealth !== 'ok') this.#sendHealth(socket);
       log('stream.ready', {
         sessionId: this.sessionId,
         codec: this.#codec,
@@ -226,7 +269,7 @@ export class StreamSession {
 
   async #lanesReady(): Promise<Record<Lane, LaneChunker>> {
     if (this.#lanes === null) {
-      const durable = await this.#store.durableUpTo(this.workspaceId, this.sessionId);
+      const durable = await this.#store.durableUpTo(this.workspaceId, this.meetingId);
       this.#lanes ??= { me: new LaneChunker(durable.me), them: new LaneChunker(durable.them) };
     }
     return this.#lanes;
@@ -263,6 +306,7 @@ export class StreamSession {
       return;
     }
     this.#meter.frame(frame.lane);
+    this.#lastFrameAt[frame.lane] = Date.now();
 
     if (frame.seq > this.#sttUpTo[frame.lane]) {
       this.#sttUpTo[frame.lane] = frame.seq;
@@ -303,7 +347,7 @@ export class StreamSession {
         const audio = this.#chunkAudio(chunk);
         await this.#store.put({
           workspaceId: this.workspaceId,
-          meetingId: this.sessionId,
+          meetingId: this.meetingId,
           lane,
           frames: chunk.frames,
           audio,
@@ -350,7 +394,7 @@ export class StreamSession {
         log('stream.control', { sessionId: this.sessionId, action: parsed.action, at: parsed.at });
         break;
       case 'event':
-        // TODO(S1-08/S2): store normalized capture events for speaker resolution (§6.1 step 6).
+        this.#event(parsed.event);
         break;
       case 'hello':
         this.#fail(socket, 'duplicate_hello', false);
@@ -358,17 +402,39 @@ export class StreamSession {
     }
   }
 
+  /**
+   * Capture events (§6.1 step 6). Video part timing is stored for `video.finalize`; a resend after
+   * a reconnect writes the same values again. TODO(S3-04): store speaker and participant events
+   * for speaker resolution.
+   */
+  #event(event: CaptureEvent): void {
+    if (event.sessionId !== this.sessionId) return;
+    if (event.type === 'video.part_started') {
+      const { partId, mimeType, width, height, fps, at } = event;
+      this.#toSink('video', (t) =>
+        this.#sink.videoPart(t, { partId, mimeType, width, height, fps, startMs: at }),
+      );
+    } else if (event.type === 'video.part_stopped') {
+      const { partId, fragments, at } = event;
+      this.#toSink('video', (t) => this.#sink.videoPart(t, { partId, fragments, stoppedAtMs: at }));
+    }
+  }
+
   async #end(socket: WebSocket): Promise<void> {
     this.#ended = true;
+    this.#onState({ ended: true, endedAt: Date.now() });
     await Promise.all(LANES.map((l) => this.#writeChunk(l, true)));
     if (LANES.some((l) => this.#writeFailed[l])) {
       // The client keeps its unacknowledged frames and retries; ending now would refuse them.
       this.#ended = false;
+      this.#onState({ ended: false, endedAt: null });
       if (this.#socket === socket) this.#fail(socket, 'storage_failed', true);
       return;
     }
     await this.#closeStt();
     const usage = await this.#saveUsage();
+    this.#toSink('ended', (target) => this.#sink.ended(target, new Date()));
+    await this.#sinkWrites;
     log('stream.ended', {
       sessionId: this.sessionId,
       audioMsMe: usage.audioMs.me,
@@ -404,12 +470,28 @@ export class StreamSession {
 
   async #saveUsage() {
     const usage = this.#meter.snapshot();
-    try {
-      await this.#store.putUsage(usage);
-    } catch (error: unknown) {
-      log('usage.write_failed', { sessionId: this.sessionId, code: errorCode(error) });
-    }
+    this.#toSink('usage', (target) => this.#sink.usage(target, usage));
+    await this.#sinkWrites;
     return usage;
+  }
+
+  get #target(): SessionTarget {
+    return { workspaceId: this.workspaceId, sessionId: this.sessionId, meetingId: this.meetingId };
+  }
+
+  /** Queues a sink write after the earlier ones; failures are logged by kind, never retried here. */
+  #toSink(
+    kind: 'segments' | 'usage' | 'ended' | 'video',
+    write: (target: SessionTarget) => Promise<void>,
+  ): void {
+    const target = this.#target;
+    this.#sinkWrites = this.#sinkWrites.then(async () => {
+      try {
+        await write(target);
+      } catch (error: unknown) {
+        log('sink.write_failed', { sessionId: this.sessionId, kind, code: errorCode(error) });
+      }
+    });
   }
 
   #forwardToStt(
@@ -445,7 +527,10 @@ export class StreamSession {
     stt.queued.push({ bytes, durationMs });
     // Bounded while a provider handshake stalls. The Ogg headers (entry 0) must stay first; audio
     // dropped here is still durable and goes to the batch pass (§6.3).
-    if (stt.queued.length > MAX_STT_QUEUE) stt.queued.splice(stt.ogg === null ? 0 : 1, 1);
+    if (stt.queued.length > MAX_STT_QUEUE) {
+      stt.queued.splice(stt.ogg === null ? 0 : 1, 1);
+      this.#markNeedsBatch('stt_queue_overflow');
+    }
     if (!opening) return;
 
     const timeline = stt.timeline;
@@ -459,13 +544,15 @@ export class StreamSession {
             // `#closeStt` clears `stream` before closing, so only an unexpected close backs off.
             if (stt.timeline === timeline && stt.stream !== null) {
               stt.stream = null;
+              this.#markNeedsBatch('stt_closed');
+              this.#setHealth('degraded');
               // Back off before reopening, or a provider that accepts and then closes is reopened
               // on every 100 ms frame (ARCHITECTURE §6.3).
               stt.retryAt = Date.now() + STT_RETRY_MS;
             }
           },
         },
-        { diarize: lane === 'them' },
+        { diarize: lane === 'them', keyterms: this.#keyterms },
       )
       .then((stream) => {
         stt.stream = stream;
@@ -474,6 +561,8 @@ export class StreamSession {
           this.#meter.sttSent(lane, queued.durationMs);
         }
         stt.queued = [];
+        this.#openFailures = 0;
+        this.#setHealth('ok');
         this.#meter.sttStreamOpened();
         log('stt.opened', { sessionId: this.sessionId, lane, provider: provider.name });
       })
@@ -482,6 +571,9 @@ export class StreamSession {
         log('stt.open_failed', { sessionId: this.sessionId, lane, code: errorCode(error) });
         stt.queued = [];
         stt.retryAt = Date.now() + STT_RETRY_MS;
+        this.#openFailures += 1;
+        this.#markNeedsBatch('stt_open_failed');
+        this.#setHealth(this.#openFailures >= STT_DOWN_AFTER_FAILURES ? 'down' : 'degraded');
       })
       .finally(() => {
         stt.opening = null;
@@ -489,65 +581,63 @@ export class StreamSession {
   }
 
   #onSttResult(lane: Lane, timeline: StreamTimeline, result: SttResult): void {
+    const socket = this.#socket;
     if (!result.final) {
-      const socket = this.#socket;
       if (socket !== null) {
         const startMs = timeline.toSessionMs(result.startMs);
-        this.#send(socket, { type: 'transcript.interim', lane, text: result.text, startMs });
+        const text = this.#assembler.interimText(result.text);
+        this.#send(socket, { type: 'transcript.interim', lane, text, startMs });
       }
       return;
     }
-    // One segment per diarized speaker run (FR-SPK-02); `me` is never diarized.
-    for (const run of splitBySpeaker(result)) {
-      this.#finalSegment(lane, timeline, run, result.language);
-    }
+    const { segments, echoFlags, invalid } = this.#assembler.finalSegments(lane, timeline, result);
+    for (const echo of echoFlags) this.#meter.segment(lane, echo);
+    if (invalid > 0) log('segment.invalid', { sessionId: this.sessionId, lane, count: invalid });
+    if (segments.length === 0) return;
+    // Stored whether or not a client is attached (§8.1 step 5); pushed only to a live client.
+    this.#toSink('segments', (target) => this.#sink.segments(target, segments));
+    if (socket === null) return;
+    for (const segment of segments) this.#send(socket, { type: 'transcript.segment', segment });
   }
 
-  #finalSegment(
-    lane: Lane,
-    timeline: StreamTimeline,
-    run: SpeakerRun,
-    language: string | undefined,
-  ): void {
-    const startMs = timeline.toSessionMs(run.startMs);
-    const endMs = Math.max(startMs, timeline.toSessionMs(run.endMs));
-    const echo = this.#echo.check(lane, startMs, endMs, run.text);
-    this.#meter.segment(lane, echo);
+  get sttHealth(): SttHealth {
+    return this.#sttHealth;
+  }
+
+  get needsBatch(): boolean {
+    return this.#needsBatch;
+  }
+
+  /**
+   * Outage handling (§6.3): audio keeps being stored; the live transcript has a hole, so the
+   * meeting is marked for the batch pass after the call (S3-04 transcribes it in full).
+   */
+  #markNeedsBatch(reason: string): void {
+    if (this.#needsBatch) return;
+    this.#needsBatch = true;
+    log('session.needs_batch', { sessionId: this.sessionId, reason });
+    this.#onState({ needsBatch: true });
+  }
+
+  #setHealth(health: SttHealth): void {
+    if (this.#sttHealth === health) return;
+    this.#sttHealth = health;
+    log('stt.health', { sessionId: this.sessionId, health });
+    this.#onState({ stt: health });
     const socket = this.#socket;
-    if (socket === null) return;
-    const speakerClusterId = lane === 'them' ? clusterId(run.speaker) : undefined;
-    const segment = Segment.safeParse({
-      id: `seg_${newUlid()}`,
-      workspaceId: this.workspaceId,
-      meetingId: this.sessionId,
-      lane,
-      // TODO(S3-04): cluster IDs restart with each provider stream; batch resolution unifies them.
-      ...(speakerClusterId !== undefined ? { speakerClusterId } : {}),
-      startMs,
-      endMs,
-      // TODO(S3): transliterate to Roman display text (D-01, ARCHITECTURE §8.1 step 2).
-      text: run.text,
-      rawText: run.text,
-      language: languageTag(language),
-      source: 'live',
-      words: run.words.map((w) => ({
-        text: w.text,
-        startMs: timeline.toSessionMs(w.startMs),
-        endMs: timeline.toSessionMs(w.endMs),
-        ...(w.confidence !== undefined ? { confidence: w.confidence } : {}),
-      })),
-      flags: echo.flag ? ['echo'] : [],
+    if (socket !== null) this.#sendHealth(socket);
+  }
+
+  #sendHealth(socket: WebSocket): void {
+    const now = Date.now();
+    const receiving = (lane: Lane) => ({
+      receiving: now - this.#lastFrameAt[lane] < RECEIVING_WINDOW_MS,
     });
-    if (!segment.success) {
-      log('segment.invalid', {
-        sessionId: this.sessionId,
-        lane,
-        issues: segment.error.issues.length,
-      });
-      return;
-    }
-    // TODO(S2): store segments (db) and emit segment.finalized via the outbox (§6.1 steps 4, 7).
-    this.#send(socket, { type: 'transcript.segment', segment: segment.data });
+    this.#send(socket, {
+      type: 'health',
+      stt: this.#sttHealth,
+      lanes: { me: receiving('me'), them: receiving('them') },
+    });
   }
 
   #send(socket: WebSocket, message: ServerMessage): void {
@@ -583,9 +673,4 @@ function toBytes(data: WebSocket.RawData): Uint8Array {
   if (Array.isArray(data)) return new Uint8Array(Buffer.concat(data));
   if (data instanceof ArrayBuffer) return new Uint8Array(data);
   return new Uint8Array(data.buffer, data.byteOffset, data.byteLength);
-}
-
-function languageTag(language: string | undefined): string {
-  const tag = language?.toLowerCase();
-  return tag !== undefined && LanguageTag.safeParse(tag).success ? tag : 'und';
 }

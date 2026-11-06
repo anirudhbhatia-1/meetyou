@@ -1,0 +1,21 @@
+{
+  "name": "@meetyou/providers",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Vendor adapters behind common interfaces: STT streaming and batch, LLM, transliteration (ARCHITECTURE §7, S2-03). The only package that talks to vendors.",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "ws": "^8.22.0",
+    "zod": "^4.6.7"
+  },
+  "devDependencies": {
+    "@types/ws": "^8.18.2"
+  }
+}

@@ -54,6 +54,11 @@ function notifySidePanel(message: SidePanelMessage): void {
 }
 
 function forwardTranscript(message: ServerMessage): void {
+  if (message.type === 'health') {
+    // Persisted by the service worker, so a panel opened later still shows "transcript delayed".
+    notifyBackground({ target: 'background', type: 'capture.stt', stt: message.stt });
+    return;
+  }
   if (message.type === 'transcript.interim') {
     notifySidePanel({
       target: 'sidepanel',

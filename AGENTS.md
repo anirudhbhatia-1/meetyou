@@ -134,12 +134,20 @@ an event. **Source of truth:** `shared/contracts` (zod schemas + tests); this bl
 ```
 shared/contracts       ✅ zod schemas: capture events, WS protocol, REST DTOs, summary output
 shared/design-tokens   ✅ colour/type/radius tokens, tokens.css, bundled fonts, contrast tests
+shared/ui              (S4-02) React components + base CSS (DESIGN §6) shared by web/ and the extension pages
+shared/hinglish        Hinglish canonical spelling list, Devanagari→Roman, display-text policies
+shared/fixtures        (S2-13) synthetic meeting script, recorded gateway sessions + replayer, TTS audio script
 tools/stt-benchmark    ✅ STT benchmark: runner, streaming harness, normalizer, scorer
-extension/             (Stage 1) Chrome MV3: service worker, offscreen document, side panel, Meet adapter (esbuild)
+extension/             (Stage 1) Chrome MV3: service worker, offscreen document, side panel (React), Meet adapter (esbuild)
+web/                   (S4) library web app, React + Vite, mock API until S2-09
 backend/apps/gateway   (S1-05) realtime gateway, local dev
 backend/packages/db    (S2-01) Postgres schema, migrations, workspace-scoped access (Kysely)
 backend/packages/auth  (S2-02) Google sign-in, JWT access/stream tokens, rotating refresh tokens
-docs/                  PRD, features, architecture, design, plan, research, ADRs, benchmark kit, legal drafts
+backend/packages/providers (S2-03) STT/LLM/transliteration interfaces, Deepgram adapters, registry
+backend/packages/queue (S2-06) graphile-worker: transactional enqueue, worker, dead letter
+backend/packages/video (S2-14) video.finalize: ffmpeg join/remux/gap fill/poster, queue task
+docs/                  PRD, features, architecture, design, plan, research, ADRs, benchmark kit, legal drafts,
+                       STAGING_SETUP.md (step-by-step cloud setup runbook)
 ```
 
 Commands (pnpm workspace, Node 24): `pnpm install`, then `pnpm check` (format, lint, typecheck,
@@ -249,6 +257,16 @@ Work like a careful senior engineer pairing with the developer.
 - **2026-11-05 — D-07 library is a web app from alpha (Anirudh):** recordings, transcripts,
   summaries and notes live on our backend; users sign in on the web app (like Fireflies) and see
   their own meetings from any device. The extension records and links to it. Hosting in ADR-0006.
+
+- **2026-11-06 — Web app stack (Anirudh):** the library web app is **React + Vite** (`web/`),
+  built against a mock API until the real endpoints exist. Hosting stays open (ADR-0006).
+- **2026-11-06 — UI look (Anirudh):** accent is **orange** (no green); **light theme by default**
+  with a Dark switch (Settings → Appearance, side panel menu); the system theme is not followed.
+- **2026-11-06 — S2 realtime choices (Anirudh):** gateway session state in Redis through
+  **`ioredis`** (in-memory locally); `video.finalize` runs the **`ffmpeg` binary** in the worker;
+  Hindi display text stays **as the STT provider returns it** for now (assembler display policy
+  `as_provided`; `roman_rules` exists for D-01 and Anirudh will switch later). The free Gemini key
+  is still never used on real meetings.
 
 ### Open (do not assume an answer)
 - LLM for summaries (D-04, ADR-0007). Gemini Flash is a candidate — paid tier only for user data.

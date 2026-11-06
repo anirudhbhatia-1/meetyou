@@ -30,10 +30,10 @@ declare namespace chrome {
     }
     const session: StorageArea;
     const local: StorageArea;
+    type ChangeListener = (changes: Record<string, StorageChange>, areaName: string) => void;
     const onChanged: {
-      addListener(
-        callback: (changes: Record<string, StorageChange>, areaName: string) => void,
-      ): void;
+      addListener(callback: ChangeListener): void;
+      removeListener(callback: ChangeListener): void;
     };
   }
   namespace commands {

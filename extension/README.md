@@ -8,8 +8,10 @@ machine (S1-06) and the Meet tab video recorder (S1-13).
 
 - `pnpm --filter @meetyou/extension build` bundles every entry point with esbuild into
   `extension/dist` (capture and local buffering only, no gateway).
-- `MINUTES_GATEWAY_URL=http://127.0.0.1:8787 pnpm --filter @meetyou/extension build` also streams
-  to the local gateway (`backend/apps/gateway`).
+- `pnpm --filter @meetyou/extension build:dev` (same as
+  `MINUTES_GATEWAY_URL=http://127.0.0.1:8787 … build`) also streams to the local gateway
+  (`backend/apps/gateway`): live transcript and video upload. Use this one when testing on Meet;
+  a plain `build` shows "Live transcript is off in this build" in the side panel.
 - `pnpm --filter @meetyou/extension typecheck` validates the TypeScript sources.
 - `pnpm --filter @meetyou/extension test` runs unit tests.
 
@@ -24,9 +26,9 @@ onboarding page are ES modules; the content script and the audio worklet are cla
 4. Open a `https://meet.google.com/...` tab and click the toolbar icon to open the side panel.
    The icon click is what lets Chrome grant tab capture (a browser-opened panel does not).
 
-The side panel's "Capture check" section is a developer control (start/stop/pause, lane meters,
-gateway link, live transcript lines, local video download). It is replaced by the DESIGN.md UI in
-S4.
+The side panel follows DESIGN §8.5–§8.7. Developer details (Meet state, selector health, gateway
+link, video files) are under the panel's "…" menu. After reloading the extension, reload the Meet
+tab too, so it gets the new content script (prompt and recording pill).
 
 The manifest has no backend host permission yet; the local gateway answers with CORS for dev. It
 requests microphone access only from the visible onboarding page; the offscreen document does not
