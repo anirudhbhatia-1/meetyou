@@ -8,7 +8,15 @@ import { handleFastifyError, handleNotFound } from './errors.ts';
 import { authPlugin } from './middleware/auth.ts';
 import { idempotencyPlugin, type IdempotencyStore } from './middleware/idempotency.ts';
 import { swaggerPlugin } from './plugins/swagger.ts';
+import { authRoutes } from './routes/auth.ts';
+import { consentLogRoutes } from './routes/consent-log.ts';
 import { healthRoutes } from './routes/health.ts';
+import { meRoutes } from './routes/me.ts';
+import { meetingsRoutes } from './routes/meetings.ts';
+import { notesRoutes } from './routes/notes.ts';
+import { segmentsRoutes } from './routes/segments.ts';
+import { sessionsRoutes } from './routes/sessions.ts';
+import { settingsRoutes } from './routes/settings.ts';
 
 export interface BuildAppOptions {
   tokens?: TokenService;
@@ -19,7 +27,7 @@ export interface BuildAppOptions {
 }
 
 /**
- * Creates and configures the Fastify REST API instance (ARCHITECTURE §12, S2-08).
+ * Creates and configures the Fastify REST API instance (ARCHITECTURE §12, S2-08, S2-09).
  * Factory design allows in-memory fast testing with `app.inject()` and production startup.
  */
 export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyInstance> {
@@ -89,10 +97,28 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
   app.setErrorHandler(handleFastifyError);
   app.setNotFoundHandler(handleNotFound);
 
-  // 6. Routes
+  // 6. Routes (S2-08, S2-09)
   await app.register(healthRoutes, {
     db: options.db,
     version: '0.1.0',
+  });
+
+  await app.register(authRoutes, {
+    tokens,
+    db: options.db,
+    config,
+  });
+
+  await app.register(meRoutes);
+  await app.register(settingsRoutes);
+  await app.register(meetingsRoutes);
+  await app.register(notesRoutes);
+  await app.register(segmentsRoutes);
+  await app.register(consentLogRoutes);
+
+  await app.register(sessionsRoutes, {
+    tokens,
+    config,
   });
 
   return app;

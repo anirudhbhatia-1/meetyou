@@ -9,6 +9,10 @@ export interface ApiConfig {
   corsOrigins: (string | RegExp)[];
   databaseUrl?: string;
   authSigningJwks?: string;
+  googleClientId?: string;
+  googleClientSecret?: string;
+  allowedRedirectUris: string[];
+  gatewayWsUrl: string;
 }
 
 export function loadConfig(env: NodeJS.ProcessEnv = process.env): ApiConfig {
@@ -34,6 +38,23 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): ApiConfig {
     corsOrigins.push(...extra);
   }
 
+  const allowedRedirectUris = env.ALLOWED_REDIRECT_URIS
+    ? env.ALLOWED_REDIRECT_URIS.split(',')
+        .map((s) => s.trim())
+        .filter(Boolean)
+    : [
+        // Pinned Extension ID redirect URI (ADR-0004 §4.1, STAGING_SETUP §4)
+        'https://hjimcofnjnikbeepahmclaniopbnhbbe.chromiumapp.org/oauth2',
+        // Local dev callback
+        'http://localhost:5173/auth/callback',
+      ];
+
+  const gatewayWsUrl =
+    env.GATEWAY_WS_URL ??
+    (appEnv === 'staging'
+      ? 'wss://meetyou-staging-gateway-7oflznia2a-el.a.run.app'
+      : 'wss://gateway.meetyou.local');
+
   return {
     port: Number.isNaN(port) ? 8080 : port,
     host,
@@ -41,5 +62,9 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): ApiConfig {
     corsOrigins,
     databaseUrl: env.DATABASE_URL,
     authSigningJwks: env.AUTH_SIGNING_JWKS,
+    googleClientId: env.GOOGLE_CLIENT_ID,
+    googleClientSecret: env.GOOGLE_CLIENT_SECRET,
+    allowedRedirectUris,
+    gatewayWsUrl,
   };
 }

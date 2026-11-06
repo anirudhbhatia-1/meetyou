@@ -6,10 +6,10 @@ pointer to where the full detail lives — the linked document stays the source 
 
 | Field | Value |
 |---|---|
-| Last updated | 2026-11-06 (Cloud staging infra, DB migrations & live API /health verified; Gaurav next: S2-09) |
+| Last updated | 2026-11-06 (S2-09 Core REST API Endpoints implemented & verified; Gaurav next: S2-10) |
 | Updated by | Gaurav (Google Antigravity) |
 | Repository | [anirudhbhatia-1/meetyou](https://github.com/anirudhbhatia-1/meetyou) — branches `main`, `anirudh`, `Gauravbro` |
-| Current stage | **Stage 2** in progress — Cloud Staging live; Gaurav next: S2-09 core endpoints (§7) |
+| Current stage | **Stage 2** in progress — S2-08 & S2-09 complete; Gaurav next: S2-10 data lifecycle (§7) |
 
 ---
 
@@ -192,7 +192,23 @@ Stage 0 is complete (status table: IMPLEMENTATION_PLAN.md → "Stage 0 status").
 
 Newest first. One entry per working session (either person).
 
-### 2026-11-06 (latest) — Gaurav (Google Antigravity): Cloud Staging Setup, DB Migration & Live API /health Verified
+### 2026-11-06 (latest) — Gaurav (Google Antigravity): S2-09 Core REST API Endpoints implemented and verified
+**Done** (branch `Gauravbro`)
+- Implemented **Task S2-09 (Core REST API Endpoints)** in `backend/apps/api` (`@meetyou/api`):
+  - **Auth & JWKS (`src/routes/auth.ts`):** `GET /.well-known/jwks.json` serving public JWKS for gateway verification; `POST /v1/auth/google` exchanging Google OAuth PKCE auth code via `@meetyou/auth` `signInWithGoogle`; `POST /v1/auth/refresh` rotating refresh tokens; `POST /v1/auth/logout` revoking tokens.
+  - **User & Workspace Profile (`src/routes/me.ts`):** `GET /v1/me` returning current user profile and workspace plan/role with `app.user_id` context for Postgres RLS compliance.
+  - **User Settings (`src/routes/settings.ts`):** `GET /v1/settings` and `PATCH /v1/settings` with automated fallback to `DEFAULT_USER_SETTINGS` (PRD FR-SET-01, FR-CON-01, ADR-0011).
+  - **Meetings Management (`src/routes/meetings.ts`):** `GET /v1/meetings` (cursor-paginated list filtered by workspace and template with `hasNextPage` and encoded cursor); `GET /v1/meetings/:id` (detailed meeting with participant names, audio/video status, and notes); `PATCH /v1/meetings/:id` (title and template updates); `DELETE /v1/meetings/:id` (soft-delete with 10s undo window); `POST /v1/meetings/:id:restore` & `/restore` (graceful recovery).
+  - **Meeting Notes (`src/routes/notes.ts`):** `GET /v1/meetings/:id/notes`, `POST /v1/meetings/:id/notes` (append single note with anchor/citation tags), `PUT /v1/meetings/:id/notes` (atomic bulk sync matching `SyncNotesRequest`).
+  - **Transcript Segments (`src/routes/segments.ts`):** `GET /v1/meetings/:id/segments` returning chronological transcript segments with resolved speaker names, words, and flags validated via `Segment.parse`.
+  - **Consent Logging (`src/routes/consent-log.ts`):** `POST /v1/consent-log` logging chat consent notices (FR-CON-03); `GET /v1/meetings/:id/consent-log` retrieving meeting consent audit records.
+  - **Sessions Lifecycle (`src/routes/sessions.ts`):** `POST /v1/sessions` creating meeting and video assets in DB, minting single-use JWT stream token (`tokens.issueStreamToken`) for gateway WebSocket connection with video constraints; `POST /v1/sessions/:id/end` marking session/meeting complete; `POST /v1/sessions/:id/recover`.
+- **Contracts (`shared/contracts/src/rest.ts`):** Added `MeResponse`, exported `type TokenResponse` and `type StartSessionResponse`.
+- **Comprehensive Test Suite (`src/routes.test.ts`):** Added 16 integration tests running on in-process PGlite with multi-tenant row-level security (RLS) enforcement. Total `@meetyou/api` tests: 29 passed out of 29.
+- Clean verification: `pnpm format:check`, `pnpm lint`, and workspace-wide `pnpm typecheck` (all 15 packages) passed with 0 errors.
+- Marked S2-09 as complete (✅) in `docs/IMPLEMENTATION_PLAN.md`. Gaurav next: Task S2-10 (Data Lifecycle & Retention Jobs).
+
+### 2026-11-06 (earlier) — Gaurav (Google Antigravity): Cloud Staging Setup, DB Migration & Live API /health Verified
 **Done** (branch `Gauravbro`)
 - **Pinned Extension ID & OAuth Manifest (`manifest.json`):** Generated RSA 2048 keypair, pinned extension ID to `hjimcofnjnikbeepahmclaniopbnhbbe`, authorized redirect `https://hjimcofnjnikbeepahmclaniopbnhbbe.chromiumapp.org/oauth2`.
 - **Google Cloud Console OAuth Staging Setup:** Configured OAuth consent screen (External, test users) and created Web application Client ID `189397093016-ghfptods39aies7sbt4hnph78nflc0cl.apps.googleusercontent.com` with authorized origins and redirect URI.
