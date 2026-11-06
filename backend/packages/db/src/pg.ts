@@ -7,7 +7,24 @@ import type { SqlRunner } from './migrate.ts';
  * (Secret Manager in staging), never from code. TODO(S2-04): pool size per Cloud Run instance.
  */
 export function createPgPool(connectionString: string): pg.Pool {
-  return new pg.Pool({ connectionString, max: 10, types: TYPE_PARSERS });
+  const pool = new pg.Pool({ connectionString, max: 10, types: TYPE_PARSERS });
+  attachPoolErrorHandlers(pool);
+  return pool;
+}
+
+/**
+ * Without these, an idle connection that Cloud SQL closes (maintenance, failover, network) emits
+ * an unhandled 'error' and crashes the process; pg then simply opens a new connection on the next
+ * query. graphile-worker asks for both handlers (err.red/wpeh). Logs carry the code only.
+ */
+export function attachPoolErrorHandlers(pool: pg.Pool): void {
+  const report = (scope: 'pool' | 'client') => (error: Error & { code?: string }) => {
+    console.error(
+      JSON.stringify({ event: 'pg.connection_error', scope, code: error.code ?? error.name }),
+    );
+  };
+  pool.on('error', report('pool'));
+  pool.on('connect', (client) => client.on('error', report('client')));
 }
 
 const INT8_OID = 20;

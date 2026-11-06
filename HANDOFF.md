@@ -6,8 +6,8 @@ pointer to where the full detail lives — the linked document stays the source 
 
 | Field | Value |
 |---|---|
-| Last updated | 2026-11-06 (S2-09 Core REST API Endpoints implemented & verified; Gaurav next: S2-10) |
-| Updated by | Gaurav (Google Antigravity) |
+| Last updated | 2026-11-06 (Gaurav: S2-09 core REST API endpoints; Anirudh: gateway staging mode, worker app, storage package) |
+| Updated by | Gaurav (Google Antigravity) & Anirudh (Claude Code) |
 | Repository | [anirudhbhatia-1/meetyou](https://github.com/anirudhbhatia-1/meetyou) — branches `main`, `anirudh`, `Gauravbro` |
 | Current stage | **Stage 2** in progress — S2-08 & S2-09 complete; Gaurav next: S2-10 data lifecycle (§7) |
 
@@ -207,6 +207,45 @@ Newest first. One entry per working session (either person).
 - **Comprehensive Test Suite (`src/routes.test.ts`):** Added 16 integration tests running on in-process PGlite with multi-tenant row-level security (RLS) enforcement. Total `@meetyou/api` tests: 29 passed out of 29.
 - Clean verification: `pnpm format:check`, `pnpm lint`, and workspace-wide `pnpm typecheck` (all 15 packages) passed with 0 errors.
 - Marked S2-09 as complete (✅) in `docs/IMPLEMENTATION_PLAN.md`. Gaurav next: Task S2-10 (Data Lifecycle & Retention Jobs).
+
+### 2026-11-06 (earlier) — Anirudh (Claude Code): S2 cloud pieces, contracts for S2-09, review of `Gauravbro`
+**Merged** `Gauravbro` (fast-forward; S2-08 API scaffold, infra, Dockerfiles) into `anirudh`.
+`pnpm check` green after the merge (a flaky gateway test was a real ordering window — fixed).
+Decision (Anirudh): `@google-cloud/storage` 8.4.0 added.
+- **Contracts for S2-09 / S3-08** (`shared/contracts/src/api.ts`): `MeResponse`,
+  `PatchSettingsRequest` (server sets `consentAcknowledgedAt`), `StreamTokenResponse`,
+  `End/RecoverSession…`, `ListMeetingsQuery` + `MeetingList`, `PatchMeetingRequest`,
+  `DeleteMeetingResponse`, `ListSegmentsQuery` + `SegmentList`, `NotesResponse` / `PutNotesRequest`
+  (ETag `version`), `ListActionItemsQuery` + `ActionItem(List)`, `PatchSummaryItemRequest`,
+  `ConsentLogResponse`, `AudioPlaybackResponse`, glossary. `SignVideoFragmentsResponse` now has
+  `headers` (the signed size range every PUT must send). **Gaurav: parse requests with these.**
+- **`@meetyou/storage`** (new): `ObjectBucket` (GCS adapter + memory), the §11.4 layout,
+  `ObjectVideoStore`, `signFragmentUploads` (V4 PUT, content type + `x-goog-content-length-range`,
+  15 min), `signReadUrl`, `meetingVideoPlayback` (for `GET /meetings/{id}/video`). Signing tested
+  offline with a throwaway key. **Gaurav: the API's `fragments:sign` and `/video` routes call these.**
+- **Gateway staging mode:** `GcsChunkStore` (newest-manifest resume), `APP_ENV=staging|production`
+  requires `DATABASE_URL`, `REDIS_URL`, `STREAM_TOKEN_JWKS`, `GCS_AUDIO_BUCKET`, `ALLOWED_ORIGINS`
+  (exact pinned extension origin), no dev endpoints, listens on `0.0.0.0`. `Dockerfile.gateway`.
+- **Worker app** (`backend/apps/worker`): `/healthz` on `$PORT`, RLS check, queue schema,
+  `video.finalize`; integration test with real Postgres (pglite-socket) + graphile + ffmpeg runs
+  the job exactly once. `Dockerfile.worker` (ffmpeg, non-root).
+- **Extension:** sends the signed headers with each fragment PUT (`putFragment`).
+- **Infra (one line):** bucket CORS also allows `x-goog-content-length-range` — Gaurav to apply.
+- **Runbook §9.1:** build/push commands (Cloud Shell Docker), the Terraform env/secrets for gateway
+  and worker, the public-JWKS command (checked locally), deploy order, checks.
+- **Review findings for Gaurav (S2-08):**
+  1. API startup does not call `db.assertRowSecurityEnforced()` (runbook §6) — add it.
+  2. Missing `AUTH_SIGNING_JWKS` makes the API sign with an ephemeral key even in staging (tokens
+     break on every restart and differ per instance) — refuse to start outside local/test.
+  3. `DATABASE_URL` is optional in staging — require it outside local/test.
+  4. CORS allows any `chrome-extension://…` with credentials — restrict to the pinned ID in
+     staging (`CORS_ALLOWED_ORIGINS`), keep the regex for local only.
+  5. `Dockerfile.api` / `.migrate` run as root — add `USER node`.
+  6. The idempotency store is in memory: retries can hit another instance (max 3) — Redis or
+     Postgres-backed store before the extension relies on it.
+  7. Images tagged `:latest`; disable old secret versions (`database-url` ×4, OAuth ×2).
+- **Still needs the cloud (not doable from here):** deploy gateway + worker (§9.1), the
+  kill-an-instance and worker-restart tests in staging, the 60-minute video sync check.
 
 ### 2026-11-06 (earlier) — Gaurav (Google Antigravity): Cloud Staging Setup, DB Migration & Live API /health Verified
 **Done** (branch `Gauravbro`)

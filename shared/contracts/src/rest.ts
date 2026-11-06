@@ -209,6 +209,11 @@ export const SignVideoFragmentsResponse = z.object({
       expiresAt: IsoDateTime,
     }),
   ),
+  /**
+   * Headers every PUT must send exactly as given: Cloud Storage checks the signed size range
+   * (`x-goog-content-length-range: 0,8388608`, `@meetyou/storage` signFragmentUploads).
+   */
+  headers: z.record(z.string().regex(/^x-goog-[a-z0-9-]+$/), z.string().max(200)),
 });
 
 // GET /v1/meetings/{meetingId}/video
