@@ -6,9 +6,11 @@ import { newUlid } from '@meetyou/contracts';
 import { MemoryChunkStore } from '@meetyou/gateway/chunk-store';
 import { scriptedProvider } from '@meetyou/gateway/record-fixture';
 import { createGateway } from '@meetyou/gateway/server';
+import { meetingDeleteTask, startWorker } from '@meetyou/queue';
 import { createQueueTestEnv } from '@meetyou/queue/testing';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
+import { checkUsage, waitForDeletion } from './records.ts';
 import { pcmFrames, runSmoke } from './smoke.ts';
 
 const ORIGIN = 'chrome-extension://hjimcofnjnikbeepahmclaniopbnhbbe';
@@ -34,6 +36,8 @@ describe('smoke run end to end (local)', () => {
   let apiUrl = '';
   let gatewayUrl = '';
   let token = '';
+  let workspaceId = '';
+  let worker: Awaited<ReturnType<typeof startWorker>>;
 
   beforeAll(async () => {
     env = await createQueueTestEnv();
@@ -75,6 +79,14 @@ describe('smoke run end to end (local)', () => {
         settingsId: `set_${newUlid()}`,
       },
     );
+    workspaceId = account.workspaceId ?? '';
+    worker = await startWorker({
+      pool: env.pool,
+      tasks: [meetingDeleteTask({ db: env.db })],
+      handleSignals: false,
+      pollIntervalMs: 200,
+      noPreparedStatements: true,
+    });
     token = (
       await tokens.issueAccessToken({
         userId: account.userId,
@@ -85,6 +97,7 @@ describe('smoke run end to end (local)', () => {
   }, 30_000);
 
   afterAll(async () => {
+    await worker.stop();
     await app.close();
     await gateway.close();
     await env.close();
@@ -99,9 +112,17 @@ describe('smoke run end to end (local)', () => {
       speed: 50,
       streamUrl: gatewayUrl,
       segmentTimeoutMs: 10_000,
+      beforeDelete: async (meetingId) => {
+        const usage = await checkUsage(env.db, workspaceId, meetingId, 5_000);
+        expect(usage.sttMsThem).toBeGreaterThan(0);
+      },
     });
     expect(result).toMatchObject({ framesSent: 20, acked: true, deleted: true });
     expect(result.segments).toBeGreaterThan(0);
+    // The worker deletes the meeting for good after the 10 s grace.
+    expect(await waitForDeletion(env.db, workspaceId, result.meetingId, 30_000, 500)).toBeLessThan(
+      30_000,
+    );
   }, 60_000);
 
   it('is refused from another origin', async () => {

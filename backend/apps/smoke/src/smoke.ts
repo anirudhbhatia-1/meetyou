@@ -20,6 +20,8 @@ export interface SmokeOptions {
   /** How long to wait for segments after the end (finals arrive after the last audio). */
   segmentTimeoutMs?: number;
   meetingCode?: string;
+  /** Runs after the transcript is read back and before the meeting is deleted (database checks). */
+  beforeDelete?: (meetingId: string) => Promise<void>;
 }
 
 export interface SmokeResult {
@@ -157,6 +159,12 @@ export async function runSmoke(options: SmokeOptions): Promise<SmokeResult> {
       throw new SmokeError('segments readback', 'no segments');
     }
     await new Promise((r) => setTimeout(r, 1_000));
+  }
+  try {
+    await options.beforeDelete?.(session.meetingId);
+  } catch (error) {
+    await finish();
+    throw error;
   }
   return finish();
 

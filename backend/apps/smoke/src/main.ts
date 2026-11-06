@@ -6,14 +6,16 @@ import { newUlid } from '@meetyou/contracts';
 import { createPgPool, Db } from '@meetyou/db';
 import { createLogger, errorCode } from '@meetyou/log';
 
+import { checkUsage, waitForDeletion } from './records.ts';
 import { runSmoke, SmokeError } from './smoke.ts';
 
 /**
  * Staging smoke job (S2-12): `node backend/apps/smoke/src/main.ts` in the Cloud Run job
  * `meetyou-<env>-smoke` (VPC, secrets DATABASE_URL and AUTH_SIGNING_JWKS). It signs in a fixed
  * synthetic account (no Google: the account is created through the same bootstrap function),
- * mints a 15-minute access token with the API's signing key, and runs `runSmoke`. Exit code 1
- * fails the deploy. Audio is synthesized here (espeak-ng, AGENTS §8: synthetic only).
+ * mints a 15-minute access token with the API's signing key, and runs `runSmoke`. It also checks
+ * the database: the meeting's usage row (S2-07) and that the worker deleted the meeting after the
+ * grace period (S2-10). Exit code 1 fails the deploy. Audio is synthesized here (espeak-ng, AGENTS §8: synthetic only).
  * Cost: about 20 s of Deepgram per lane per run.
  */
 const log = createLogger('smoke');
@@ -69,9 +71,11 @@ async function main(): Promise<void> {
     const tokens = new TokenService(
       await loadKeyRing(JSON.parse(required('AUTH_SIGNING_JWKS')) as never),
     );
+    const workspaceId = account.workspaceId ?? '';
+    let usage: Awaited<ReturnType<typeof checkUsage>> | undefined;
     const { token } = await tokens.issueAccessToken({
       userId: account.userId,
-      workspaceId: account.workspaceId ?? '',
+      workspaceId,
       scope: 'user',
     });
     const result = await runSmoke({
@@ -80,9 +84,13 @@ async function main(): Promise<void> {
       origin,
       pcmThem: synthesize(SENTENCE),
       speed: 2,
+      beforeDelete: async (meetingId) => {
+        usage = await checkUsage(db, workspaceId, meetingId);
+      },
     });
-    log.log('smoke.passed', { ...result });
-    if (!result.deleted) log.log('smoke.cleanup_failed', { meetingId: result.meetingId });
+    if (!result.deleted) throw new SmokeError('meeting delete', 'api refused');
+    const deleteMs = await waitForDeletion(db, workspaceId, result.meetingId);
+    log.log('smoke.passed', { ...result, ...usage, deleteMs });
   } finally {
     await db.destroy();
   }
