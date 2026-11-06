@@ -25,7 +25,7 @@ import {
 } from '../lib/format.ts';
 import { href, navigate } from '../lib/router.ts';
 import { useAsync } from '../lib/useAsync.ts';
-import { ConfirmAlert } from './ConfirmAlert.tsx';
+import { MoreMenu, useDeleteMeeting } from './MeetingMenu.tsx';
 import { VideoPlayer, type PlayerHandle } from './VideoPlayer.tsx';
 
 /** DESIGN §12 */
@@ -46,8 +46,10 @@ export function MeetingDetail({
   const people = useAsync(() => api.getParticipants(meetingId), [meetingId]);
   const [selected, setSelected] = useState<SummaryItem | null>(null);
   const [playFrom, setPlayFrom] = useState<number | null>(null);
-  const [confirmDelete, setConfirmDelete] = useState(false);
-  const toast = useToast();
+  const remove = useDeleteMeeting({
+    deleted: () => navigate({ screen: 'meetings' }),
+    restored: (id) => navigate({ screen: 'detail', meetingId: id, tab: 'notes' }),
+  });
 
   const m = meeting.data;
   if (meeting.loading && m === undefined) {
@@ -69,32 +71,9 @@ export function MeetingDetail({
   }
 
   const rec = recordingLabel(m.recordingExpiresAt, now);
-  const deleteMeeting = async () => {
-    await api.deleteMeeting(meetingId);
-    navigate({ screen: 'meetings' });
-    // The server waits a short grace period before the delete job runs (DESIGN §13.3).
-    toast({
-      message: 'Meeting deleted',
-      undo: () => {
-        void api.restoreMeeting(meetingId).then(
-          () => navigate({ screen: 'detail', meetingId, tab: 'notes' }),
-          () => toast({ message: 'Too late to undo — the meeting is already deleted.' }),
-        );
-      },
-    });
-  };
   return (
     <div className="detail">
-      {confirmDelete && (
-        <ConfirmAlert
-          title="Delete this meeting?"
-          body="Its audio, video, transcript, notes and action items will be removed. You can undo for a few seconds."
-          confirmLabel="Delete"
-          failedText="The meeting wasn’t deleted. Try again."
-          onCancel={() => setConfirmDelete(false)}
-          onConfirm={deleteMeeting}
-        />
-      )}
+      {remove.alert}
       <div className="toolbar glass-bar">
         <Button variant="ghost" onClick={() => navigate({ screen: 'meetings' })}>
           <Icon name="chevron-left" /> Meetings
@@ -108,7 +87,7 @@ export function MeetingDetail({
           <Button variant="primary" disabled title="Share sheet comes with S4-10">
             Share
           </Button>
-          <MoreMenu onDelete={() => setConfirmDelete(true)} />
+          <MoreMenu onDelete={() => remove.request(meetingId)} />
         </div>
       </div>
       <div className="page detail-page">
@@ -477,45 +456,5 @@ function ActionItemsCard({
         ))}
       </ul>
     </Card>
-  );
-}
-
-/** DESIGN §12.1 More menu. TODO(S4-10): Rename, Download as .md, Consent log. */
-function MoreMenu({ onDelete }: { onDelete: () => void }) {
-  const [open, setOpen] = useState(false);
-  return (
-    <div className="more">
-      <Button
-        className="icon-btn round"
-        aria-label="More actions"
-        aria-haspopup="menu"
-        aria-expanded={open}
-        onClick={() => setOpen((v) => !v)}
-      >
-        <Icon name="more-horizontal" />
-      </Button>
-      {open && (
-        <div
-          className="menu"
-          role="menu"
-          onKeyDown={(e) => {
-            if (e.key === 'Escape') setOpen(false);
-          }}
-        >
-          <button
-            type="button"
-            role="menuitem"
-            className="menu-item menu-danger"
-            autoFocus
-            onClick={() => {
-              setOpen(false);
-              onDelete();
-            }}
-          >
-            Delete meeting…
-          </button>
-        </div>
-      )}
-    </div>
   );
 }

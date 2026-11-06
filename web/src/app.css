@@ -690,3 +690,18 @@
 .menu-danger {
   color: var(--danger);
 }
+
+/* Meetings list: the row opens the meeting; the ⋯ menu sits beside it (no nested buttons). */
+.table-line {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 44px;
+  align-items: center;
+}
+.table-head {
+  padding-right: 64px;
+}
+/* The card clips overflow (rounded corners), so the last row's menu opens upwards. */
+.table-line:last-child .menu {
+  top: auto;
+  bottom: calc(100% + 6px);
+}

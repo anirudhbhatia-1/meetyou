@@ -21,6 +21,7 @@ import {
 } from '../lib/format.ts';
 import { navigate } from '../lib/router.ts';
 import { useAsync } from '../lib/useAsync.ts';
+import { MoreMenu, useDeleteMeeting } from './MeetingMenu.tsx';
 
 type Filter = TemplateId | 'all';
 const FILTERS: { value: Filter; label: string }[] = [
@@ -55,9 +56,11 @@ export function Meetings() {
     () => api.listMeetings({ query: debounced, template }),
     [debounced, template],
   );
+  const remove = useDeleteMeeting({ deleted: list.reload, restored: list.reload });
 
   return (
     <div className="page">
+      {remove.alert}
       <header className="page-head">
         <h1 className="display">Meetings</h1>
         <SearchInput
@@ -110,7 +113,7 @@ export function Meetings() {
             {(list.data ?? []).map((m) => {
               const rec = recordingLabel(m.recordingExpiresAt, now);
               return (
-                <li key={m.id}>
+                <li key={m.id} className="table-line">
                   <button
                     type="button"
                     className="table-row"
@@ -122,7 +125,7 @@ export function Meetings() {
                         {m.video !== null && <Icon name="video" size={14} label="Has video" />}
                       </span>
                       <span className="meta">
-                        {m.participantNames.join(', ')} · {TEMPLATE_LABEL[m.template]}
+                        {[...m.participantNames, TEMPLATE_LABEL[m.template]].join(' · ')}
                       </span>
                     </span>
                     <span className="cell">{formatWhen(m.startedAt, now)}</span>
@@ -132,6 +135,10 @@ export function Meetings() {
                       {rec !== null && <span className="meta small">{rec}</span>}
                     </span>
                   </button>
+                  <MoreMenu
+                    label={`More actions for ${meetingTitle(m)}`}
+                    onDelete={() => remove.request(m.id)}
+                  />
                 </li>
               );
             })}

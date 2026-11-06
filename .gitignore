@@ -33,3 +33,4 @@ override.tf.json
 
 # Synthetic TTS audio made by shared/fixtures (regenerated locally, never committed)
 shared/fixtures/audio/
+*.zip
