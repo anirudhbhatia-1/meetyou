@@ -62,6 +62,7 @@ describe('content-free structured logs (S2-11, AGENTS §7)', () => {
   it('turns errors into short codes', () => {
     const e = Object.assign(new Error('secret detail'), { code: 'ECONNRESET' });
     expect(errorCode(e)).toBe('Error:ECONNRESET');
+    expect(errorCode(Object.assign(new Error('denied'), { code: 403 }))).toBe('Error:403');
     expect(errorCode('boom')).toBe('UnknownError');
   });
 });

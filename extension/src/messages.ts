@@ -132,6 +132,16 @@ export function parseMeetStateReply(reply: unknown): MeetCallState | null {
   return CALL_STATES.has(snapshot.state) ? (snapshot.state as MeetCallState) : null;
 }
 
+/** The Meet title from a `meet.get-state` reply; null when Meet shows none. */
+export function parseMeetTitle(reply: unknown): string | null {
+  if (!isRecord(reply) || !isRecord(reply.metadata)) return null;
+  const title = reply.metadata.title;
+  if (typeof title !== 'string') return null;
+  const trimmed = title.trim().slice(0, 200);
+  // The adapter's placeholder is not a real title; the web app names untitled meetings itself.
+  return trimmed === '' || trimmed === 'Untitled Meeting' ? null : trimmed;
+}
+
 /** Tab ID of a runtime message sender, when it came from a content script. */
 export function senderTabId(sender: unknown): number | null {
   if (!isRecord(sender) || !isRecord(sender.tab) || typeof sender.tab.id !== 'number') return null;

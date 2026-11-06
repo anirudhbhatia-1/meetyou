@@ -1,6 +1,14 @@
 import { Banner, Card, Checkbox, SkeletonRows, StatusPill, useToast } from '@meetyou/ui';
 import { useApi } from '../lib/api-context.ts';
-import { formatDue, formatLength, formatWhen, greeting, longDate } from '../lib/format.ts';
+import {
+  formatDue,
+  formatLength,
+  formatWhen,
+  greeting,
+  longDate,
+  meetingTitle,
+  peopleLabel,
+} from '../lib/format.ts';
 import { href, navigate } from '../lib/router.ts';
 import { useAsync } from '../lib/useAsync.ts';
 
@@ -81,10 +89,10 @@ export function Home({ onActionsChanged }: { onActionsChanged: () => void }) {
                     onClick={() => navigate({ screen: 'detail', meetingId: m.id, tab: 'notes' })}
                   >
                     <span className="row-main">
-                      <span className="row-title">{m.title}</span>
+                      <span className="row-title">{meetingTitle(m)}</span>
                       <span className="meta">
                         {formatWhen(m.startedAt, now)} · {formatLength(m.startedAt, m.endedAt)} ·{' '}
-                        {m.participantNames.length + 1} people
+                        {peopleLabel(m.participantNames.length)}
                       </span>
                     </span>
                     <StatusPill status={m.status} />

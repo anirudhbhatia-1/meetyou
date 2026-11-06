@@ -110,8 +110,11 @@ export function createLogger(
 /** A short, content-free code for an error: its class name and system code. */
 export function errorCode(error: unknown): string {
   if (error instanceof Error) {
+    // Node uses string codes (ECONNRESET); Google client libraries use HTTP status numbers (403).
     const code = (error as Error & { code?: unknown }).code;
-    return typeof code === 'string' ? `${error.name}:${code}` : error.name;
+    return typeof code === 'string' || typeof code === 'number'
+      ? `${error.name}:${String(code)}`
+      : error.name;
   }
   return 'UnknownError';
 }

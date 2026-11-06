@@ -12,10 +12,11 @@ import {
 } from '@meetyou/ui';
 import { useApi } from '../lib/api-context.ts';
 import {
+  TEMPLATE_LABEL,
   formatLength,
   formatWhen,
+  meetingTitle,
   recordingLabel,
-  TEMPLATE_LABEL,
   type TemplateId,
 } from '../lib/format.ts';
 import { navigate } from '../lib/router.ts';
@@ -117,7 +118,7 @@ export function Meetings() {
                   >
                     <span className="row-main">
                       <span className="row-title">
-                        {m.title}
+                        {meetingTitle(m)}
                         {m.video !== null && <Icon name="video" size={14} label="Has video" />}
                       </span>
                       <span className="meta">

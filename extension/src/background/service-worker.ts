@@ -2,6 +2,7 @@ import {
   parseBackgroundMessage,
   parseMeetCallState,
   parseMeetStateReply,
+  parseMeetTitle,
   senderTabId,
   type MeetCallState,
   parseCaptureStartResult,
@@ -188,10 +189,12 @@ const auth =
  * from there). Undefined in dev builds; a failure is the recording's error.
  */
 async function startCloudSession(
+  tabId: number,
   meetingCode: string | null,
   recordVideo: boolean,
 ): Promise<StartedSession | undefined | 'signed_out' | 'server_unreachable'> {
   if (auth === null) return undefined;
+  const title = await readMeetTitle(tabId);
   let token: string | null;
   try {
     token = await auth.accessToken();
@@ -204,6 +207,7 @@ async function startCloudSession(
     const started = await startApiSession(API_URL, token, {
       // Meet codes look like abc-defg-hij; an unknown one still records.
       meetingCode: meetingCode ?? 'unknown',
+      ...(title !== null ? { title } : {}),
       recordVideo,
       extensionVersion: chrome.runtime.getManifest().version,
     });
@@ -242,7 +246,7 @@ async function startRecording(tabId: number | undefined): Promise<void> {
     at: Date.now(),
   });
   const recordVideo = await recordVideoSetting();
-  const session = await startCloudSession(meetingCode, recordVideo);
+  const session = await startCloudSession(tabId, meetingCode, recordVideo);
   if (session === 'signed_out' || session === 'server_unreachable') {
     await applyCaptureEvent({ type: 'failed', error: session });
     return;
@@ -400,6 +404,16 @@ async function stopIfCapturing(tabId: number): Promise<void> {
   const state = await loadCaptureState();
   if (state.tabId === tabId) {
     await stopRecording();
+  }
+}
+
+/** Meet's title for the API session; null when the content script has none or is gone. */
+async function readMeetTitle(tabId: number): Promise<string | null> {
+  try {
+    return parseMeetTitle(await chrome.tabs.sendMessage(tabId, { type: 'meet.get-state' }));
+  } catch {
+    // No content script (e.g. reloaded extension): the meeting is simply untitled.
+    return null;
   }
 }
 

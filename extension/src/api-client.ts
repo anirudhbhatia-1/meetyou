@@ -44,6 +44,8 @@ async function postJson(
 
 export interface StartSessionInput {
   meetingCode: string;
+  /** Meet's title when the adapter could read it (FR-DET-04). */
+  title?: string;
   recordVideo: boolean;
   extensionVersion: string;
 }
@@ -57,6 +59,7 @@ export async function startApiSession(
     await postJson(apiUrl, '/v1/sessions', accessToken, {
       platform: 'google_meet',
       meetingCode: input.meetingCode,
+      ...(input.title !== undefined ? { title: input.title } : {}),
       recordVideo: input.recordVideo,
       clientInfo: { extensionVersion: input.extensionVersion, browser: 'chrome' },
     }),

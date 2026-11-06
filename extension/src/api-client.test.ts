@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { apiSessionSource, signApiVideoFragments } from './api-client.ts';
-import { parseAccessTokenReply, parseOffscreenMessage } from './messages.ts';
+import { parseAccessTokenReply, parseMeetTitle, parseOffscreenMessage } from './messages.ts';
 import { parseLastRecording } from './last-recording.ts';
 import { UploadRejected } from './offscreen/video-uploader.ts';
 
@@ -89,6 +89,9 @@ describe('cloud messages', () => {
     ).toEqual(base);
     expect(parseAccessTokenReply({ token: 'a' })).toEqual({ token: 'a' });
     expect(parseAccessTokenReply(undefined)).toEqual({ token: null });
+    expect(parseMeetTitle({ metadata: { title: '  Sprint sync ' } })).toBe('Sprint sync');
+    expect(parseMeetTitle({ metadata: { title: 'Untitled Meeting' } })).toBeNull();
+    expect(parseMeetTitle({ snapshot: {} })).toBeNull();
     expect(parseLastRecording({ sessionId: 'ses_1', startedAt: 1, meetingId: 'mtg_1' })).toEqual({
       sessionId: 'ses_1',
       startedAt: 1,

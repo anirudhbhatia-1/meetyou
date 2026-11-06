@@ -84,3 +84,14 @@ export function formatDue(item: { dueDate: string | null; duePhrase: string | nu
   }
   return item.duePhrase ?? 'No due date';
 }
+
+/** The meeting's name; Meet may not expose one (no title, or read before the call loaded). */
+export function meetingTitle(meeting: { title: string }): string {
+  return meeting.title.trim() === '' ? 'Untitled meeting' : meeting.title;
+}
+
+/** "1 person" / "3 people": the participants plus you. */
+export function peopleLabel(others: number): string {
+  const n = others + 1;
+  return n === 1 ? '1 person' : `${n} people`;
+}

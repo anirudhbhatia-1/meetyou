@@ -19,6 +19,7 @@ import {
   formatDue,
   formatLength,
   formatWhen,
+  meetingTitle,
   recordingLabel,
   TEMPLATE_LABEL,
 } from '../lib/format.ts';
@@ -71,7 +72,7 @@ export function MeetingDetail({
         <Button variant="ghost" onClick={() => navigate({ screen: 'meetings' })}>
           <Icon name="chevron-left" /> Meetings
         </Button>
-        <span className="toolbar-title">{m.title}</span>
+        <span className="toolbar-title">{meetingTitle(m)}</span>
         <div className="toolbar-actions">
           {/* TODO(S4-09/S3-08): regenerate menu (§12.2), share sheet (§13.1), more menu. */}
           <Button disabled title="Available when summaries come from the server (S3-08)">
@@ -86,81 +87,70 @@ export function MeetingDetail({
         <header>
           <p className="meta">
             {formatWhen(m.startedAt, now)} · {formatLength(m.startedAt, m.endedAt)} ·{' '}
-            {m.participantNames.join(', ')} and you
+            {m.participantNames.length === 0 ? 'You' : `${m.participantNames.join(', ')} and you`}
             {rec !== null && ` · ${rec}`}
           </p>
-          <h1 className="meeting-title">{m.title}</h1>
+          <h1 className="meeting-title">{meetingTitle(m)}</h1>
         </header>
-        {m.status === 'processing' ? (
-          <Card className="processing">
-            <span className="proc-dot" aria-hidden />
-            <h2>Writing your notes…</h2>
-            <p className="meta">
-              This usually takes under a minute. You can leave this page — we&rsquo;ll let you know
-              when they&rsquo;re ready.
-            </p>
-          </Card>
-        ) : (
-          <>
-            <div className="tabs" role="tablist" aria-label="Meeting">
-              {(['notes', 'transcript'] as const).map((t) => (
-                <a
-                  key={t}
-                  role="tab"
-                  aria-selected={tab === t}
-                  className={`tab ${tab === t ? 'tab-on' : ''}`}
-                  href={href({ screen: 'detail', meetingId, tab: t })}
-                >
-                  {t === 'notes' ? 'Notes' : 'Transcript'}
-                </a>
-              ))}
-            </div>
-            <div className="detail-grid">
-              {tab === 'notes' ? (
-                <NotesTab
-                  summary={summary.data ?? null}
-                  loading={summary.loading}
-                  selected={selected}
-                  onSelect={setSelected}
-                  status={m.status}
-                />
-              ) : (
-                <TranscriptTab
-                  meetingId={meetingId}
-                  segments={segments.data ?? []}
-                  loading={segments.loading}
-                  video={m.video}
-                  highlight={selected?.segmentIds ?? []}
-                  startAt={playFrom}
-                />
-              )}
-              <aside className="rail">
-                <CitationCard
-                  item={selected}
-                  number={
-                    selected === null || summary.data == null
-                      ? null
-                      : (numberCitations(summary.data).get(selected.id) ?? null)
-                  }
-                  segments={segments.data ?? []}
-                  canPlay={m.video?.status === 'ready'}
-                  onPlay={(ms) => {
-                    setPlayFrom(ms);
-                    navigate({ screen: 'detail', meetingId, tab: 'transcript' });
-                  }}
-                  onShowInTranscript={() =>
-                    navigate({ screen: 'detail', meetingId, tab: 'transcript' })
-                  }
-                />
-                <ActionItemsCard
-                  summary={summary.data ?? null}
-                  people={people.data ?? []}
-                  onChanged={onActionsChanged}
-                />
-              </aside>
-            </div>
-          </>
-        )}
+        <>
+          <div className="tabs" role="tablist" aria-label="Meeting">
+            {(['notes', 'transcript'] as const).map((t) => (
+              <a
+                key={t}
+                role="tab"
+                aria-selected={tab === t}
+                className={`tab ${tab === t ? 'tab-on' : ''}`}
+                href={href({ screen: 'detail', meetingId, tab: t })}
+              >
+                {t === 'notes' ? 'Notes' : 'Transcript'}
+              </a>
+            ))}
+          </div>
+          <div className="detail-grid">
+            {tab === 'notes' ? (
+              <NotesTab
+                summary={summary.data ?? null}
+                loading={summary.loading}
+                selected={selected}
+                onSelect={setSelected}
+                status={m.status}
+              />
+            ) : (
+              <TranscriptTab
+                meetingId={meetingId}
+                segments={segments.data ?? []}
+                loading={segments.loading}
+                video={m.video}
+                highlight={selected?.segmentIds ?? []}
+                startAt={playFrom}
+              />
+            )}
+            <aside className="rail">
+              <CitationCard
+                item={selected}
+                number={
+                  selected === null || summary.data == null
+                    ? null
+                    : (numberCitations(summary.data).get(selected.id) ?? null)
+                }
+                segments={segments.data ?? []}
+                canPlay={m.video?.status === 'ready'}
+                onPlay={(ms) => {
+                  setPlayFrom(ms);
+                  navigate({ screen: 'detail', meetingId, tab: 'transcript' });
+                }}
+                onShowInTranscript={() =>
+                  navigate({ screen: 'detail', meetingId, tab: 'transcript' })
+                }
+              />
+              <ActionItemsCard
+                summary={summary.data ?? null}
+                people={people.data ?? []}
+                onChanged={onActionsChanged}
+              />
+            </aside>
+          </div>
+        </>
       </div>
     </div>
   );
@@ -189,6 +179,19 @@ function NotesTab({
         <SkeletonRows rows={5} />
       </Card>
     );
+  if (summary === null && status === 'processing') {
+    // Notes are still being written; the Transcript tab (and video) can be used meanwhile.
+    return (
+      <Card className="processing">
+        <span className="proc-dot" aria-hidden />
+        <h2>Writing your notes…</h2>
+        <p className="meta">
+          This usually takes under a minute. You can leave this page — we&rsquo;ll let you know when
+          they&rsquo;re ready. The transcript is ready now.
+        </p>
+      </Card>
+    );
+  }
   if (summary === null) {
     return (
       <Card className="notes">

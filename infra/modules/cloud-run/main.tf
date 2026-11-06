@@ -13,6 +13,14 @@ resource "google_project_iam_member" "sql_client" {
 }
 
 # Cloud Run v2 Service for the Realtime Gateway
+# Storage Object User on the recordings bucket: the gateway writes audio chunks and manifests,
+# reads them back to resume a session, and writes usage and video part info (S2-04).
+resource "google_storage_bucket_iam_member" "gateway_storage_user" {
+  bucket = var.audio_bucket_name
+  role   = "roles/storage.objectUser"
+  member = "serviceAccount:${google_service_account.gateway_sa.email}"
+}
+
 resource "google_cloud_run_v2_service" "gateway" {
   name     = "meetyou-${var.environment}-gateway"
   location = var.region
