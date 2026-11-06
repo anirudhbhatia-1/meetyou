@@ -12,7 +12,11 @@ export function createMockApi(options: { latencyMs?: number } = {}): LibraryApi 
   const wait = <T>(value: T): Promise<T> =>
     new Promise((resolve) => setTimeout(() => resolve(structuredClone(value)), latency));
 
+  /** Soft-deleted in this session (undo brings them back). */
+  const deleted = new Set<string>();
+
   const matches = (meeting: Meeting, filter: MeetingFilter): boolean => {
+    if (deleted.has(meeting.id)) return false;
     if (filter.template !== 'all' && meeting.template !== filter.template) return false;
     const q = filter.query.trim().toLowerCase();
     if (q === '') return true;
@@ -44,7 +48,7 @@ export function createMockApi(options: { latencyMs?: number } = {}): LibraryApi 
           .filter((m) => matches(m, filter))
           .sort((a, b) => Date.parse(b.startedAt) - Date.parse(a.startedAt)),
       ),
-    getMeeting: (id) => wait(meetings.find((m) => m.id === id) ?? null),
+    getMeeting: (id) => wait(deleted.has(id) ? null : (meetings.find((m) => m.id === id) ?? null)),
     getSummary: (id) => wait(summaries[id] ?? null),
     getSegments: (id) => wait(segments[id] ?? []),
     getParticipants: (id) => wait(participants[id] ?? []),
@@ -76,5 +80,13 @@ export function createMockApi(options: { latencyMs?: number } = {}): LibraryApi 
     getVideo: () => wait(null),
     signOut: () => wait(undefined),
     deleteAccount: () => wait(undefined),
+    deleteMeeting: (id) => {
+      deleted.add(id);
+      return wait(undefined);
+    },
+    restoreMeeting: (id) => {
+      deleted.delete(id);
+      return wait(undefined);
+    },
   };
 }

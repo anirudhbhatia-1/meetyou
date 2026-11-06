@@ -72,6 +72,20 @@ export function createHttpApi(auth: WebAuth): LibraryApi {
 
     signOut: () => auth.signOut(),
 
+    async deleteMeeting(id) {
+      const res = await auth.authorized(`/v1/meetings/${encodeURIComponent(id)}`, {
+        method: 'DELETE',
+      });
+      if (!res.ok) throw new Error(`meeting delete failed (${res.status})`);
+    },
+
+    async restoreMeeting(id) {
+      const res = await auth.authorized(`/v1/meetings/${encodeURIComponent(id)}:restore`, {
+        method: 'POST',
+      });
+      if (!res.ok) throw new Error(`meeting restore failed (${res.status})`);
+    },
+
     async deleteAccount() {
       // The web header lets the API clear the refresh cookie with the account.
       const res = await auth.authorized('/v1/account:delete', {

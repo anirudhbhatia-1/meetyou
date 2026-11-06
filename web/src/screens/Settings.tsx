@@ -1,8 +1,9 @@
-import { Banner, Button, Card, Icon, Segmented, useTheme } from '@meetyou/ui';
+import { Button, Card, Icon, Segmented, useTheme } from '@meetyou/ui';
 import { useState } from 'react';
 
 import { useApi } from '../lib/api-context.ts';
 import { useAsync } from '../lib/useAsync.ts';
+import { ConfirmAlert } from './ConfirmAlert.tsx';
 
 /** DESIGN §15. TODO(S4-12): recording, language, the rest of privacy & data, templates, vocabulary. */
 export function Settings({ onSignOut }: { onSignOut: () => void }) {
@@ -57,69 +58,19 @@ export function Settings({ onSignOut }: { onSignOut: () => void }) {
         </div>
       </Card>
       {confirming && (
-        <DeleteAccountAlert
+        // DESIGN §15.3.
+        <ConfirmAlert
+          title="Delete your account?"
+          body="Every meeting, note and recording will be permanently deleted within 30 days. This can’t be undone."
+          confirmLabel="Delete account"
+          failedText="Your account wasn’t deleted. Try again."
           onCancel={() => setConfirming(false)}
-          onDelete={async () => {
+          onConfirm={async () => {
             await api.deleteAccount();
             onSignOut();
           }}
         />
       )}
-    </div>
-  );
-}
-
-/** DESIGN §15.3 alert "Delete your account?" (copy from §15.3). */
-function DeleteAccountAlert({
-  onCancel,
-  onDelete,
-}: {
-  onCancel: () => void;
-  onDelete: () => Promise<void>;
-}) {
-  const [busy, setBusy] = useState(false);
-  const [failed, setFailed] = useState(false);
-  return (
-    <div className="scrim" role="presentation" onClick={busy ? undefined : onCancel}>
-      <div
-        className="alert"
-        role="alertdialog"
-        aria-modal="true"
-        aria-labelledby="delete-account-title"
-        aria-describedby="delete-account-body"
-        onClick={(e) => e.stopPropagation()}
-        onKeyDown={(e) => {
-          if (e.key === 'Escape' && !busy) onCancel();
-        }}
-      >
-        <h2 id="delete-account-title" className="alert-title">
-          Delete your account?
-        </h2>
-        <p id="delete-account-body" className="alert-body">
-          Every meeting, note and recording will be permanently deleted within 30 days. This
-          can&rsquo;t be undone.
-        </p>
-        {failed && <Banner tone="error">Your account wasn&rsquo;t deleted. Try again.</Banner>}
-        <div className="alert-actions">
-          <Button autoFocus disabled={busy} onClick={onCancel}>
-            Cancel
-          </Button>
-          <Button
-            variant="danger"
-            disabled={busy}
-            onClick={() => {
-              setBusy(true);
-              setFailed(false);
-              onDelete().catch(() => {
-                setFailed(true);
-                setBusy(false);
-              });
-            }}
-          >
-            Delete account
-          </Button>
-        </div>
-      </div>
     </div>
   );
 }

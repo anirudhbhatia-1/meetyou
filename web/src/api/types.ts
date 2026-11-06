@@ -58,6 +58,10 @@ export interface LibraryApi {
   ): Promise<VideoPlaybackResponse | null>;
   /** Ends the web session (clears the refresh cookie). */
   signOut(): Promise<void>;
+  /** FR-SET-02: soft-deletes a meeting; the server removes it after a short grace period. */
+  deleteMeeting(id: string): Promise<void>;
+  /** Undo within the grace period (`POST /v1/meetings/{id}:restore`). */
+  restoreMeeting(id: string): Promise<void>;
   /** FR-SET-03: deletes the account and every meeting (asynchronously, on the server). */
   deleteAccount(): Promise<void>;
 }

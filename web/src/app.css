@@ -649,3 +649,44 @@
   justify-content: flex-end;
   gap: 8px;
 }
+
+/* DESIGN §12.1 More menu (round button, danger item last). */
+.more {
+  position: relative;
+}
+.icon-btn.round {
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  border-radius: 50%;
+  justify-content: center;
+}
+.menu {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 6px);
+  z-index: 10;
+  min-width: 200px;
+  padding: 6px;
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius-menu);
+  background: var(--surface);
+  box-shadow: var(--glass-shadow);
+}
+.menu-item {
+  all: unset;
+  box-sizing: border-box;
+  display: block;
+  width: 100%;
+  padding: 8px 12px;
+  border-radius: var(--radius-menu-item);
+  font-size: 14px;
+  cursor: pointer;
+}
+.menu-item:hover,
+.menu-item:focus-visible {
+  background: var(--paper-2);
+}
+.menu-danger {
+  color: var(--danger);
+}
