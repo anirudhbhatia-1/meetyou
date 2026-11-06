@@ -4,12 +4,22 @@ import type { SqlRunner } from './migrate.ts';
 
 /**
  * Connection pool for Cloud SQL / local Postgres. The connection string comes from the environment
- * (Secret Manager in staging), never from code. TODO(S2-04): pool size per Cloud Run instance.
+ * (Secret Manager in staging), never from code. Pool size is per Cloud Run instance: the total,
+ * Σ (max instances × `PG_POOL_MAX`) over API, gateway, worker and jobs, must stay under the
+ * instance's `max_connections` (STAGING_SETUP §6). Default 10.
  */
-export function createPgPool(connectionString: string): pg.Pool {
-  const pool = new pg.Pool({ connectionString, max: 10, types: TYPE_PARSERS });
+export function createPgPool(
+  connectionString: string,
+  max: number = poolMax(process.env.PG_POOL_MAX),
+): pg.Pool {
+  const pool = new pg.Pool({ connectionString, max, types: TYPE_PARSERS });
   attachPoolErrorHandlers(pool);
   return pool;
+}
+
+export function poolMax(value: string | undefined): number {
+  const parsed = Number(value);
+  return Number.isInteger(parsed) && parsed > 0 && parsed <= 100 ? parsed : 10;
 }
 
 /**

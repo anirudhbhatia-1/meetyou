@@ -83,6 +83,11 @@ export interface VideoUploaderOptions {
 }
 
 /** `video/mp4;codecs=avc1,opus` → `video/mp4`, the type the signed URL is bound to. */
+/** Fragments of server sessions upload; local-only recordings (no session ID yet) stay put. */
+export function uploadableSession(sessionId: string): boolean {
+  return sessionId.startsWith('ses_');
+}
+
 export function baseContentType(mimeType: string): string {
   return mimeType.split(';')[0]?.trim() ?? mimeType;
 }

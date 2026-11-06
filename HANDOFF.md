@@ -6,7 +6,7 @@ pointer to where the full detail lives — the linked document stays the source 
 
 | Field | Value |
 |---|---|
-| Last updated | 2026-11-06 (Anirudh: S2 code complete — CI/CD, monitoring and OpenTelemetry tracing; live failover/crash/60-min tests remain) |
+| Last updated | 2026-11-06 (Anirudh: S2 code complete — tracing, §20 latency/spend metrics, upload resume at startup; cloud apply and live tests later) |
 | Updated by | Anirudh (Claude Code) |
 | Repository | [anirudhbhatia-1/meetyou](https://github.com/anirudhbhatia-1/meetyou) — branches `main`, `anirudh`, `Gauravbro` |
 | Current stage | **Stage 2** in progress — S2-08 & S2-09 complete; Gaurav next: S2-10 data lifecycle (§7) |
@@ -225,8 +225,25 @@ Newest first. One entry per working session (either person).
   2026-10-30), so it is not used. On only inside Cloud Run; `TRACING=off`, `TRACE_SAMPLE_RATIO`.
   Terraform: Telemetry API + `roles/telemetry.tracesWriter` / `serviceUsageConsumer` for the three
   runtime accounts (`-target=google_project_iam_member.telemetry`, STAGING_SETUP §9.3).
-- **S2 code is complete.** Still open (testing, Anirudh will run later): live failover test
-  (S2-04), worker shutdown mid-job (S2-06), 60-min video sync and website playback (S2-14).
+- **S2 audit and close-out** (Anirudh: "first complete S2", cloud setup later):
+  - §20 latencies: the gateway measures STT final latency (audio sent → final; `StreamTimeline`
+    remembers ~2 min of send times) and ack lag (chunk ready → durable ack) in constant-memory
+    histograms (`latency.ts`) and logs p50/p95 on `stream.ended`; monitoring adds two distribution
+    metrics and dashboard tiles.
+  - §20 spend: per-session Deepgram cost metric + "Expensive STT session" alert (default 1.5 USD),
+    optional Google Cloud monthly budget (`billing_account_id`, 50/90/100 % + forecast).
+  - Session timeline query (STAGING_SETUP §9.3); `PG_POOL_MAX` per process (default 10; budget
+    rule in STAGING_SETUP §6) closes the last real `TODO(S2-04)`.
+  - Extension: video fragments left by a closed browser now upload at browser startup / extension
+    update (`video-resume.ts`, ADR-0011 §3.3) instead of at the next recording.
+  - Stale `TODO(S2…)` comments rewritten to what the code does; two retagged (S3-03 `processed`
+    state, S4-06 Roman interim). Starting a recording while the server is unreachable is not in the
+    PRD and needs a recorder change (open is awaited, video keyed by session): left as a TODO.
+  - Known, not fixed: worker logs `MaxListenersExceededWarning … [PassThrough]` from inside the
+    Cloud Storage client during fragment downloads; finalize succeeds; not reproducible locally.
+- **S2 code is complete.** Cloud steps (Anirudh, later): `-target=google_project_iam_member.telemetry`
+  and re-apply `-target=module.monitoring` (new metrics/alert, optional budget). Tests (later): live
+  failover (S2-04), worker shutdown mid-job (S2-06), 60-min video sync and website playback (S2-14).
 
 ### 2026-11-06 — Anirudh (Claude Code): S2-10 merged and fixed, S2-11 and S2-12 built
 Anirudh asked to finish everything left in S2, including S2-11 and S2-12 (owned by Gaurav until

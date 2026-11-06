@@ -33,3 +33,9 @@ variable "alert_emails" {
   type        = list(string)
   default     = []
 }
+
+variable "billing_account_id" {
+  description = "Billing account for the monthly budget alert (S2-11). Empty: no budget."
+  type        = string
+  default     = ""
+}

@@ -397,7 +397,7 @@ export function createGateway(options: GatewayOptions): Gateway {
    * Dev playback of uploaded video (the side panel's Recording card). Before finalize the parts are
    * served with their fragments joined; after it, `playback.mp4` (with Range, so the player seeks)
    * and `poster.jpg`. Works from disk, also after a restart. `?download=1` saves instead of plays.
-   * TODO(S2-14): in staging the API returns signed Cloud Storage URLs (`GET /meetings/{id}/video`).
+   * Deployed, the API serves signed Cloud Storage URLs instead (`GET /v1/meetings/{id}/video`).
    */
   const getVideo = async (
     req: IncomingMessage,

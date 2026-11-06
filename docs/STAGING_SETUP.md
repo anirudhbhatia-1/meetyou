@@ -145,6 +145,10 @@ Rules that keep tenant isolation working (ARCHITECTURE §11.3, S2-01):
   tables get the wrong owner and RLS can be bypassed.
 - The API, gateway and worker refuse to start if their role has `SUPERUSER` or `BYPASSRLS`
   (`Db.assertRowSecurityEnforced()` — **the API must call it at startup**, S2-08).
+- Each process opens at most `PG_POOL_MAX` connections (default 10). Keep
+  Σ (max instances × `PG_POOL_MAX`) for API, gateway, worker, migrate and smoke under the
+  instance's `max_connections` (100 on the 3.75 GB `db-custom-1-3840` tier **[Verify]** with
+  `show max_connections;`); lower `PG_POOL_MAX` per service before raising max instances.
 
 Steps:
 1. Build the migration image (§8) and run the job once:
@@ -437,7 +441,23 @@ terraform plan -target=google_project_iam_member.telemetry -var project_id=<proj
 terraform apply tel.tfplan
 ```
 Then Cloud Trace → Trace explorer, filter on `meetingId`, shows a meeting's spans on one timeline.
-Not done: spend anomalies (use a Billing budget alert, §11); summary latency (S3).
+
+**Session timeline** (§20, no content): every log line carries the session ID, so one query lists a
+session's events across services in order (connections, resumes, STT health, chunk failures, end
+with latency and cost):
+```bash
+gcloud logging read 'jsonPayload.sessionId="ses_..." OR jsonPayload.meetingId="mtg_..."' \
+  --order asc --freshness 2d --format='table(timestamp,resource.labels.service_name,labels.instanceId,jsonPayload.message)'
+```
+
+**Latency and spend** (§20): `stream.ended` carries the session's `sttFinalP50Ms`/`sttFinalP95Ms`
+(audio sent → final), `ackLagP50Ms`/`ackLagP95Ms` (chunk ready → durable ack) and
+`estimatedCostUsd`; the monitoring module turns them into dashboard tiles and an "Expensive STT
+session" alert (`stt_session_cost_alert_usd`, default 1.5 USD). Google Cloud spend: set
+`billing_account_id` in `terraform.tfvars` and re-apply `-target=module.monitoring` for a monthly
+budget with 50/90/100 % and forecast alerts (needs Billing Account Administrator or Costs Manager;
+with user credentials the provider may also need a quota project **[Verify]**).
+Not done: summary latency (S3).
 
 **CI/CD (S2-12).** `.github/workflows/deploy-staging.yml` runs after every green `CI` run on
 `main` (or by hand): build and push `api gateway worker web migrate smoke` tagged with the commit,

@@ -5,8 +5,7 @@ import { FragmentRejected, UploadRejected, type SignedFragment } from './video-u
 
 /**
  * Local-dev session API of the S1-05 gateway (`backend/apps/gateway`, APP_ENV=local only).
- * TODO(S2): replace with `POST /v1/sessions` (StartSessionResponse) and the stream-token endpoint
- * once the API and Google sign-in exist (ADR-0004).
+ * Builds with an API URL use `POST /v1/sessions` and `/recover` instead (`api-client.ts`).
  */
 const DevSession = z.object({
   sessionId: z.string().min(1),
@@ -35,7 +34,8 @@ export async function createDevSession(baseUrl: string): Promise<DevSession> {
 /**
  * Up to three attempts, each bounded by REQUEST_TIMEOUT_MS, so a slow or briefly unreachable
  * gateway does not turn the whole recording local-only. Null when every attempt failed.
- * TODO(S2-04): start offline and create the session later (audio is captured meanwhile).
+ * TODO(offline start, not in the PRD yet): record while the server is unreachable and create the
+ * session later; `startRecorder` awaits `open()`, and video parts are keyed by the session ID.
  */
 export async function createDevSessionWithRetry(
   baseUrl: string,
@@ -159,7 +159,7 @@ export type DevVideoState = z.infer<typeof DevVideoParts>;
 /**
  * Video parts the dev gateway holds for a session, each with a URL that plays the uploaded part
  * (fragments joined). Uploaded fragments are deleted locally, so this is where they are seen.
- * TODO(S2-14): replace with `GET /v1/meetings/{id}/video` (signed URL of the finalized MP4).
+ * Builds with an API URL link to the web app's player instead (`GET /v1/meetings/{id}/video`).
  */
 export async function listDevVideo(baseUrl: string, sessionId: string): Promise<DevVideoPart[]> {
   return (await devVideoState(baseUrl, sessionId)).parts;

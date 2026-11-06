@@ -29,8 +29,11 @@ import { isMeetUrl, meetingCodeOf } from './meet-tab.ts';
 import { LAST_RECORDING_KEY, type LastRecording } from '../last-recording.ts';
 import { RECORD_VIDEO_KEY, recordVideoFrom } from '../settings.ts';
 import { discardApiMeeting, startApiSession } from '../api-client.ts';
-import { API_URL, GOOGLE_CLIENT_ID } from '../build-config.ts';
+import { API_URL, GATEWAY_URL, GOOGLE_CLIENT_ID } from '../build-config.ts';
+import { openMinutesDb } from '../offscreen/idb.ts';
+import { IdbFragmentQueue, uploadableSession } from '../offscreen/video-uploader.ts';
 import { ExtensionAuth } from './auth.ts';
+import { resumeVideoUploads } from './video-resume.ts';
 
 const OFFSCREEN_DOCUMENT_PATH = 'offscreen/index.html';
 /**
@@ -354,6 +357,24 @@ async function closeOffscreenQuietly(): Promise<void> {
   }
 }
 
+/** ADR-0011 §3.3: fragments a closed browser left behind upload at startup (video-resume.ts). */
+async function resumePendingVideo(): Promise<void> {
+  await resumeVideoUploads({
+    hasUploadTarget: API_URL !== '' || GATEWAY_URL !== '',
+    idle: async () => canStart(await loadCaptureState()),
+    signedIn: async () => auth === null || (await auth.accessToken()) !== null,
+    pendingFragments: async () => {
+      const db = await openMinutesDb();
+      try {
+        return await new IdbFragmentQueue(db).count(uploadableSession);
+      } finally {
+        db.close();
+      }
+    },
+    openOffscreen: ensureOffscreenDocument,
+  });
+}
+
 /** The offscreen document finished uploading video; close it unless a recording uses it. */
 async function closeIfUploadsDone(): Promise<void> {
   if (!canStart(await loadCaptureState())) return;
@@ -535,11 +556,13 @@ chrome.runtime.onInstalled.addListener((details) => {
       .create({ url: 'onboarding/index.html' })
       .catch((error: unknown) => logError('open onboarding failed', error));
   }
+  if (details.reason === 'update') enqueueCapture(resumePendingVideo);
 });
 
 chrome.runtime.onStartup.addListener(() => {
   disableBrowserOpenedPanel();
   configureExistingTabs().catch((error: unknown) => logError('configure tabs failed', error));
+  enqueueCapture(resumePendingVideo);
 });
 
 chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {

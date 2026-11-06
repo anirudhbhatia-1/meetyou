@@ -2,8 +2,8 @@ import { randomBytes } from 'node:crypto';
 
 /**
  * Local-dev stream tokens: random, bound to one session, single use, 10 minutes to connect
- * (ADR-0004 §4.4 rules). TODO(S2): JWT (`aud=gateway`, `sid`, `jti`, `exp`) signed by the API with
- * `jose`, used-JTI cache in Redis.
+ * (ADR-0004 §4.4 rules). Deployed gateways accept only the API's JWT stream tokens
+ * (`StreamTokenVerifier`, `@meetyou/auth`), with used JTIs in the session registry.
  */
 export const TOKEN_TTL_MS = 10 * 60 * 1000;
 
@@ -42,8 +42,8 @@ export interface VideoUpload {
 
 /**
  * Local-dev stand-in for Cloud Storage signed PUT URLs: a random token per fragment, reusable until
- * it expires so a retried PUT overwrites the same object. TODO(S2-14): V4 signed URLs with the
- * content type and size bound in the signature.
+ * it expires so a retried PUT overwrites the same object. Deployed: V4 signed URLs from the API
+ * (`fragments:sign`, `@meetyou/storage`).
  */
 export class DevVideoSigner {
   readonly #uploads = new Map<string, VideoUpload & { expiresAt: number }>();

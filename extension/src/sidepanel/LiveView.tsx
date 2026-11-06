@@ -208,7 +208,7 @@ function TranscriptList({
         {lines.map((line) => (
           <div key={line.key} className={`line ${line.final ? '' : 'line-interim'}`}>
             <span className={`line-who ${line.lane === 'me' ? 'line-you' : ''}`}>
-              {/* TODO(S2-05): Roman interim for Devanagari STT output (§8.6 script consistency). */}
+              {/* TODO(S4-06): Roman interim for Devanagari STT output (§8.6 script consistency). */}
               {line.lane === 'me' ? 'You' : speakerLabel('them', line.speaker, participants)}{' '}
               <span className="line-time num">{formatClock(line.startMs)}</span>
             </span>

@@ -21,7 +21,7 @@ import {
  *                error              stopping ─stopped─► processing (streamed) ─processed─► ready
  *                                                    └► idle (nothing streamed)
  *
- * TODO(S2): `processing → ready` is driven by the backend pipeline; nothing sends `processed` yet.
+ * TODO(S3-03): `processing → ready` is driven by the summary pipeline; nothing sends `processed` yet.
  */
 export type CaptureStatus =
   | 'idle'

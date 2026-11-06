@@ -79,6 +79,54 @@ resource "google_logging_metric" "service_errors" {
   }
 }
 
+# ARCHITECTURE §20 latencies: the gateway logs each session's p95 (bucket upper bound) on
+# `stream.ended` — STT final latency (audio sent → final) and ack lag (chunk ready → durable ack).
+resource "google_logging_metric" "session_latency" {
+  for_each = {
+    stt_final_latency = { field = "sttFinalP95Ms", description = "Per-session p95 of STT final latency (audio sent → final result)." }
+    ack_lag           = { field = "ackLagP95Ms", description = "Per-session p95 of ack lag (10 s chunk ready → durable write acknowledged)." }
+  }
+  project         = var.project_id
+  name            = "${local.prefix}/${each.key}"
+  description     = each.value.description
+  filter          = "${local.gateway} AND jsonPayload.message=\"stream.ended\" AND jsonPayload.${each.value.field}>=0"
+  value_extractor = "EXTRACT(jsonPayload.${each.value.field})"
+  metric_descriptor {
+    metric_kind = "DELTA"
+    value_type  = "DISTRIBUTION"
+    unit        = "ms"
+  }
+  bucket_options {
+    exponential_buckets {
+      num_finite_buckets = 20
+      growth_factor      = 1.6
+      scale              = 10
+    }
+  }
+}
+
+# Spend per vendor (§20). Deepgram: the gateway logs each session's estimated STT cost on
+# `stream.ended` (`usage_records` keeps the same number per meeting). Google Cloud: the budget below.
+resource "google_logging_metric" "stt_session_cost" {
+  project         = var.project_id
+  name            = "${local.prefix}/stt_session_cost"
+  description     = "Estimated STT (Deepgram) cost per session, in USD."
+  filter          = "${local.gateway} AND jsonPayload.message=\"stream.ended\" AND jsonPayload.estimatedCostUsd>=0"
+  value_extractor = "EXTRACT(jsonPayload.estimatedCostUsd)"
+  metric_descriptor {
+    metric_kind = "DELTA"
+    value_type  = "DISTRIBUTION"
+    unit        = "USD"
+  }
+  bucket_options {
+    exponential_buckets {
+      num_finite_buckets = 20
+      growth_factor      = 2
+      scale              = 0.001
+    }
+  }
+}
+
 # The worker logs `queue.depth` every minute: due jobs waiting for a worker.
 resource "google_logging_metric" "queue_depth" {
   project         = var.project_id
@@ -204,6 +252,72 @@ resource "google_monitoring_alert_policy" "queue_backlog" {
   depends_on = [google_logging_metric.queue_depth]
 }
 
+resource "google_monitoring_alert_policy" "stt_session_cost" {
+  project               = var.project_id
+  display_name          = "Expensive STT session (${var.environment})"
+  combiner              = "OR"
+  notification_channels = local.channels
+  documentation {
+    content   = "A session's estimated Deepgram cost passed ${var.stt_session_cost_alert_usd} USD: a stream that ran far longer than a meeting, or a price change. Check the session's stream.ended line and usage_records."
+    mime_type = "text/markdown"
+  }
+  conditions {
+    display_name = "Session STT cost > ${var.stt_session_cost_alert_usd} USD"
+    condition_threshold {
+      filter          = "${local.metric}/stt_session_cost\" AND resource.type=\"cloud_run_revision\""
+      comparison      = "COMPARISON_GT"
+      threshold_value = var.stt_session_cost_alert_usd
+      duration        = "0s"
+      aggregations {
+        alignment_period     = "3600s"
+        per_series_aligner   = "ALIGN_PERCENTILE_99"
+        cross_series_reducer = "REDUCE_MAX"
+      }
+      trigger {
+        count = 1
+      }
+    }
+  }
+  depends_on = [google_logging_metric.stt_session_cost]
+}
+
+# Google Cloud spend: a monthly budget with 50/90/100 % alerts (and forecast) to the same channels.
+data "google_project" "this" {
+  count      = var.billing_account_id == "" ? 0 : 1
+  project_id = var.project_id
+}
+
+resource "google_billing_budget" "monthly" {
+  count           = var.billing_account_id == "" ? 0 : 1
+  billing_account = var.billing_account_id
+  display_name    = "Minutes ${var.environment} monthly"
+  budget_filter {
+    projects = ["projects/${data.google_project.this[0].number}"]
+  }
+  amount {
+    specified_amount {
+      currency_code = var.budget_currency
+      units         = tostring(var.monthly_budget)
+    }
+  }
+  threshold_rules {
+    threshold_percent = 0.5
+  }
+  threshold_rules {
+    threshold_percent = 0.9
+  }
+  threshold_rules {
+    threshold_percent = 1.0
+  }
+  threshold_rules {
+    threshold_percent = 1.0
+    spend_basis       = "FORECASTED_SPEND"
+  }
+  all_updates_rule {
+    monitoring_notification_channels = local.channels
+  }
+}
+
 resource "google_monitoring_alert_policy" "api_5xx" {
   project               = var.project_id
   display_name          = "API 5xx (${var.environment})"
@@ -241,6 +355,9 @@ locals {
     dead_letters = { title = "Jobs failed for good (by task)", filter = "${local.metric}/jobs_dead_lettered\"", aligner = "ALIGN_SUM" }
     queue = { title = "Queue depth (p99)", filter = "${local.metric}/queue_depth\"", aligner = "ALIGN_PERCENTILE_99" }
     errors = { title = "ERROR lines by service", filter = "${local.metric}/service_errors\"", aligner = "ALIGN_SUM" }
+    stt_cost = { title = "STT cost per session, p95 (USD)", filter = "${local.metric}/stt_session_cost\"", aligner = "ALIGN_PERCENTILE_95" }
+    stt_latency = { title = "STT final latency, per-session p95 (ms)", filter = "${local.metric}/stt_final_latency\"", aligner = "ALIGN_PERCENTILE_95" }
+    ack_lag = { title = "Ack lag, per-session p95 (ms)", filter = "${local.metric}/ack_lag\"", aligner = "ALIGN_PERCENTILE_95" }
     api_latency = { title = "API latency p95", filter = "metric.type=\"run.googleapis.com/request_latencies\" AND resource.labels.service_name=\"${local.prefix}-api\"", aligner = "ALIGN_PERCENTILE_95" }
   }
 }
@@ -281,5 +398,7 @@ resource "google_monitoring_dashboard" "overview" {
     google_logging_metric.jobs_dead_lettered,
     google_logging_metric.service_errors,
     google_logging_metric.queue_depth,
+    google_logging_metric.session_latency,
+    google_logging_metric.stt_session_cost,
   ]
 }

@@ -126,7 +126,7 @@ const ID = /^[A-Za-z0-9_-]{1,80}$/;
  * Local-disk store for development, laid out like Cloud Storage (ARCHITECTURE §11.4):
  * `ws/{workspaceId}/meetings/{meetingId}/audio/{lane}/{chunkStartMs}.{codec}` plus a `.json`
  * manifest written last as the commit marker. Each file is fsynced before its rename.
- * TODO(S1-10/S2): Cloud Storage implementation behind the same interface.
+ * Deployed gateways use `GcsChunkStore` (same layout, Cloud Storage).
  */
 export class LocalChunkStore implements ChunkStore {
   readonly #root: string;

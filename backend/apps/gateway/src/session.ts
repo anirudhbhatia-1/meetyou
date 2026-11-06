@@ -19,6 +19,7 @@ import type { DisplayTextPolicy } from '@meetyou/hinglish';
 
 import { TranscriptAssembler } from './assembler.ts';
 import type { ChunkStore } from './chunk-store.ts';
+import { LatencyHistogram } from './latency.ts';
 import { LaneChunker, type PendingChunk } from './lane-chunker.ts';
 import { errorCode, log } from './log.ts';
 import { DEFAULT_PRE_SKIP, oggOpusFile, OggOpusWriter } from './ogg.ts';
@@ -72,8 +73,8 @@ function newLaneStt(): LaneStt {
 
 /**
  * One capture session; it outlives individual WebSocket connections so reconnects resume where
- * the durable chunks end (ARCHITECTURE §5.3, §6.2).
- * TODO(S2): session state in Redis so any gateway instance can resume it (§6.2).
+ * the durable chunks end (ARCHITECTURE §5.3, §6.2). Its record lives in the session registry
+ * (Redis when deployed), so any gateway instance can take it over and resume.
  */
 export class StreamSession {
   readonly sessionId: string;
@@ -82,6 +83,9 @@ export class StreamSession {
   readonly #store: ChunkStore;
   readonly #stt: SttProvider | null;
   readonly #meter: UsageMeter;
+  /** §20: provider final latency and durable-write (ack) latency, logged when the session ends. */
+  readonly #sttFinalLatency = new LatencyHistogram();
+  readonly #ackLag = new LatencyHistogram();
   readonly #assembler: TranscriptAssembler;
   readonly #sink: SessionSink;
   /** Sink writes in order; a failure is logged and the chain goes on (the batch pass re-covers it). */
@@ -359,6 +363,7 @@ export class StreamSession {
     if (chunk === null) return this.#writes[lane];
     const lastSeq = chunk.frames.at(-1)?.seq ?? -1;
     const codec = this.#codec ?? 'pcm16';
+    const takenAt = Date.now();
     this.#writes[lane] = this.#writes[lane].then(async () => {
       // After a failed write, a later chunk's ack would cover the lost frames and the client would
       // prune them. Nothing more is written or acked until the client reconnects and replays.
@@ -389,6 +394,7 @@ export class StreamSession {
       // Acknowledged only after the durable write (§5.3), so acknowledged = safe.
       const socket = this.#socket;
       if (socket !== null) this.#send(socket, { type: 'ack', lane, upToSeq: lastSeq });
+      this.#ackLag.add(Date.now() - takenAt);
     });
     return this.#writes[lane];
   }
@@ -463,6 +469,7 @@ export class StreamSession {
       sttMsThem: usage.stt.audioMs.them,
       bytesStored: usage.bytesStored,
       estimatedCostUsd: usage.estimatedCostUsd,
+      ...this.latencyFields(),
     });
     if (this.#socket === socket) socket.close(1000, 'ended');
     this.#onEnded?.();
@@ -614,6 +621,8 @@ export class StreamSession {
       }
       return;
     }
+    const sentAt = timeline.sentAt(result.endMs);
+    if (sentAt !== undefined) this.#sttFinalLatency.add(Date.now() - sentAt);
     const { segments, echoFlags, invalid } = this.#assembler.finalSegments(lane, timeline, result);
     for (const echo of echoFlags) this.#meter.segment(lane, echo);
     if (invalid > 0) log('segment.invalid', { sessionId: this.sessionId, lane, count: invalid });
@@ -622,6 +631,20 @@ export class StreamSession {
     this.#toSink('segments', (target) => this.#sink.segments(target, segments));
     if (socket === null) return;
     for (const segment of segments) this.#send(socket, { type: 'transcript.segment', segment });
+  }
+
+  /** Upper-bound percentiles (bucket edges) for the session-end log line and its metrics. */
+  latencyFields(): Record<string, number> {
+    const fields: Record<string, number | undefined> = {
+      sttFinalCount: this.#sttFinalLatency.count,
+      sttFinalP50Ms: this.#sttFinalLatency.percentile(50),
+      sttFinalP95Ms: this.#sttFinalLatency.percentile(95),
+      ackLagP50Ms: this.#ackLag.percentile(50),
+      ackLagP95Ms: this.#ackLag.percentile(95),
+    };
+    return Object.fromEntries(
+      Object.entries(fields).filter((entry): entry is [string, number] => entry[1] !== undefined),
+    );
   }
 
   get sttHealth(): SttHealth {

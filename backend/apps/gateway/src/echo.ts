@@ -4,7 +4,7 @@ import type { Lane } from '@meetyou/contracts';
  * Probable-echo detection (ARCHITECTURE §8.1 step 7): on laptop speakers the mic can pick up
  * remote voices, so the same words appear in `me` and `them`. The `me` copy is flagged, never
  * deleted; summaries exclude it. Counts also answer §26.2 Q2 (does echo cancellation suffice?).
- * TODO(S2-07): move to transcript assembly in backend/packages/core with the stored segments.
+ * Used by the transcript assembler (S2-05) before segments are stored.
  */
 export const ECHO_WINDOW_MS = 3_000;
 export const ECHO_SIMILARITY = 0.6;

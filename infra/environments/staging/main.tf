@@ -40,6 +40,7 @@ locals {
     "iamcredentials.googleapis.com",       # signBlob for V4 signed URLs on Cloud Run (S2-14)
     "sts.googleapis.com",                  # Workload Identity Federation for GitHub Actions (S2-12)
     "telemetry.googleapis.com",            # OTLP trace ingestion for Cloud Trace (S2-11)
+    "billingbudgets.googleapis.com",       # Monthly budget alert (S2-11 spend)
   ]
 }
 
@@ -146,6 +147,9 @@ module "monitoring" {
   project_id   = var.project_id
   environment  = "staging"
   alert_emails = var.alert_emails
+
+  # Optional monthly budget (S2-11 spend alerts); empty skips it.
+  billing_account_id = var.billing_account_id
 
   depends_on = [google_project_service.enabled_services]
 }

@@ -7,7 +7,7 @@ import { createMeetingForSession } from '@meetyou/db';
 import { createTestDb } from '@meetyou/db/testing';
 import { DEEPGRAM_CAPABILITIES, type SttProvider, type SttResult } from '@meetyou/providers';
 import { sql } from 'kysely';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import WebSocket from 'ws';
 
 import { MemoryChunkStore } from './chunk-store.ts';
@@ -328,8 +328,17 @@ describe('production stream path (JWT + Postgres, S2-04/S2-05/S2-07)', () => {
       await client.until((m) => m.some((x) => x.type === 'ready'));
       client.send('them', 0, 29);
       await client.until((m) => m.filter((x) => x.type === 'transcript.segment').length === 3);
+      const logged = vi.spyOn(console, 'log').mockImplementation(() => undefined);
       client.socket.send(JSON.stringify({ type: 'control', action: 'end', at: 3000 }));
       expect(await client.closed).toBe(1000);
+      // §20 latency fields on the session-end line (log-based metrics read them).
+      const ended = logged.mock.calls
+        .map(([line]) => JSON.parse(String(line)) as Record<string, unknown>)
+        .find((line) => line.message === 'stream.ended');
+      logged.mockRestore();
+      expect(ended).toMatchObject({ sttFinalCount: 3 });
+      expect(ended?.sttFinalP95Ms).toEqual(expect.any(Number));
+      expect(ended?.ackLagP95Ms).toEqual(expect.any(Number));
 
       // The same token cannot be used twice (single use, ADR-0004 §4.4).
       const replay = new Client(host, token);

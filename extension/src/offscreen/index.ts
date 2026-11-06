@@ -21,6 +21,7 @@ import {
   pruneStaleFragments,
   VideoUploader,
   VIDEO_RETENTION_MS,
+  uploadableSession,
 } from './video-uploader.ts';
 
 let recorder: Recorder | null = null;
@@ -128,7 +129,7 @@ function videoUploader(): Promise<VideoUploader | null> {
         canUpload: () =>
           (recorder === null || recorder.audioClear()) &&
           [...draining].every((r) => r.audioClear()),
-        isUploadable: (sessionId) => sessionId.startsWith('ses_'),
+        isUploadable: uploadableSession,
         onProgress: reportUpload,
         onIdle() {
           videoIdle = true;
@@ -290,9 +291,16 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
 });
 
 // Resume fragments left by an earlier recording (e.g. the browser closed mid-upload). This runs
-// when the document opens, i.e. at the next recording start.
-// TODO(S2-14): resume after a browser restart without waiting for a recording (ADR-0011 §3.3).
-void videoUploader().then((current) => current?.kick());
+// when the document opens: at a recording start, or at browser startup when the service worker
+// finds fragments waiting (ADR-0011 §3.3). Busy until they are sent, so it is not closed early.
+void videoUploader().then(async (current) => {
+  if (current === null) return;
+  if ((await current.pending()) > 0) {
+    idleReported = false;
+    videoIdle = false;
+  }
+  current.kick();
+});
 
 // Video that never uploads (no gateway, or a session the gateway lost) is kept no longer than
 // recordings are retained by default (D-02), so `video_buffer` cannot grow without bound.

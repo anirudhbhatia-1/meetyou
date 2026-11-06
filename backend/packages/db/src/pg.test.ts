@@ -2,7 +2,7 @@ import { EventEmitter } from 'node:events';
 
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { attachPoolErrorHandlers, createPgPool } from './pg.ts';
+import { attachPoolErrorHandlers, createPgPool, poolMax } from './pg.ts';
 
 afterEach(() => {
   vi.restoreAllMocks();
@@ -31,5 +31,18 @@ describe('Postgres pool error handling', () => {
     expect(logged).toHaveBeenCalledWith(
       JSON.stringify({ event: 'pg.connection_error', scope: 'client', code: 'Error' }),
     );
+  });
+});
+
+describe('pool size per instance (PG_POOL_MAX)', () => {
+  it('uses a valid value and falls back to 10 otherwise', async () => {
+    expect(poolMax('4')).toBe(4);
+    expect(poolMax(undefined)).toBe(10);
+    expect(poolMax('0')).toBe(10);
+    expect(poolMax('abc')).toBe(10);
+    expect(poolMax('500')).toBe(10);
+    const pool = createPgPool('postgres://localhost/none', 3);
+    expect(pool.options.max).toBe(3);
+    await pool.end();
   });
 });
