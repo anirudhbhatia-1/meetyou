@@ -109,6 +109,8 @@ export const ERROR_TEXT: Record<CaptureError, string> = {
   audio_context_failed: 'Something went wrong and recording stopped.',
   offscreen_failed: 'Something went wrong and recording stopped.',
   capture_lost: 'Something went wrong and recording stopped. Your audio so far is safe.',
+  signed_out: 'Sign in again to keep your notes.',
+  server_unreachable: "We couldn't reach Minutes. Check your connection and try again.",
 };
 
 /** Upload progress for "Uploading video — N%" (§8.7); null when nothing is waiting. */

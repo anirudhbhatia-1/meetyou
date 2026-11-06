@@ -8,7 +8,6 @@ import {
 
 import type { Lane, LaneFlags, StreamLink, VideoStatus } from '../messages.ts';
 import { startCapture, type CaptureSession } from './capture.ts';
-import { createDevSessionWithRetry, devStreamToken } from './dev-gateway.ts';
 import { IdbFrameStore } from './frame-store.ts';
 import { openMinutesDb } from './idb.ts';
 import { createLaneEncoder, type LaneEncoder } from './opus-encoder.ts';
@@ -66,10 +65,21 @@ export interface Recorder {
  * so a slow gateway must not sit between the service worker's request and `getUserMedia`. Frames
  * captured meanwhile wait in memory and are written once the session exists.
  */
+/**
+ * Where a recording's session comes from: the cloud API (started by the service worker) or the
+ * local dev gateway. Null `open()` keeps the recording on this computer.
+ */
+export interface SessionSource {
+  open(): Promise<{ sessionId: string; streamUrl: string } | null>;
+  /** A stream token for each (re)connect. */
+  token(sessionId: string): Promise<string>;
+}
+
 export async function startRecorder(options: {
   streamId: string;
   recordVideo: boolean;
-  gatewayUrl: string;
+  /** Null: no gateway, local-only recording. */
+  session: SessionSource | null;
   workletUrl: string;
   preferredCodec: AudioFormat['codec'];
   events: RecorderEvents;
@@ -81,7 +91,7 @@ export async function startRecorder(options: {
   let streamUrl: string | null = null;
   let store: IdbFrameStore | null = null;
   /** True until the gateway session is known; frames wait in `early` meanwhile. */
-  let sessionPending = options.gatewayUrl !== '';
+  let sessionPending = options.session !== null;
   const early: { lane: Lane; payload: Uint8Array; captureMs: number }[] = [];
   const nextSeq: Record<Lane, number> = { me: 0, them: 0 };
   const writes: Record<Lane, Promise<void>> = { me: Promise.resolve(), them: Promise.resolve() };
@@ -164,8 +174,11 @@ export async function startRecorder(options: {
     throw error;
   }
 
-  if (options.gatewayUrl !== '') {
-    const session = await createDevSessionWithRetry(options.gatewayUrl, events.onError);
+  if (options.session !== null) {
+    const session = await options.session.open().catch((error: unknown) => {
+      events.onError('session open failed', error);
+      return null;
+    });
     if (session !== null) {
       sessionId = session.sessionId;
       streamUrl = session.streamUrl;
@@ -181,12 +194,12 @@ export async function startRecorder(options: {
     for (const frame of early.splice(0)) enqueueFrame(frame.lane, frame.payload, frame.captureMs);
   }
 
-  if (store !== null && streamUrl !== null && options.gatewayUrl !== '') {
-    const baseUrl = options.gatewayUrl;
+  if (store !== null && streamUrl !== null && options.session !== null) {
+    const source = options.session;
     client = new StreamClient({
       sessionId,
       streamUrl,
-      getToken: () => devStreamToken(baseUrl, sessionId),
+      getToken: () => source.token(sessionId),
       format,
       store,
       openSocket: (url, protocols) => new WebSocket(url, protocols),

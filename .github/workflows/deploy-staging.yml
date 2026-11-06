@@ -1,0 +1,66 @@
+name: Deploy staging
+
+# S2-12: every green CI run on main builds the images, migrates the database, rolls out the
+# services and runs the smoke job (STAGING_SETUP §9.3). Keyless: GitHub OIDC → Workload Identity
+# Federation → the deployer service account (infra/modules/ci). Image-only updates keep each
+# service's environment and secrets as they are.
+on:
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-staging
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  deploy:
+    if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-latest
+    environment: staging
+    env:
+      REGION: asia-south1
+      REPO: asia-south1-docker.pkg.dev/${{ vars.GCP_PROJECT_ID }}/meetyou
+      TAG: ${{ github.event.workflow_run.head_sha || github.sha }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.TAG }}
+
+      - uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ vars.GCP_WIF_PROVIDER }}
+          service_account: ${{ vars.GCP_DEPLOY_SA }}
+
+      - uses: google-github-actions/setup-gcloud@v2
+
+      - name: Build and push images
+        run: |
+          gcloud auth configure-docker asia-south1-docker.pkg.dev --quiet
+          for app in api gateway worker web migrate smoke; do
+            docker build -f "Dockerfile.$app" -t "$REPO/$app:$TAG" .
+            docker push "$REPO/$app:$TAG"
+          done
+
+      - name: Migrate the database
+        run: |
+          gcloud run jobs update meetyou-staging-migrate --region "$REGION" --image "$REPO/migrate:$TAG"
+          gcloud run jobs execute meetyou-staging-migrate --region "$REGION" --wait
+
+      # Worker first: it installs the queue schema the gateway and API enqueue into.
+      - name: Deploy services
+        run: |
+          for app in worker api gateway web; do
+            gcloud run services update "meetyou-staging-$app" --region "$REGION" --image "$REPO/$app:$TAG"
+          done
+
+      - name: Smoke test
+        run: |
+          gcloud run jobs update meetyou-staging-smoke --region "$REGION" --image "$REPO/smoke:$TAG"
+          gcloud run jobs execute meetyou-staging-smoke --region "$REGION" --wait

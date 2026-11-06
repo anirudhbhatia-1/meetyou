@@ -6,3 +6,4 @@ gateway_image = "gcr.io/google-samples/hello-app:1.0"
 # Pinned extension ID from manifest.json ("key" field, ADR-0004 §4.1).
 extension_origins = ["chrome-extension://hjimcofnjnikbeepahmclaniopbnhbbe"]
 
+alert_emails = ["anirudh@example.com"]

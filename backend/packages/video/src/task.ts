@@ -3,7 +3,14 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 import { upsertVideoAsset, type Db } from '@meetyou/db';
-import { DEFAULT_MAX_ATTEMPTS, defineTask, jobKey } from '@meetyou/queue';
+import {
+  DEFAULT_MAX_ATTEMPTS,
+  defineTask,
+  enqueue,
+  jobKey,
+  RETENTION_SWEEP,
+  retentionSweepJob,
+} from '@meetyou/queue';
 import { z } from 'zod';
 
 import type { FfmpegTools } from './ffmpeg.ts';
@@ -85,8 +92,9 @@ export function videoFinalizeTask(deps: {
         tx.selectFrom('userSettings').select('retentionPolicy').executeTakeFirst(),
       );
       const days = RETENTION_DAYS[policy?.retentionPolicy ?? '7d'] ?? 7;
-      await deps.db.inWorkspace(workspaceId, (tx) =>
-        upsertVideoAsset(tx, {
+      const deleteAfter = new Date((endedAt ?? now()) + days * 24 * 60 * 60 * 1000);
+      await deps.db.inWorkspace(workspaceId, async (tx) => {
+        await upsertVideoAsset(tx, {
           id: `va_${meetingId}`,
           workspaceId,
           meetingId,
@@ -98,9 +106,17 @@ export function videoFinalizeTask(deps: {
           fragments: result.fragments,
           storageKey: result.storageKey,
           bytes: result.bytes,
-          deleteAfter: new Date((endedAt ?? now()) + days * 24 * 60 * 60 * 1000),
-        }),
-      );
+          deleteAfter,
+        });
+        // Retention (D-02, S2-10): the sweep for this meeting runs when the video expires. The
+        // job key keeps one pending sweep per meeting if finalize runs again.
+        await enqueue(
+          tx,
+          retentionSweepJob,
+          { workspaceId, meetingId, dryRun: false },
+          { runAt: deleteAfter, jobKey: jobKey(RETENTION_SWEEP, meetingId, 1) },
+        );
+      });
       await deps.store.deleteVideoFragments(workspaceId, meetingId);
       helpers.logger.info(
         `video.finalize: ready (${meetingId}, ${result.durationMs} ms, ${result.parts.length} parts)`,

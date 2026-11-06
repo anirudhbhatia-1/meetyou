@@ -61,6 +61,7 @@ describe('queue (ADR-0005)', () => {
       tasks: [task],
       handleSignals: false,
       pollIntervalMs: 100,
+      noPreparedStatements: true,
     });
     await until(() => seen.length > 0);
     await new Promise((r) => setTimeout(r, 300));
@@ -84,6 +85,7 @@ describe('queue (ADR-0005)', () => {
       tasks: [task],
       handleSignals: false,
       pollIntervalMs: 100,
+      noPreparedStatements: true,
     });
     await until(() => seen.length > 0);
     await new Promise((r) => setTimeout(r, 300));
@@ -109,6 +111,7 @@ describe('queue (ADR-0005)', () => {
       tasks: [task],
       handleSignals: false,
       pollIntervalMs: 100,
+      noPreparedStatements: true,
     });
     await new Promise((r) => setTimeout(r, 600));
     expect(seen).toEqual([]);
@@ -134,6 +137,7 @@ describe('queue (ADR-0005)', () => {
       tasks: [task],
       handleSignals: false,
       pollIntervalMs: 100,
+      noPreparedStatements: true,
       onPermanentFailure: (f) => failures.push(`${f.task}:${f.errorCode}`),
     });
     await until(() => failures.length > 0);

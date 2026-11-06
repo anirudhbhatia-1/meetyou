@@ -1,9 +1,10 @@
 import { Banner, Button, Icon, Switch } from '@meetyou/ui';
 
 import type { CaptureState } from '../background/capture-state.ts';
-import { GATEWAY_URL } from '../build-config.ts';
+import { API_URL, GATEWAY_URL } from '../build-config.ts';
 import { LAST_RECORDING_KEY, parseLastRecording } from '../last-recording.ts';
 import { RECORD_VIDEO_KEY, recordVideoFrom } from '../settings.ts';
+import { AccountLine, SignInCard, useAccount } from './Account.tsx';
 import { send, useLocalSetting } from './hooks.ts';
 import { ERROR_TEXT, uploadPercent } from './panel-model.ts';
 import { RecordingVideo } from './RecordingVideo.tsx';
@@ -14,6 +15,15 @@ import { RecordingVideo } from './RecordingVideo.tsx';
  * straight away, as with consent mode Off.
  */
 export function ReadyView() {
+  const account = useAccount();
+  if (API_URL !== '' && account === null) {
+    return (
+      <section className="state-view state-center">
+        <h3 className="state-title">Nothing joins your call.</h3>
+        <SignInCard title="Sign in so your notes and video are saved to your Minutes library." />
+      </section>
+    );
+  }
   return (
     <section className="state-view state-center">
       <h3 className="state-title">Ready when you are</h3>
@@ -23,9 +33,15 @@ export function ReadyView() {
       </p>
       <LocalOnlyBanner />
       <RecordingOptions />
-      <Button variant="primary" size="lg" onClick={() => send('recording.start')}>
+      <Button
+        variant="primary"
+        size="lg"
+        disabled={API_URL !== '' && account === undefined}
+        onClick={() => send('recording.start')}
+      >
         Start taking notes
       </Button>
+      {account != null && <AccountLine account={account} />}
       <LastRecordingCard />
     </section>
   );
@@ -158,6 +174,18 @@ export function NotesReadyView({
 
 /** Error (§9). TODO(S4-08): "Get help" once a help page exists. */
 export function ErrorView({ state }: { state: CaptureState }) {
+  if (state.error === 'signed_out') {
+    // §9 "Signed out / token expired".
+    return (
+      <section className="state-view state-center">
+        <h3 className="state-title">Recording stopped</h3>
+        <SignInCard title={ERROR_TEXT.signed_out} />
+        <Button variant="ghost" onClick={() => send('recording.dismiss')}>
+          Dismiss
+        </Button>
+      </section>
+    );
+  }
   return (
     <section className="state-view state-center">
       <h3 className="state-title">Recording stopped</h3>
@@ -209,7 +237,7 @@ function UploadRow({ upload }: { upload: UploadProgress }) {
  * TODO(S5-01): alpha builds always stream; this goes with the developer build.
  */
 export function LocalOnlyBanner() {
-  if (GATEWAY_URL !== '') return null;
+  if (GATEWAY_URL !== '' || API_URL !== '') return null;
   return (
     <Banner tone="warning">
       Live transcript is off in this build: audio and video stay on this computer. Build with{' '}

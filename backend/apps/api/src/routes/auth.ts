@@ -4,7 +4,13 @@ import type { Db } from '@meetyou/db';
 import { GoogleSignInRequest, RefreshRequest, type TokenResponse } from '@meetyou/contracts';
 
 import type { ApiConfig } from '../config.ts';
-import { BadRequestError } from '../errors.ts';
+import { BadRequestError, UnauthorizedError } from '../errors.ts';
+import {
+  clearRefreshCookie,
+  isWebClient,
+  readRefreshCookie,
+  setRefreshCookie,
+} from '../web-session.ts';
 
 export interface AuthRoutesOptions {
   tokens: TokenService;
@@ -83,6 +89,14 @@ export const authRoutes: FastifyPluginAsync<AuthRoutesOptions> = async (fastify,
       }
 
       const pair = await authService.signInWithGoogle(parseResult.data);
+      if (isWebClient(request)) {
+        // Web app: the refresh token never reaches page script (ADR-0004 §4.5).
+        setRefreshCookie(reply, pair.refreshToken, pair.refreshExpiresAt);
+        return reply.send({
+          accessToken: pair.accessToken,
+          accessExpiresAt: pair.accessExpiresAt.toISOString(),
+        });
+      }
       const response: TokenResponse = {
         accessToken: pair.accessToken,
         accessExpiresAt: pair.accessExpiresAt.toISOString(),
@@ -119,6 +133,17 @@ export const authRoutes: FastifyPluginAsync<AuthRoutesOptions> = async (fastify,
         throw new BadRequestError('Authentication service is not configured');
       }
 
+      if (isWebClient(request)) {
+        const cookie = readRefreshCookie(request);
+        if (cookie === null) throw new UnauthorizedError('not signed in', 'not_signed_in');
+        const rotated = await authService.refresh(cookie);
+        setRefreshCookie(reply, rotated.refreshToken, rotated.refreshExpiresAt);
+        return reply.send({
+          accessToken: rotated.accessToken,
+          accessExpiresAt: rotated.accessExpiresAt.toISOString(),
+        });
+      }
+
       const parseResult = RefreshRequest.safeParse(request.body);
       if (!parseResult.success) {
         throw new BadRequestError('Invalid refresh token');
@@ -149,6 +174,13 @@ export const authRoutes: FastifyPluginAsync<AuthRoutesOptions> = async (fastify,
       },
     },
     async (request, reply) => {
+      if (isWebClient(request)) {
+        const cookie = readRefreshCookie(request);
+        if (cookie !== null && authService) await authService.logout(cookie);
+        clearRefreshCookie(reply);
+        return reply.status(204).send();
+      }
+
       if (!authService) {
         return reply.status(204).send();
       }

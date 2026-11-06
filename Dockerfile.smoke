@@ -1,0 +1,21 @@
+# syntax=docker/dockerfile:1
+# Staging smoke job (S2-12): synthetic speech (espeak-ng) streamed through the gateway, segments
+# read back through the API. Runs as the Cloud Run job meetyou-<env>-smoke after each deploy.
+FROM node:24-slim
+RUN apt-get update \
+  && apt-get install -y --no-install-recommends espeak-ng ffmpeg \
+  && rm -rf /var/lib/apt/lists/*
+RUN corepack enable
+
+WORKDIR /app
+
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
+COPY shared/ ./shared/
+COPY backend/ ./backend/
+
+RUN pnpm install --frozen-lockfile --prod
+
+ENV NODE_ENV=production
+USER node
+
+CMD ["node", "backend/apps/smoke/src/main.ts"]

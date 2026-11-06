@@ -1,13 +1,15 @@
 import Fastify, { type FastifyInstance, type FastifyServerOptions } from 'fastify';
 import fastifyCors from '@fastify/cors';
-import { TokenService, generateSigningJwk, loadKeyRing } from '@meetyou/auth';
+import { TokenService, generateSigningJwk, loadKeyRing, type AuthService } from '@meetyou/auth';
 import type { Db } from '@meetyou/db';
+import { GcsBucket } from '@meetyou/storage';
 
 import { loadConfig, type ApiConfig } from './config.ts';
 import { handleFastifyError, handleNotFound } from './errors.ts';
 import { authPlugin } from './middleware/auth.ts';
 import { idempotencyPlugin, type IdempotencyStore } from './middleware/idempotency.ts';
 import { swaggerPlugin } from './plugins/swagger.ts';
+import { accountRoutes } from './routes/account.ts';
 import { authRoutes } from './routes/auth.ts';
 import { consentLogRoutes } from './routes/consent-log.ts';
 import { healthRoutes } from './routes/health.ts';
@@ -17,6 +19,7 @@ import { notesRoutes } from './routes/notes.ts';
 import { segmentsRoutes } from './routes/segments.ts';
 import { sessionsRoutes } from './routes/sessions.ts';
 import { settingsRoutes } from './routes/settings.ts';
+import { videoRoutes } from './routes/video.ts';
 
 export interface BuildAppOptions {
   tokens?: TokenService;
@@ -24,6 +27,10 @@ export interface BuildAppOptions {
   config?: Partial<ApiConfig>;
   idempotencyStore?: IdempotencyStore;
   fastifyOptions?: FastifyServerOptions;
+  /** Recordings bucket for video URLs; built from GCS_AUDIO_BUCKET when absent. */
+  bucket?: GcsBucket;
+  /** Tests replace the Google exchange; built from the config otherwise. */
+  authService?: AuthService;
 }
 
 /**
@@ -36,6 +43,10 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
   // Initialize or fallback TokenService
   let tokens = options.tokens;
   if (!tokens) {
+    if (!config.authSigningJwks && (config.env === 'staging' || config.env === 'production')) {
+      // An ephemeral key would break every token on restart and differ between instances.
+      throw new Error(`api: ${config.env} needs AUTH_SIGNING_JWKS`);
+    }
     if (config.authSigningJwks) {
       const parsed = JSON.parse(config.authSigningJwks);
       const ring = await loadKeyRing(parsed);
@@ -54,11 +65,19 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
         ? false
         : {
             level: config.env === 'production' ? 'info' : 'debug',
+            // Cloud Logging reads `severity` and `message` (S2-11, ARCHITECTURE §20).
+            messageKey: 'message',
+            formatters: {
+              level: (label: string) => ({
+                severity: label === 'warn' ? 'WARNING' : label.toUpperCase(),
+              }),
+            },
             serializers: {
               req(req) {
                 return {
                   method: req.method,
-                  url: req.url,
+                  // No query string: cursors and search terms stay out of the logs (AGENTS §7).
+                  url: req.url.split('?')[0],
                   path: req.routeOptions?.url,
                   parameters: req.params,
                 };
@@ -107,9 +126,11 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
     tokens,
     db: options.db,
     config,
+    ...(options.authService !== undefined ? { authService: options.authService } : {}),
   });
 
   await app.register(meRoutes);
+  await app.register(accountRoutes);
   await app.register(settingsRoutes);
   await app.register(meetingsRoutes);
   await app.register(notesRoutes);
@@ -119,6 +140,14 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
   await app.register(sessionsRoutes, {
     tokens,
     config,
+  });
+
+  const bucket =
+    options.bucket ??
+    (config.gcsAudioBucket !== undefined ? new GcsBucket(config.gcsAudioBucket) : undefined);
+  await app.register(videoRoutes, {
+    ...(options.db !== undefined ? { db: options.db } : {}),
+    ...(bucket !== undefined ? { bucket } : {}),
   });
 
   return app;

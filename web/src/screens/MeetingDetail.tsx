@@ -1,5 +1,5 @@
 import type { Segment, SummaryItem } from '@meetyou/contracts';
-import { useMemo, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 
 import type { MeetingSummary, Participant } from '../api/types.ts';
 import {
@@ -24,6 +24,7 @@ import {
 } from '../lib/format.ts';
 import { href, navigate } from '../lib/router.ts';
 import { useAsync } from '../lib/useAsync.ts';
+import { VideoPlayer, type PlayerHandle } from './VideoPlayer.tsx';
 
 /** DESIGN §12 */
 export function MeetingDetail({
@@ -42,6 +43,7 @@ export function MeetingDetail({
   const segments = useAsync(() => api.getSegments(meetingId), [meetingId]);
   const people = useAsync(() => api.getParticipants(meetingId), [meetingId]);
   const [selected, setSelected] = useState<SummaryItem | null>(null);
+  const [playFrom, setPlayFrom] = useState<number | null>(null);
 
   const m = meeting.data;
   if (meeting.loading && m === undefined) {
@@ -124,10 +126,12 @@ export function MeetingDetail({
                 />
               ) : (
                 <TranscriptTab
+                  meetingId={meetingId}
                   segments={segments.data ?? []}
                   loading={segments.loading}
                   video={m.video}
                   highlight={selected?.segmentIds ?? []}
+                  startAt={playFrom}
                 />
               )}
               <aside className="rail">
@@ -139,6 +143,11 @@ export function MeetingDetail({
                       : (numberCitations(summary.data).get(selected.id) ?? null)
                   }
                   segments={segments.data ?? []}
+                  canPlay={m.video?.status === 'ready'}
+                  onPlay={(ms) => {
+                    setPlayFrom(ms);
+                    navigate({ screen: 'detail', meetingId, tab: 'transcript' });
+                  }}
                   onShowInTranscript={() =>
                     navigate({ screen: 'detail', meetingId, tab: 'transcript' })
                   }
@@ -247,56 +256,86 @@ function NotesTab({
 }
 
 function TranscriptTab({
+  meetingId,
   segments,
   loading,
   video,
   highlight,
+  startAt,
 }: {
+  meetingId: string;
   segments: Segment[];
   loading: boolean;
   video: { status: string; durationMs: number | null } | null;
   highlight: string[];
+  startAt: number | null;
 }) {
+  const player = useRef<PlayerHandle>(null);
+  const [now, setNow] = useState<number | null>(null);
+  const ready = video?.status === 'ready';
   return (
     <Card className="transcript">
-      {video !== null && (
-        <div className={`video-slot video-${video.status}`}>
-          {video.status === 'ready' ? (
-            // TODO(S4-17): player with click-to-seek from the signed playback URL (DESIGN §6.19).
-            <p className="meta">
-              <Icon name="video" /> Video player comes with S4-17.
-            </p>
-          ) : video.status === 'uploading' ? (
-            <p className="meta">
-              <Icon name="video" /> Video is still uploading from the computer that recorded it.
-              Your notes and transcript are ready.
-            </p>
-          ) : video.status === 'processing' ? (
-            <p className="meta">Preparing video…</p>
-          ) : video.status === 'failed' ? (
-            <p className="meta">Video couldn&rsquo;t be saved. Audio and notes are fine.</p>
-          ) : (
-            <p className="meta">Recording was deleted after the retention period.</p>
-          )}
-        </div>
-      )}
+      {video !== null &&
+        (ready ? (
+          <VideoPlayer
+            ref={player}
+            meetingId={meetingId}
+            startAt={startAt}
+            onSessionTime={setNow}
+          />
+        ) : (
+          <div className={`video-slot video-${video.status}`}>
+            {video.status === 'uploading' ? (
+              <p className="meta">
+                <Icon name="video" /> Video is still uploading from the computer that recorded it.
+                Your notes and transcript are ready.
+              </p>
+            ) : video.status === 'processing' ? (
+              <p className="meta">Preparing video…</p>
+            ) : video.status === 'failed' ? (
+              <p className="meta">Video couldn&rsquo;t be saved. Audio and notes are fine.</p>
+            ) : (
+              <p className="meta">Recording was deleted after the retention period.</p>
+            )}
+          </div>
+        ))}
       {loading && segments.length === 0 ? (
         <SkeletonRows rows={6} />
       ) : segments.length === 0 ? (
         <p className="empty">No transcript for this meeting.</p>
       ) : (
         <ol className="segments">
-          {segments.map((s) => (
-            <li key={s.id} className={`segment ${highlight.includes(s.id) ? 'segment-hl' : ''}`}>
-              <span className="meta small num">{formatClock(s.startMs)}</span>
-              <span>
-                <span className={`speaker ${s.lane === 'me' ? 'speaker-me' : ''}`}>
-                  {s.lane === 'me' ? 'You' : (s.speakerName ?? 'Speaker')}
+          {segments.map((s) => {
+            const playingNow = now !== null && now >= s.startMs && now < s.endMs;
+            const cls = `segment ${highlight.includes(s.id) || playingNow ? 'segment-hl' : ''} ${ready ? 'segment-seek' : ''}`;
+            const body = (
+              <>
+                <span className="meta small num">{formatClock(s.startMs)}</span>
+                <span>
+                  <span className={`speaker ${s.lane === 'me' ? 'speaker-me' : ''}`}>
+                    {s.lane === 'me' ? 'You' : (s.speakerName ?? 'Speaker')}
+                  </span>
+                  <span className="segment-text">{s.text}</span>
                 </span>
-                <span className="segment-text">{s.text}</span>
-              </span>
-            </li>
-          ))}
+              </>
+            );
+            return (
+              <li key={s.id} className={cls} aria-current={playingNow ? 'true' : undefined}>
+                {ready ? (
+                  // DESIGN §12.5 click-to-seek: the line plays the video from its start.
+                  <button
+                    type="button"
+                    className="segment-btn"
+                    onClick={() => player.current?.playFrom(s.startMs)}
+                  >
+                    {body}
+                  </button>
+                ) : (
+                  body
+                )}
+              </li>
+            );
+          })}
         </ol>
       )}
     </Card>
@@ -307,11 +346,15 @@ function CitationCard({
   item,
   number,
   segments,
+  canPlay,
+  onPlay,
   onShowInTranscript,
 }: {
   item: SummaryItem | null;
   number: number | null;
   segments: Segment[];
+  canPlay: boolean;
+  onPlay: (sessionMs: number) => void;
   onShowInTranscript: () => void;
 }) {
   if (item === null || number === null) {
@@ -339,8 +382,12 @@ function CitationCard({
         </blockquote>
       ))}
       <div className="cite-actions">
-        {/* TODO(S4-17): play from the cited time once audio/video URLs exist (DESIGN §12.6). */}
-        <Button disabled title="Playback comes with S4-17">
+        {/* TODO(S4-17): audio playback for meetings without video (DESIGN §12.6). */}
+        <Button
+          disabled={!canPlay}
+          title={canPlay ? undefined : 'Plays when the meeting has video'}
+          onClick={() => onPlay(start)}
+        >
           <Icon name="play" /> Play from {formatClock(start)}
         </Button>
         <Button variant="ghost" onClick={onShowInTranscript}>

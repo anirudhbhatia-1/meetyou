@@ -1,0 +1,26 @@
+{
+  "name": "@meetyou/smoke",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Staging smoke test (S2-12): synthetic audio streamed through the gateway, segments read back through the API, then the meeting deleted. Runs as a Cloud Run job after every deploy.",
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json",
+    "test": "vitest run",
+    "start": "node src/main.ts"
+  },
+  "dependencies": {
+    "@meetyou/auth": "workspace:*",
+    "@meetyou/contracts": "workspace:*",
+    "@meetyou/db": "workspace:*",
+    "@meetyou/log": "workspace:*",
+    "ws": "^8.22.0",
+    "zod": "^4.6.7"
+  },
+  "devDependencies": {
+    "@meetyou/api": "workspace:*",
+    "@meetyou/gateway": "workspace:*",
+    "@meetyou/queue": "workspace:*",
+    "@types/ws": "^8.18.2"
+  }
+}

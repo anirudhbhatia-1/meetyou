@@ -57,3 +57,13 @@ output "redis_host" {
   description = "Private IP address of the Memorystore Redis instance."
   value       = google_redis_instance.session_redis.host
 }
+
+output "github_wif_provider" {
+  description = "GitHub repository variable GCP_WIF_PROVIDER (S2-12)."
+  value       = module.ci.workload_identity_provider
+}
+
+output "github_deploy_service_account" {
+  description = "GitHub repository variable GCP_DEPLOY_SA (S2-12)."
+  value       = module.ci.deployer_service_account
+}

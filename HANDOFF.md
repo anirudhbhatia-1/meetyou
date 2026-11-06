@@ -6,8 +6,8 @@ pointer to where the full detail lives — the linked document stays the source 
 
 | Field | Value |
 |---|---|
-| Last updated | 2026-11-06 (merged Gaurav's MeResponse/lint fix from `main`) |
-| Updated by | Anirudh (Claude Code) & Gaurav (Google Antigravity) |
+| Last updated | 2026-11-06 (Anirudh: merged S2-10 with fixes; S2-10 wiring, S2-11 observability and S2-12 CI/CD + smoke built; sign-in, web app, cloud recording) |
+| Updated by | Anirudh (Claude Code) |
 | Repository | [anirudhbhatia-1/meetyou](https://github.com/anirudhbhatia-1/meetyou) — branches `main`, `anirudh`, `Gauravbro` |
 | Current stage | **Stage 2** in progress — S2-08 & S2-09 complete; Gaurav next: S2-10 data lifecycle (§7) |
 
@@ -192,7 +192,72 @@ Stage 0 is complete (status table: IMPLEMENTATION_PLAN.md → "Stage 0 status").
 
 Newest first. One entry per working session (either person).
 
-### 2026-11-06 (latest) — Gaurav (Google Antigravity): S2-09 Core REST API Endpoints implemented and verified
+### 2026-11-06 (latest) — Anirudh (Claude Code): S2-10 merged and fixed, S2-11 and S2-12 built
+Anirudh asked to finish everything left in S2, including S2-11 and S2-12 (owned by Gaurav until
+now — **Gaurav: please don't start them; review instead**). Runbook: STAGING_SETUP §9.3.
+- **Merged `main` (Gaurav's S2-10, `0d725f1`)** and fixed what broke `pnpm check`: formatting,
+  lint (`any`, unused import) and three real bugs in `lifecycle.ts` —
+  (1) retention set `audio_assets.storage_key = null`, but the column is NOT NULL: the row is now
+  deleted with its object; (2) account deletion never deleted the user: `inWorkspace` does not set
+  `app.user_id`, so the `users` policy hid the row — the task now sets it (refresh tokens cascade);
+  (3) storage cleanup errors were swallowed and the rows deleted anyway (orphaned recordings): they
+  now fail the job, which retries. API route tests now run on the queue test DB (DELETE enqueues).
+  PGlite-backed worker tests use `noPreparedStatements` (shared session; flaky otherwise).
+- **S2-10 wiring**: the worker runs `meeting.delete`, `account.delete`, `retention.sweep` with
+  `bucketCleanup` (meeting prefix; playback + poster); `video.finalize` schedules the meeting's
+  sweep at `delete_after` in the same transaction. New `POST /v1/account:delete` (202, enqueues in
+  one step, clears the web cookie) and web Settings → Privacy & data → "Delete my account and all
+  data…" with the DESIGN §15.3 alert. Audio rows still wait for S3 (bucket lifecycle is the backstop).
+- **S2-11**: `@meetyou/log` (allow-listed fields, string values must look like codes/IDs, severity
+  from the event name); gateway and worker use it; Fastify logs `severity`/`message` and strips
+  query strings; worker logs `queue.depth` each minute. `infra/modules/monitoring`: 7 log metrics,
+  6 alerts, dashboard (`terraform apply -target=module.monitoring`). OpenTelemetry tracing not added
+  (new dependencies need approval).
+- **S2-12**: `.github/workflows/deploy-staging.yml` (after green CI on main: build 6 images, migrate,
+  roll out worker → api → gateway → web, smoke job), keyless via `infra/modules/ci` (WIF pool +
+  deployer SA). Smoke job `backend/apps/smoke` + `Dockerfile.smoke`; its flow passes locally against
+  the real gateway + API (scripted STT): API session → JWT stream → all frames acked → segments via
+  API → meeting deleted. Gateway/API packages now export `./server`, `./chunk-store`,
+  `./record-fixture`, `./app` for that test.
+- `pnpm check` green. Not run in the cloud yet: Terraform targets, GitHub variables, smoke job
+  creation, first deploy run, failover/crash/60-min tests.
+
+### 2026-11-06 — Anirudh (Claude Code): sign-in, library web app on the API, cloud recording
+Goal (Anirudh): log in and watch recordings on the website, all on staging. Deploy steps:
+[STAGING_SETUP §9.2](docs/STAGING_SETUP.md). Not yet deployed or tried against Google/GCS — needs
+the Cloud Shell steps there.
+- **API** (`backend/apps/api`): web sign-in per ADR-0004 §4.5 — with `X-Minutes-Client: web`,
+  `/v1/auth/google|refresh|logout` keep the refresh token in an `HttpOnly; Secure; SameSite=Lax`
+  cookie `minutes_rt` on `/v1/auth` and never in the body (`web-session.ts`); the extension flow
+  is unchanged. New `routes/video.ts`: `POST /v1/sessions/{id}/video/fragments:sign` (own session,
+  open until 24 h after the end, 410 after) and `GET /v1/meetings/{id}/video[?download=1]`.
+  Staging/production refuse to boot without `AUTH_SIGNING_JWKS`; `DATABASE_URL` required there;
+  RLS checked at startup. **Gaurav, please note:** `POST /v1/sessions/{id}/recover` now answers
+  `RecoverSessionResponse` (`state: 'resumable' | 'ended'`) instead of 400 for an ended session;
+  meetings queries for the playback row filter `part_id IS NULL`. Tests: `web-video.test.ts`.
+- **Web app** (`web/`): Google PKCE redirect sign-in (`src/api/auth.ts`, access token in memory),
+  real HTTP client (`src/api/http.ts`, contracts-validated), sign-in screen (DESIGN §7.1 copy),
+  Settings → Account/Sign out, **video player** (DESIGN §6.19: play/pause, time, seek, speed,
+  download, full screen, Space/←/→) above the transcript with click-to-seek and "Play from" on
+  citations. `web/server/server.ts` (Node built-ins only) serves the build + `/config.json` and
+  proxies `/v1` (cookie both ways, header allow-list, CSP, `no-referrer`); `Dockerfile.web`.
+  Vite dev without `/config.json` still runs on the mock API. Summaries/action items/participants
+  return empty until S3-08.
+- **Extension**: cloud mode when built with `MINUTES_API_URL` (`build:staging`): sign-in in the
+  service worker (`background/auth.ts`, `launchWebAuthFlow` + PKCE, refresh token in
+  `chrome.storage.local`, access token in `chrome.storage.session`, one refresh at a time); start
+  calls `POST /v1/sessions` and hands the session to the offscreen recorder (`SessionSource`:
+  API or dev gateway); reconnects use `recover`; video signs through the API. Side panel: sign-in
+  card, "Signed in as … · Sign out", signed-out error with sign-in, "Open" link to the meeting in
+  the web app. New capture errors `signed_out`, `server_unreachable`.
+- Merged `origin/main` (Gaurav's `cb66bb2`): `MeResponse` is the flat
+  `{ userId, workspaceId, email, displayName }` in `shared/contracts/src/api.ts` (both sides had
+  removed one copy); web app and extension read it that way.
+- `pnpm check` green. Not verified: real Google sign-in, signed URLs on Cloud Run (needs
+  `iamcredentials` + token creator, declared in Terraform), video playback from GCS in the web
+  player (local check stopped at the https-only contract; seek/UI checked with a fake API).
+
+### 2026-11-06 — Gaurav (Google Antigravity): S2-09 Core REST API Endpoints implemented and verified
 **Done** (branch `Gauravbro`)
 - Implemented **Task S2-09 (Core REST API Endpoints)** in `backend/apps/api` (`@meetyou/api`):
   - **Auth & JWKS (`src/routes/auth.ts`):** `GET /.well-known/jwks.json` serving public JWKS for gateway verification; `POST /v1/auth/google` exchanging Google OAuth PKCE auth code via `@meetyou/auth` `signInWithGoogle`; `POST /v1/auth/refresh` rotating refresh tokens; `POST /v1/auth/logout` revoking tokens.

@@ -1,13 +1,14 @@
 import { beforeAll, afterAll, describe, expect, it } from 'vitest';
 import { TokenService, generateSigningJwk, loadKeyRing } from '@meetyou/auth';
-import { createTestDb } from '@meetyou/db/testing';
-import { newUlid } from '@meetyou/contracts';
+// Queue schema included: DELETE /v1/meetings enqueues the hard delete (S2-10).
+import { createQueueTestEnv } from '@meetyou/queue/testing';
+import { newUlid, RecoverSessionResponse } from '@meetyou/contracts';
 
 import { buildApp } from './app.ts';
 
 describe('Core REST API Endpoints (S2-09)', () => {
   let tokens: TokenService;
-  let testDb: Awaited<ReturnType<typeof createTestDb>>;
+  let testDb: Awaited<ReturnType<typeof createQueueTestEnv>>;
   let app: Awaited<ReturnType<typeof buildApp>>;
 
   let workspaceIdA: string;
@@ -25,7 +26,7 @@ describe('Core REST API Endpoints (S2-09)', () => {
     tokens = new TokenService(ring);
 
     // 2. In-memory PGlite DB with applied migrations
-    testDb = await createTestDb();
+    testDb = await createQueueTestEnv();
 
     // 3. Seed workspaces and users via signInGoogleUser
     const accountA = await testDb.db.signInGoogleUser(
@@ -224,6 +225,7 @@ describe('Core REST API Endpoints (S2-09)', () => {
       const body = JSON.parse(res.body);
       expect(body.sessionId).toBe(sessionId);
       expect(typeof body.streamToken).toBe('string');
+      expect(RecoverSessionResponse.parse(body).state).toBe('resumable');
     });
 
     it('ends a session and transitions meeting to processing', async () => {
@@ -236,6 +238,16 @@ describe('Core REST API Endpoints (S2-09)', () => {
       const body = JSON.parse(res.body);
       expect(body.status).toBe('ended');
       expect(body.meetingId).toBe(meetingId);
+
+      const recovered = await app.inject({
+        method: 'POST',
+        url: `/v1/sessions/${sessionId}/recover`,
+        headers: { authorization: `Bearer ${tokenA}` },
+      });
+      expect(RecoverSessionResponse.parse(JSON.parse(recovered.body))).toEqual({
+        state: 'ended',
+        meetingId,
+      });
 
       // Verify meeting status in DB
       const meetingRes = await app.inject({

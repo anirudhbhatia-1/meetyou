@@ -7,7 +7,10 @@ import {
   parseCaptureStartResult,
   parseCaptureStatusReply,
   parseCaptureStopReply,
+  type AccessTokenReply,
+  type AuthReply,
   type OffscreenMessage,
+  type StartedSession,
 } from '../messages.ts';
 import {
   badgeFor,
@@ -24,6 +27,9 @@ import {
 import { isMeetUrl, meetingCodeOf } from './meet-tab.ts';
 import { LAST_RECORDING_KEY, type LastRecording } from '../last-recording.ts';
 import { RECORD_VIDEO_KEY, recordVideoFrom } from '../settings.ts';
+import { startApiSession } from '../api-client.ts';
+import { API_URL, GOOGLE_CLIENT_ID } from '../build-config.ts';
+import { ExtensionAuth } from './auth.ts';
 
 const OFFSCREEN_DOCUMENT_PATH = 'offscreen/index.html';
 /**
@@ -173,6 +179,46 @@ async function recordVideoSetting(): Promise<boolean> {
   return recordVideoFrom(await chrome.storage.local.get(RECORD_VIDEO_KEY));
 }
 
+/** Cloud mode only (S2-09): the build names an API. */
+const auth =
+  API_URL === '' ? null : new ExtensionAuth({ apiUrl: API_URL, googleClientId: GOOGLE_CLIENT_ID });
+
+/**
+ * Cloud mode: start the session on the API before capture (the meeting row and stream token come
+ * from there). Undefined in dev builds; a failure is the recording's error.
+ */
+async function startCloudSession(
+  meetingCode: string | null,
+  recordVideo: boolean,
+): Promise<StartedSession | undefined | 'signed_out' | 'server_unreachable'> {
+  if (auth === null) return undefined;
+  let token: string | null;
+  try {
+    token = await auth.accessToken();
+  } catch (error: unknown) {
+    logError('access token refresh failed', error);
+    return 'server_unreachable';
+  }
+  if (token === null) return 'signed_out';
+  try {
+    const started = await startApiSession(API_URL, token, {
+      // Meet codes look like abc-defg-hij; an unknown one still records.
+      meetingCode: meetingCode ?? 'unknown',
+      recordVideo,
+      extensionVersion: chrome.runtime.getManifest().version,
+    });
+    return {
+      sessionId: started.sessionId,
+      meetingId: started.meetingId,
+      streamUrl: started.streamUrl,
+      streamToken: started.streamToken,
+    };
+  } catch (error: unknown) {
+    logError('API session start failed', error);
+    return 'server_unreachable';
+  }
+}
+
 async function startRecording(tabId: number | undefined): Promise<void> {
   const state = await loadCaptureState();
   if (!canStart(state)) {
@@ -188,13 +234,19 @@ async function startRecording(tabId: number | undefined): Promise<void> {
     return;
   }
 
+  const meetingCode = meetingCodeOf(tab.url);
   await applyCaptureEvent({
     type: 'start_requested',
     tabId,
-    meetingCode: meetingCodeOf(tab.url),
+    meetingCode,
     at: Date.now(),
   });
   const recordVideo = await recordVideoSetting();
+  const session = await startCloudSession(meetingCode, recordVideo);
+  if (session === 'signed_out' || session === 'server_unreachable') {
+    await applyCaptureEvent({ type: 'failed', error: session });
+    return;
+  }
 
   try {
     await ensureOffscreenDocument();
@@ -222,6 +274,7 @@ async function startRecording(tabId: number | undefined): Promise<void> {
       type: 'capture.start',
       streamId,
       recordVideo,
+      ...(session !== undefined ? { session } : {}),
     });
   } catch (error: unknown) {
     logError('offscreen capture.start failed', error);
@@ -240,7 +293,11 @@ async function startRecording(tabId: number | undefined): Promise<void> {
     video: result.video,
   });
   if (started.startedAt !== null) {
-    const last: LastRecording = { sessionId: result.sessionId, startedAt: started.startedAt };
+    const last: LastRecording = {
+      sessionId: result.sessionId,
+      startedAt: started.startedAt,
+      ...(session !== undefined ? { meetingId: session.meetingId } : {}),
+    };
     await chrome.storage.local
       .set({ [LAST_RECORDING_KEY]: last })
       .catch((error: unknown) => logError('save last recording failed', error));
@@ -535,6 +592,36 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   const parsed = parseBackgroundMessage(message);
   if (parsed === null) {
     return false;
+  }
+
+  if (parsed.type === 'auth.token') {
+    const reply = (token: string | null): void =>
+      sendResponse({ token } satisfies AccessTokenReply);
+    if (auth === null) {
+      reply(null);
+      return false;
+    }
+    auth.accessToken().then(reply, (error: unknown) => {
+      logError('access token for offscreen failed', error);
+      reply(null);
+    });
+    return true;
+  }
+  if (parsed.type === 'auth.sign_in' || parsed.type === 'auth.sign_out') {
+    const reply = (ok: boolean): void => sendResponse({ ok } satisfies AuthReply);
+    if (auth === null) {
+      reply(false);
+      return false;
+    }
+    const task = parsed.type === 'auth.sign_in' ? auth.signIn() : auth.signOut();
+    task.then(
+      () => reply(true),
+      (error: unknown) => {
+        logError(`${parsed.type} failed`, error);
+        reply(false);
+      },
+    );
+    return true;
   }
 
   switch (parsed.type) {

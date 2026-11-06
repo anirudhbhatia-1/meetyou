@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "Background worker (ADR-0005, S2-06): runs queued jobs — video.finalize now, summaries and retention later. Cloud Run service with a health endpoint; needs ffmpeg in its image.",
+  "description": "Background worker (ADR-0005, S2-06): runs queued jobs \u2014 video.finalize now, summaries and retention later. Cloud Run service with a health endpoint; needs ffmpeg in its image.",
   "scripts": {
     "typecheck": "tsc -p tsconfig.json",
     "test": "vitest run",
@@ -11,6 +11,7 @@
   },
   "dependencies": {
     "@meetyou/db": "workspace:*",
+    "@meetyou/log": "workspace:*",
     "@meetyou/queue": "workspace:*",
     "@meetyou/storage": "workspace:*",
     "@meetyou/video": "workspace:*",

@@ -98,6 +98,8 @@ export const meetingsRoutes: FastifyPluginAsync = async (fastify) => {
           const videoAsset = await tx
             .selectFrom('videoAssets')
             .select(['status', 'durationMs', 'deleteAfter'])
+            // The meeting's playback row; per-part rows (ADR-0011) carry a partId.
+            .where('partId', 'is', null)
             .where('workspaceId', '=', workspaceId)
             .where('meetingId', '=', m.id)
             .executeTakeFirst();
@@ -195,6 +197,7 @@ export const meetingsRoutes: FastifyPluginAsync = async (fastify) => {
         const videoAsset = await tx
           .selectFrom('videoAssets')
           .select(['status', 'durationMs', 'deleteAfter'])
+          .where('partId', 'is', null)
           .where('workspaceId', '=', workspaceId)
           .where('meetingId', '=', id)
           .executeTakeFirst();
@@ -298,6 +301,7 @@ export const meetingsRoutes: FastifyPluginAsync = async (fastify) => {
         const videoAsset = await tx
           .selectFrom('videoAssets')
           .select(['status', 'durationMs', 'deleteAfter'])
+          .where('partId', 'is', null)
           .where('workspaceId', '=', workspaceId)
           .where('meetingId', '=', id)
           .executeTakeFirst();

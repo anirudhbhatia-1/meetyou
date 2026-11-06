@@ -515,3 +515,24 @@ body {
 .toast {
   justify-content: space-between;
 }
+
+/* Cloud sign-in (DESIGN §7.1 copy, §9 signed out). */
+.sign-in {
+  display: grid;
+  gap: 12px;
+  justify-items: center;
+  text-align: center;
+}
+.account-line {
+  text-align: center;
+}
+.link-btn {
+  all: unset;
+  cursor: pointer;
+  color: var(--olive);
+  text-decoration: underline;
+}
+.link-btn:focus-visible {
+  box-shadow: 0 0 0 3px var(--focus-ring);
+  border-radius: 4px;
+}

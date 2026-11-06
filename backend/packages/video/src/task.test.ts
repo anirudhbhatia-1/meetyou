@@ -4,7 +4,8 @@ import { join } from 'node:path';
 
 import { newUlid } from '@meetyou/contracts';
 import { createMeetingForSession, endMeeting } from '@meetyou/db';
-import { createTestDb } from '@meetyou/db/testing';
+// Queue schema included: finalize schedules the retention sweep in its transaction (S2-10).
+import { createQueueTestEnv } from '@meetyou/queue/testing';
 import type { JobHelpers } from 'graphile-worker';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -53,10 +54,10 @@ function helpers() {
 }
 
 describe.runIf(hasFfmpeg())('video.finalize task (S2-14, ADR-0005)', () => {
-  let env: Awaited<ReturnType<typeof createTestDb>>;
+  let env: Awaited<ReturnType<typeof createQueueTestEnv>>;
   let dir: string;
   beforeEach(async () => {
-    env = await createTestDb();
+    env = await createQueueTestEnv();
     dir = await mkdtemp(join(tmpdir(), 'finalize-task-'));
   });
   afterEach(async () => {
@@ -140,6 +141,11 @@ describe.runIf(hasFfmpeg())('video.finalize task (S2-14, ADR-0005)', () => {
     expect(row.durationMs).toBeGreaterThan(3500);
     // D-02 default retention: 7 days after the meeting ended.
     expect(row.deleteAfter?.getTime()).toBe(endedAt.getTime() + 7 * 24 * 60 * 60 * 1000);
+    const sweep = await env.pool.query<{ task_identifier: string; run_at: Date }>(
+      'select task_identifier, run_at from graphile_worker.jobs where key = $1',
+      [`retention.sweep:${meetingId}:1`],
+    );
+    expect(sweep.rows).toEqual([{ task_identifier: 'retention.sweep', run_at: row.deleteAfter }]);
   }, 60_000);
 
   it('finalizes with what arrived once 24 h have passed', async () => {

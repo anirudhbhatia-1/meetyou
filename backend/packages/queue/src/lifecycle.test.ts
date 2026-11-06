@@ -1,5 +1,5 @@
 import { newUlid } from '@meetyou/contracts';
-import type { Runner } from 'graphile-worker';
+import type { JobHelpers, Runner } from 'graphile-worker';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import {
@@ -12,7 +12,6 @@ import {
   type StorageCleanup,
 } from './lifecycle.ts';
 import { createQueueTestEnv } from './testing.ts';
-import { startWorker } from './worker.ts';
 
 let env: Awaited<ReturnType<typeof createQueueTestEnv>>;
 let runner: Runner | null = null;
@@ -92,19 +91,22 @@ describe('Data lifecycle & retention jobs (S2-10, PRD FR-SET-01..03, ARCHITECTUR
       });
 
       // Run task directly
-      await task.handle(
-        { workspaceId: a.workspaceId, dryRun: false },
-        { logger: { info: () => undefined, warn: () => undefined } } as any,
-      );
+      await task.handle({ workspaceId: a.workspaceId, dryRun: false }, {
+        logger: { info: () => undefined, warn: () => undefined },
+      } as unknown as JobHelpers);
 
       expect(deletedAudioKeys.length).toBe(1);
       expect(deletedAudioKeys[0]).toContain(meetingId);
 
-      // Verify DB row was cleared of storageKey
+      // The asset row is deleted with its object (storage_key is NOT NULL).
       const asset = await env.db.inWorkspace(a.workspaceId, (tx) =>
-        tx.selectFrom('audioAssets').selectAll().where('meetingId', '=', meetingId).executeTakeFirst(),
+        tx
+          .selectFrom('audioAssets')
+          .selectAll()
+          .where('meetingId', '=', meetingId)
+          .executeTakeFirst(),
       );
-      expect(asset?.storageKey).toBeNull();
+      expect(asset).toBeUndefined();
     });
 
     it('CRITICAL SAFETY: failed processing never deletes audio, even past delete_after (D-02, FR-SET-01)', async () => {
@@ -189,21 +191,28 @@ describe('Data lifecycle & retention jobs (S2-10, PRD FR-SET-01..03, ARCHITECTUR
         now: () => nowMs,
       });
 
-      await task.handle(
-        { workspaceId: a.workspaceId, dryRun: false },
-        { logger: { info: () => undefined, warn: () => undefined } } as any,
-      );
+      await task.handle({ workspaceId: a.workspaceId, dryRun: false }, {
+        logger: { info: () => undefined, warn: () => undefined },
+      } as unknown as JobHelpers);
 
       // Both audio files MUST be preserved!
       expect(deletedAudioKeys.length).toBe(0);
 
       const failedAsset = await env.db.inWorkspace(a.workspaceId, (tx) =>
-        tx.selectFrom('audioAssets').selectAll().where('meetingId', '=', failedMeetingId).executeTakeFirst(),
+        tx
+          .selectFrom('audioAssets')
+          .selectAll()
+          .where('meetingId', '=', failedMeetingId)
+          .executeTakeFirst(),
       );
       expect(failedAsset?.storageKey).not.toBeNull();
 
       const processingAsset = await env.db.inWorkspace(a.workspaceId, (tx) =>
-        tx.selectFrom('audioAssets').selectAll().where('meetingId', '=', processingMeetingId).executeTakeFirst(),
+        tx
+          .selectFrom('audioAssets')
+          .selectAll()
+          .where('meetingId', '=', processingMeetingId)
+          .executeTakeFirst(),
       );
       expect(processingAsset?.storageKey).not.toBeNull();
     });
@@ -260,15 +269,18 @@ describe('Data lifecycle & retention jobs (S2-10, PRD FR-SET-01..03, ARCHITECTUR
         now: () => nowMs,
       });
 
-      await task.handle(
-        { workspaceId: a.workspaceId, dryRun: false },
-        { logger: { info: () => undefined, warn: () => undefined } } as any,
-      );
+      await task.handle({ workspaceId: a.workspaceId, dryRun: false }, {
+        logger: { info: () => undefined, warn: () => undefined },
+      } as unknown as JobHelpers);
 
       expect(deletedVideoKeys.length).toBe(1);
 
       const videoAsset = await env.db.inWorkspace(a.workspaceId, (tx) =>
-        tx.selectFrom('videoAssets').selectAll().where('meetingId', '=', meetingId).executeTakeFirst(),
+        tx
+          .selectFrom('videoAssets')
+          .selectAll()
+          .where('meetingId', '=', meetingId)
+          .executeTakeFirst(),
       );
       expect(videoAsset?.status).toBe('expired');
       expect(videoAsset?.storageKey).toBeNull();
@@ -325,7 +337,11 @@ describe('Data lifecycle & retention jobs (S2-10, PRD FR-SET-01..03, ARCHITECTUR
 
       // Verify soft-deleted
       const softDeleted = await env.db.inWorkspace(a.workspaceId, (tx) =>
-        tx.selectFrom('meetings').select('deletedAt').where('id', '=', meetingId).executeTakeFirst(),
+        tx
+          .selectFrom('meetings')
+          .select('deletedAt')
+          .where('id', '=', meetingId)
+          .executeTakeFirst(),
       );
       expect(softDeleted?.deletedAt).not.toBeNull();
 
@@ -341,7 +357,11 @@ describe('Data lifecycle & retention jobs (S2-10, PRD FR-SET-01..03, ARCHITECTUR
 
       // Verify meeting is active again
       const activeMeeting = await env.db.inWorkspace(a.workspaceId, (tx) =>
-        tx.selectFrom('meetings').select('deletedAt').where('id', '=', meetingId).executeTakeFirst(),
+        tx
+          .selectFrom('meetings')
+          .select('deletedAt')
+          .where('id', '=', meetingId)
+          .executeTakeFirst(),
       );
       expect(activeMeeting?.deletedAt).toBeNull();
 
@@ -356,16 +376,19 @@ describe('Data lifecycle & retention jobs (S2-10, PRD FR-SET-01..03, ARCHITECTUR
         },
       });
 
-      await task.handle(
-        { workspaceId: a.workspaceId, meetingId, requestId },
-        { logger: { info: () => undefined, warn: () => undefined } } as any,
-      );
+      await task.handle({ workspaceId: a.workspaceId, meetingId, requestId }, {
+        logger: { info: () => undefined, warn: () => undefined },
+      } as unknown as JobHelpers);
 
       expect(storageDeleted).toBe(false);
 
       // Meeting and transcript still exist in database
       const count = await env.db.inWorkspace(a.workspaceId, (tx) =>
-        tx.selectFrom('transcriptSegments').select('id').where('meetingId', '=', meetingId).execute(),
+        tx
+          .selectFrom('transcriptSegments')
+          .select('id')
+          .where('meetingId', '=', meetingId)
+          .execute(),
       );
       expect(count.length).toBe(1);
     });
@@ -421,10 +444,9 @@ describe('Data lifecycle & retention jobs (S2-10, PRD FR-SET-01..03, ARCHITECTUR
       });
 
       // Run deletion task without prior cancellation
-      await task.handle(
-        { workspaceId: a.workspaceId, meetingId, requestId },
-        { logger: { info: () => undefined, warn: () => undefined } } as any,
-      );
+      await task.handle({ workspaceId: a.workspaceId, meetingId, requestId }, {
+        logger: { info: () => undefined, warn: () => undefined },
+      } as unknown as JobHelpers);
 
       expect(storageDeletedMeetingId).toBe(meetingId);
 
@@ -441,7 +463,11 @@ describe('Data lifecycle & retention jobs (S2-10, PRD FR-SET-01..03, ARCHITECTUR
 
       // Deletion request audit log marked completed
       const req = await env.db.inWorkspace(a.workspaceId, (tx) =>
-        tx.selectFrom('deletionRequests').select('completedAt').where('id', '=', requestId).executeTakeFirst(),
+        tx
+          .selectFrom('deletionRequests')
+          .select('completedAt')
+          .where('id', '=', requestId)
+          .executeTakeFirst(),
       );
       expect(req?.completedAt).not.toBeNull();
     });
@@ -480,24 +506,37 @@ describe('Data lifecycle & retention jobs (S2-10, PRD FR-SET-01..03, ARCHITECTUR
         db: env.db,
       });
 
-      await task.handle(
-        { userId: a.userId, workspaceId: a.workspaceId, requestId },
-        { logger: { info: () => undefined, warn: () => undefined } } as any,
-      );
+      await task.handle({ userId: a.userId, workspaceId: a.workspaceId, requestId }, {
+        logger: { info: () => undefined, warn: () => undefined },
+      } as unknown as JobHelpers);
 
-      // Direct SQL check outside RLS context (audit logs persist without tenant scope)
-      const auditLog = await env.pool.query(
-        'SELECT id, workspace_id, scope, target_id, completed_at FROM deletion_requests WHERE id = $1',
-        [requestId],
-      );
+      // Operator view: the audit row has no workspace any more, so the app role cannot see it under
+      // RLS; read it as the test superuser (the shared PGlite session), then switch back.
+      const operator = await env.pool.connect();
+      let auditLog: { rows: Record<string, unknown>[] };
+      let users: { rows: unknown[] };
+      try {
+        await operator.query('RESET ROLE');
+        auditLog = await operator.query(
+          'SELECT id, workspace_id, scope, target_id, completed_at FROM deletion_requests WHERE id = $1',
+          [requestId],
+        );
+        users = await operator.query('SELECT id FROM users WHERE id = $1', [a.userId]);
+      } finally {
+        await operator.query('SET ROLE meetyou_app');
+        operator.release();
+      }
+      expect(users.rows).toEqual([]);
 
-      expect(auditLog.rows.length).toBe(1);
-      expect(auditLog.rows[0].scope).toBe('account');
-      expect(auditLog.rows[0].target_id).toBe(a.userId);
-      expect(auditLog.rows[0].completed_at).not.toBeNull();
-      // workspace_id set to null on cascade (ON DELETE SET NULL)
-      expect(auditLog.rows[0].workspace_id).toBeNull();
+      expect(auditLog.rows).toEqual([
+        expect.objectContaining({
+          scope: 'account',
+          target_id: a.userId,
+          completed_at: expect.anything() as unknown,
+          // ON DELETE SET NULL: the audit row outlives the workspace.
+          workspace_id: null,
+        }),
+      ]);
     });
   });
 });
-

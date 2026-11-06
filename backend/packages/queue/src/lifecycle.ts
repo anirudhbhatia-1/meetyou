@@ -1,5 +1,6 @@
 import { newUlid } from '@meetyou/contracts';
 import type { Db, WorkspaceTx } from '@meetyou/db';
+import { sql } from 'kysely';
 import { z } from 'zod';
 
 import { enqueue } from './enqueue.ts';
@@ -228,12 +229,10 @@ export function meetingDeleteTask(deps: {
     }
 
     // 1. Delete associated files from object storage (audio chunks, finalized video, etc.)
+    // A storage failure fails the job (it retries): deleting the rows first would orphan the
+    // recording objects with nothing left pointing at them. Deleting is idempotent.
     if (deps.storage?.deleteMeetingFiles) {
-      try {
-        await deps.storage.deleteMeetingFiles(workspaceId, meetingId);
-      } catch (err) {
-        helpers.logger.warn(`meeting.delete: storage cleanup error: ${String(err)}`);
-      }
+      await deps.storage.deleteMeetingFiles(workspaceId, meetingId);
     }
 
     // 2. Permanently delete meeting row (cascades all related database child rows)
@@ -287,14 +286,9 @@ export function accountDeleteTask(deps: {
       tx.selectFrom('meetings').select('id').execute(),
     );
 
+    // As for one meeting: fail and retry rather than delete rows over surviving objects.
     for (const mtg of meetings) {
-      if (deps.storage?.deleteMeetingFiles) {
-        try {
-          await deps.storage.deleteMeetingFiles(workspaceId, mtg.id);
-        } catch {
-          // Continue deleting remaining files
-        }
-      }
+      await deps.storage?.deleteMeetingFiles?.(workspaceId, mtg.id);
     }
 
     // 2. Mark request completed in audit log before deleting workspace
@@ -310,6 +304,9 @@ export function accountDeleteTask(deps: {
         .where('id', '=', requestId)
         .execute();
 
+      // The users policy matches on app.user_id, which inWorkspace does not set: without it the
+      // user row is silently kept. Refresh tokens go with it (ON DELETE CASCADE).
+      await sql`select set_config('app.user_id', ${userId}, true)`.execute(tx);
       await tx.deleteFrom('meetings').execute();
       await tx.deleteFrom('userSettings').where('userId', '=', userId).execute();
       await tx.deleteFrom('memberships').where('userId', '=', userId).execute();
@@ -355,8 +352,7 @@ export function retentionSweepTask(deps: {
           'audioAssets.meetingId',
           'meetings.status as meetingStatus',
         ])
-        .where('audioAssets.deleteAfter', '<=', now)
-        .where('audioAssets.storageKey', 'is not', null);
+        .where('audioAssets.deleteAfter', '<=', now);
 
       if (meetingId) {
         audioQuery = audioQuery.where('audioAssets.meetingId', '=', meetingId);
@@ -377,11 +373,8 @@ export function retentionSweepTask(deps: {
           if (item.storageKey && deps.storage?.deleteAudioFile) {
             await deps.storage.deleteAudioFile(item.storageKey);
           }
-          await tx
-            .updateTable('audioAssets')
-            .set({ storageKey: null, updatedAt: now })
-            .where('id', '=', item.assetId)
-            .execute();
+          // audio_assets.storage_key is NOT NULL: the row goes with the object (0001_init.sql).
+          await tx.deleteFrom('audioAssets').where('id', '=', item.assetId).execute();
         }
         audioDeletedCount++;
       }
@@ -424,4 +417,3 @@ export function retentionSweepTask(deps: {
     );
   });
 }
-

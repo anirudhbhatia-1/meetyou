@@ -5,7 +5,7 @@ import type { ActionItemRow, LibraryApi, MeetingFilter } from './types.ts';
 
 /**
  * In-memory API for building the UI before the real endpoints exist (S4-01; "mocks over waiting",
- * IMPLEMENTATION_PLAN §2). Same shapes as `shared/contracts`. TODO(S4-14): HTTP client for S2-09.
+ * IMPLEMENTATION_PLAN §2). Same shapes as `shared/contracts`. `http.ts` is the real client.
  */
 export function createMockApi(options: { latencyMs?: number } = {}): LibraryApi {
   const latency = options.latencyMs ?? 250;
@@ -72,5 +72,9 @@ export function createMockApi(options: { latencyMs?: number } = {}): LibraryApi 
       }
       return wait(undefined);
     },
+    // Fixtures have no video file to play; the player shows only against the real API.
+    getVideo: () => wait(null),
+    signOut: () => wait(undefined),
+    deleteAccount: () => wait(undefined),
   };
 }

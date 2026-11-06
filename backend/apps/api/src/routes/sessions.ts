@@ -214,8 +214,9 @@ export const sessionsRoutes: FastifyPluginAsync<SessionsRoutesOptions> = async (
         throw new NotFoundError(`Session ${sessionId} not found`);
       }
 
+      // RecoverSessionResponse (shared/contracts api.ts): an ended session is closed for good.
       if (meeting.endedAt !== null) {
-        throw new BadRequestError(`Session ${sessionId} has already ended`);
+        return reply.send({ state: 'ended', meetingId: meeting.id });
       }
 
       const streamToken = await tokens.issueStreamToken({
@@ -225,6 +226,7 @@ export const sessionsRoutes: FastifyPluginAsync<SessionsRoutesOptions> = async (
       });
 
       return reply.send({
+        state: 'resumable',
         sessionId,
         meetingId: meeting.id,
         streamUrl: config.gatewayWsUrl,

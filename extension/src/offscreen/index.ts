@@ -1,18 +1,21 @@
 import type { ServerMessage } from '@meetyou/contracts';
 
-import { AUDIO_CODEC, GATEWAY_URL } from '../build-config.ts';
+import { apiSessionSource, signApiVideoFragments } from '../api-client.ts';
+import { API_URL, AUDIO_CODEC, GATEWAY_URL } from '../build-config.ts';
 import {
+  parseAccessTokenReply,
   parseOffscreenMessage,
   type BackgroundMessage,
   type CaptureStartResult,
   type CaptureStatusReply,
   type CaptureStopReply,
   type SidePanelMessage,
+  type StartedSession,
 } from '../messages.ts';
 import { CaptureStartError } from './capture.ts';
-import { putFragment, signDevVideoFragments } from './dev-gateway.ts';
+import { devSessionSource, putFragment, signDevVideoFragments } from './dev-gateway.ts';
 import { openMinutesDb } from './idb.ts';
-import { startRecorder, type Recorder } from './recorder.ts';
+import { startRecorder, type Recorder, type SessionSource } from './recorder.ts';
 import {
   IdbFragmentQueue,
   pruneStaleFragments,
@@ -82,19 +85,45 @@ function forwardTranscript(message: ServerMessage): void {
   }
 }
 
+/** The service worker owns sign-in and token refresh; this document only borrows access tokens. */
+async function apiAccessToken(): Promise<string> {
+  const reply = parseAccessTokenReply(
+    await chrome.runtime.sendMessage({ target: 'background', type: 'auth.token' }),
+  );
+  if (reply.token === null) throw new Error('signed out');
+  return reply.token;
+}
+
+/** Cloud mode streams to the API's session; otherwise the dev gateway, or nothing. */
+function sessionSource(session: StartedSession | undefined): SessionSource | null {
+  if (API_URL !== '') {
+    return session === undefined ? null : apiSessionSource(API_URL, session, apiAccessToken);
+  }
+  return GATEWAY_URL === '' ? null : devSessionSource(GATEWAY_URL, logError);
+}
+
 /**
  * One uploader for the document's lifetime: it outlives each recording, so video keeps uploading
  * after the meeting ends and leftovers of earlier recordings resume (ADR-0011 §3.3). Only gateway
  * sessions (`ses_…`) upload; `local_…` recordings were made without one.
  */
 function videoUploader(): Promise<VideoUploader | null> {
-  if (GATEWAY_URL === '') return Promise.resolve(null);
+  if (API_URL === '' && GATEWAY_URL === '') return Promise.resolve(null);
   uploader ??= openMinutesDb().then(
     (db) =>
       new VideoUploader({
         queue: new IdbFragmentQueue(db),
-        sign: (sessionId, partId, indices, contentType) =>
-          signDevVideoFragments(GATEWAY_URL, sessionId, partId, indices, contentType),
+        sign: async (sessionId, partId, indices, contentType) =>
+          API_URL !== ''
+            ? signApiVideoFragments(
+                API_URL,
+                await apiAccessToken(),
+                sessionId,
+                partId,
+                indices,
+                contentType,
+              )
+            : signDevVideoFragments(GATEWAY_URL, sessionId, partId, indices, contentType),
         put: putFragment,
         canUpload: () =>
           (recorder === null || recorder.audioClear()) &&
@@ -160,7 +189,11 @@ async function onVideoFragment(): Promise<void> {
   reportUpload({ pending: await current.pending(), uploaded: current.uploaded });
 }
 
-async function start(streamId: string, recordVideo: boolean): Promise<CaptureStartResult> {
+async function start(
+  streamId: string,
+  recordVideo: boolean,
+  session: StartedSession | undefined,
+): Promise<CaptureStartResult> {
   if (recorder !== null) {
     const previous = recorder;
     recorder = null;
@@ -170,7 +203,7 @@ async function start(streamId: string, recordVideo: boolean): Promise<CaptureSta
     recorder = await startRecorder({
       streamId,
       recordVideo,
-      gatewayUrl: GATEWAY_URL,
+      session: sessionSource(session),
       preferredCodec: AUDIO_CODEC,
       workletUrl: chrome.runtime.getURL('offscreen/pcm-worklet.js'),
       events: {
@@ -239,7 +272,7 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
 
   switch (parsed.type) {
     case 'capture.start':
-      return reply(start(parsed.streamId, parsed.recordVideo));
+      return reply(start(parsed.streamId, parsed.recordVideo, parsed.session));
     case 'capture.stop':
       return reply(stop());
     case 'capture.pause':

@@ -206,11 +206,11 @@ console.log(JSON.stringify([await generateSigningJwk('stg-2026-11')]));
 2. Credentials → OAuth client ID → **Web application** (the extension uses
    `chrome.identity.launchWebAuthFlow`, which needs a web client with an explicit redirect):
    - Authorized redirect URI: `https://<extension-id>.chromiumapp.org/oauth2`
-   - Later (S4-09): the web app's callback URL.
+   - And the web app's callback: `https://<web host>/auth/callback` (§9.2).
 3. Client ID → API environment `GOOGLE_CLIENT_ID` (and the extension build, it is public).
    Client secret → `meetyou-staging-google-oauth-client-secret`.
 4. The API passes `allowedRedirectUris` exactly; anything else is refused before calling Google.
-5. The extension needs the `identity` permission back in its manifest (S4-03, Anirudh).
+5. The extension has the `identity` permission and signs in from the side panel (§9.2).
 
 ## 8. Container images
 
@@ -268,10 +268,10 @@ Dev endpoints are **off** outside `local`/`ci`; sessions come from the API.
 | `DATABASE_URL` | secret |
 | `AUTH_SIGNING_JWKS` | secret |
 | `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` | §7.2 |
-| `GOOGLE_REDIRECT_URIS` | `https://<extension-id>.chromiumapp.org/oauth2` (comma list) |
-| `ALLOWED_ORIGINS` | `chrome-extension://<extension-id>` (+ web app origin later) |
+| `ALLOWED_REDIRECT_URIS` | `https://<extension-id>.chromiumapp.org/oauth2,https://<web host>/auth/callback` (comma list) |
+| `CORS_ALLOWED_ORIGINS` | extra origins only; `chrome-extension://*` is built in, and the web app needs none (its server proxies `/v1`) |
 | `GCS_AUDIO_BUCKET` | as above (signed video PUT/GET URLs) |
-| `GATEWAY_URL` | `wss://<gateway host>/v1/stream` (returned by `POST /sessions`) |
+| `GATEWAY_WS_URL` | `wss://<gateway host>/v1/stream` (returned by `POST /sessions`) |
 What the API must do, using what already exists:
 - Startup: `Db.assertRowSecurityEnforced()`.
 - `POST /v1/auth/google` → `AuthService.signIn`; `POST /v1/auth/refresh`, `/logout` → `AuthService`.
@@ -335,6 +335,134 @@ delete the instance) and check the client resumes with no loss; restart the work
 `video.finalize` and check it completes exactly once; record 60 minutes and check video ↔
 transcript sync within ±0.5 s.
 
+### 9.2 Sign-in, the library web app and cloud recording (ready since 2026-11-06)
+
+What this turns on: the extension signs in with Google (`launchWebAuthFlow` + PKCE), starts each
+recording with `POST /v1/sessions`, streams to the gateway with the API's stream token, and uploads
+video to API-signed URLs; the worker finalizes `video/playback.mp4`; the web app
+(`meetyou-staging-web`) signs in with the same Google client and plays the video on the meeting's
+Transcript tab, with click-to-seek from transcript lines.
+
+The web app is one Cloud Run service: `web/server/server.ts` serves the Vite build and proxies
+`/v1/*` to the API, so the API's `minutes_rt` refresh cookie (`HttpOnly; Secure; SameSite=Lax`,
+path `/v1/auth`) is first-party and the page needs no CORS. The browser keeps only the 15-minute
+access token, in memory. Auth calls must send `X-Minutes-Client: web` (CSRF guard).
+
+1. **Images** (Cloud Shell, repo at the pushed commit):
+   ```bash
+   cd ~/meetyou && git fetch origin main && git checkout --detach FETCH_HEAD
+   TAG=$(git rev-parse --short HEAD)
+   REPO=asia-south1-docker.pkg.dev/<STAGING_PROJECT_ID>/meetyou
+   docker build -f Dockerfile.api -t $REPO/api:$TAG . && docker push $REPO/api:$TAG
+   docker build -f Dockerfile.web -t $REPO/web:$TAG . && docker push $REPO/web:$TAG
+   ```
+2. **API signing permissions** (signed URLs on Cloud Run use the IAM `signBlob` API, no key file;
+   `infra/modules/cloud-run/api.tf` already declares both grants — this only checks them):
+   ```bash
+   gcloud services enable iamcredentials.googleapis.com
+   API_SA=$(gcloud run services describe meetyou-staging-api --region asia-south1 --format='value(spec.template.spec.serviceAccountName)')
+   gcloud iam service-accounts get-iam-policy $API_SA --format=json | grep -A3 serviceAccountTokenCreator
+   gcloud storage buckets get-iam-policy gs://<GCS_AUDIO_BUCKET> --format=json | grep -B2 -A3 $API_SA
+   ```
+3. **API revision** (`--update-env-vars` keeps the other variables; `^@^` makes `@` the separator
+   because the redirect list contains a comma):
+   ```bash
+   gcloud run services update meetyou-staging-api --region asia-south1 --image $REPO/api:$TAG \
+     --update-env-vars "^@^GCS_AUDIO_BUCKET=<bucket>@GATEWAY_WS_URL=wss://<gateway host>/v1/stream@ALLOWED_REDIRECT_URIS=https://<extension-id>.chromiumapp.org/oauth2,https://<web host>/auth/callback"
+   ```
+   `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `AUTH_SIGNING_JWKS` and `DATABASE_URL` must already
+   be set (`gcloud run services describe … --format=yaml(spec.template.spec.containers[0].env)`
+   lists names; secrets show as references).
+4. **Web service** (public; no secrets — the Google client ID is public):
+   ```bash
+   gcloud run deploy meetyou-staging-web --region asia-south1 --image $REPO/web:$TAG \
+     --allow-unauthenticated --min-instances 0 --max-instances 2 --memory 256Mi \
+     --set-env-vars "API_URL=https://<api host>,GOOGLE_CLIENT_ID=<client id>"
+   ```
+   Its URL is the `<web host>` above (`https://meetyou-staging-web-<hash>-el.a.run.app`; the hash is
+   the same as the other services'). If it differs, redo step 3 with the printed URL.
+5. **Google OAuth client** (Console → APIs & Services → Credentials → the web client): Authorized
+   redirect URIs = `https://<extension-id>.chromiumapp.org/oauth2` **and**
+   `https://<web host>/auth/callback`. Google can take a few minutes to apply it.
+6. **Extension**: `pnpm --filter @meetyou/extension build:staging` (API, client ID and web URL are
+   in `extension/package.json`), load `extension/dist` unpacked, open the side panel on a Meet tab →
+   **Continue with Google** → Start.
+7. **Checks**: `curl -s https://<web host>/healthz` → `ok`; `curl -s https://<web host>/config.json`
+   → the client ID; sign in on the web app; record a short call with only us two, stop, wait for
+   "video.finalized" in the worker logs, then open the meeting → Transcript: the player plays and a
+   click on a transcript line seeks to it.
+
+Not in the web app yet (shown as empty states, `TODO`s in `web/src/api/http.ts`): summaries,
+participants and action items (S3-08), server search (S3-09), audio playback without video
+(S4-17).
+
+### 9.3 Lifecycle jobs, observability and CI/CD (ready since 2026-11-06)
+
+**Lifecycle (S2-10).** The worker now runs `meeting.delete` (10 s after `DELETE /v1/meetings/{id}`
+unless restored), `account.delete` (`POST /v1/account:delete`, web Settings → Privacy & data) and
+`retention.sweep` (scheduled by `video.finalize` at the video's `delete_after`; it deletes
+`playback.mp4` + `poster.jpg` and marks the row `expired`). A storage failure fails the job so it
+retries instead of leaving objects behind. Audio chunks have no `audio_assets` rows yet: they are
+covered by the bucket's 31-day lifecycle rule until the S3 pipeline writes the rows after the
+summary (D-02: audio is never deleted while processing or after a failure). Nothing to configure:
+the next worker image picks them up.
+
+**Observability (S2-11).** Every service logs one JSON line per event through `@meetyou/log`
+(`severity`, `message` = event, IDs/counts/codes only; other fields are dropped and counted). The
+API's Fastify logs use the same `severity`/`message` keys and log paths without query strings. The
+worker logs `queue.depth` every minute. `infra/modules/monitoring` turns these into log-based
+metrics (audio loss, STT errors, reconnects, sessions, dead-lettered jobs by task, ERROR lines by
+service, queue depth), six alert policies (audio loss, STT errors, job failed for good — includes
+retention and deletion jobs —, error spike, queue backlog, API 5xx) and a "Minutes staging"
+dashboard. It only adds resources, so it can be applied on its own even before the rest of the
+live config is codified:
+```bash
+cd ~/meetyou/infra/environments/staging
+# terraform.tfvars: alert_emails = ["you@example.com"]
+terraform init && terraform plan -target=module.monitoring
+terraform apply -target=module.monitoring
+```
+Not done yet: OpenTelemetry tracing (needs new dependencies, awaiting approval); spend anomalies
+(use a Billing budget alert, §11); summary latency (S3).
+
+**CI/CD (S2-12).** `.github/workflows/deploy-staging.yml` runs after every green `CI` run on
+`main` (or by hand): build and push `api gateway worker web migrate smoke` tagged with the commit,
+run the migrate job, update `worker → api → gateway → web` (image only: env and secrets stay), then
+run the smoke job. GitHub reaches Google Cloud through Workload Identity Federation — no key file.
+The smoke job (`backend/apps/smoke`, `Dockerfile.smoke`) signs in a synthetic account
+(`smoke-test@minutes.invalid`) through the same bootstrap function, mints a token with the API's
+signing key, starts a session on the API, streams espeak-ng speech through the gateway, checks
+every frame was acked, reads the segments back through the API and deletes the meeting (about
+20 s of Deepgram per lane per deploy). The same flow runs locally in `smoke.test.ts` against the
+real gateway and API with scripted STT.
+
+One-time setup:
+1. Identity (adds a pool, a provider and the deployer account only):
+   ```bash
+   cd ~/meetyou/infra/environments/staging
+   terraform apply -target=module.ci
+   terraform output github_wif_provider github_deploy_service_account
+   ```
+2. GitHub → repository → Settings → Secrets and variables → Actions → **Variables**:
+   `GCP_PROJECT_ID` = the project ID, `GCP_WIF_PROVIDER` and `GCP_DEPLOY_SA` = the two outputs.
+   (Variables, not secrets: none of these is secret.)
+3. The smoke job, once (the workflow later only changes its image). Copy the VPC connector and the
+   `DATABASE_URL` secret name from the API service:
+   ```bash
+   gcloud run services describe meetyou-staging-api --region asia-south1 \
+     --format='yaml(spec.template.metadata.annotations,spec.template.spec.serviceAccountName,spec.template.spec.containers[0].env)'
+   gcloud run jobs create meetyou-staging-smoke --region asia-south1 \
+     --image $REPO/smoke:$TAG --service-account <api service account> \
+     --vpc-connector <connector> --vpc-egress private-ranges-only \
+     --set-secrets DATABASE_URL=<database-url secret>:latest,AUTH_SIGNING_JWKS=meetyou-staging-auth-signing-jwks:latest \
+     --set-env-vars API_URL=https://<api host>,SMOKE_ORIGIN=chrome-extension://<extension-id> \
+     --task-timeout 300s --max-retries 0
+   gcloud run jobs execute meetyou-staging-smoke --region asia-south1 --wait
+   gcloud logging read 'resource.labels.job_name="meetyou-staging-smoke" AND jsonPayload.message=~"^smoke\."' --limit 5 --format='value(jsonPayload)'
+   ```
+   `smoke.passed` with `segments` > 0 and `acked: true` means the whole path works.
+4. The migrate job and all four services must exist before the first run (§9.1, §9.2).
+
 ## 10. Deploy order and checks
 
 First time:
@@ -345,7 +473,7 @@ First time:
 4. Gateway (after its staging mode lands): set `STREAM_TOKEN_JWKS` from step 3; check
    `curl https://<gateway>/healthz`.
 5. Worker: logs show it started and installed the queue schema.
-6. Extension: build with the staging URLs (Anirudh adds the build variables in S4-14), sign in,
+6. Extension: `build:staging` (§9.2), sign in,
    record a short **test call with only us two**, then check: rows in `meetings`,
    `transcript_segments`, `usage_records`; audio chunks under `ws/<workspace>/meetings/<meeting>/`
    in the bucket; after the call `video/playback.mp4` and a `video_assets` row with `ready`.

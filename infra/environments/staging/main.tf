@@ -35,6 +35,10 @@ locals {
     "compute.googleapis.com",              # Compute Engine API for VPC networks
     "artifactregistry.googleapis.com",     # Artifact Registry for container images
     "redis.googleapis.com",                # Memorystore for Redis (Gateway sessions)
+    "logging.googleapis.com",              # Log-based metrics (S2-11)
+    "monitoring.googleapis.com",           # Alert policies and dashboards (S2-11)
+    "iamcredentials.googleapis.com",       # signBlob for V4 signed URLs on Cloud Run (S2-14)
+    "sts.googleapis.com",                  # Workload Identity Federation for GitHub Actions (S2-12)
   ]
 }
 
@@ -132,4 +136,25 @@ resource "google_redis_instance" "session_redis" {
     google_project_service.enabled_services,
     module.vpc.private_vpc_connection
   ]
+}
+
+# Observability (S2-11): log-based metrics, alerts and the dashboard. Safe to apply on its own:
+#   terraform apply -target=module.monitoring
+module "monitoring" {
+  source       = "../../modules/monitoring"
+  project_id   = var.project_id
+  environment  = "staging"
+  alert_emails = var.alert_emails
+
+  depends_on = [google_project_service.enabled_services]
+}
+
+# CI/CD identity (S2-12): GitHub Actions deploys keylessly. Apply on its own:
+#   terraform apply -target=module.ci
+module "ci" {
+  source      = "../../modules/ci"
+  project_id  = var.project_id
+  environment = "staging"
+
+  depends_on = [google_project_service.enabled_services]
 }

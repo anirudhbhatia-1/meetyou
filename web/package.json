@@ -3,13 +3,14 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "Library web app (D-07): Home, Meetings, Meeting detail, Action items, Settings. React + Vite; mock API until S2-09 (S4-01, S4-02, S4-09).",
+  "description": "Library web app (D-07): Home, Meetings, Meeting detail, Action items, Settings. React + Vite; real API through web/server (sign-in, meetings, transcript, video); mock API in Vite dev (S4-01, S4-02, S4-09).",
   "scripts": {
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
     "typecheck": "tsc -p tsconfig.json",
-    "test": "vitest run"
+    "test": "vitest run",
+    "start": "node server/server.ts"
   },
   "dependencies": {
     "@meetyou/contracts": "workspace:*",

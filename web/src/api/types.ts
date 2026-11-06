@@ -1,6 +1,12 @@
-import type { Meeting, Note, Segment, SummaryItem } from '@meetyou/contracts';
+import type {
+  Meeting,
+  Note,
+  Segment,
+  SummaryItem,
+  VideoPlaybackResponse,
+} from '@meetyou/contracts';
 
-export type { Meeting, Note, Segment, SummaryItem };
+export type { Meeting, Note, Segment, SummaryItem, VideoPlaybackResponse };
 
 export interface Participant {
   id: string;
@@ -45,4 +51,13 @@ export interface LibraryApi {
   getParticipants(id: string): Promise<Participant[]>;
   listActionItems(status: 'open' | 'done' | 'all'): Promise<ActionItemRow[]>;
   setActionItemStatus(id: string, status: 'open' | 'done'): Promise<void>;
+  /** Signed playback URL of the finalized video (DESIGN §6.19); null until it is ready. */
+  getVideo(
+    meetingId: string,
+    options?: { download?: boolean },
+  ): Promise<VideoPlaybackResponse | null>;
+  /** Ends the web session (clears the refresh cookie). */
+  signOut(): Promise<void>;
+  /** FR-SET-03: deletes the account and every meeting (asynchronously, on the server). */
+  deleteAccount(): Promise<void>;
 }

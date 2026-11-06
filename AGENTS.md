@@ -139,7 +139,7 @@ shared/hinglish        Hinglish canonical spelling list, Devanagari→Roman, dis
 shared/fixtures        (S2-13) synthetic meeting script, recorded gateway sessions + replayer, TTS audio script
 tools/stt-benchmark    ✅ STT benchmark: runner, streaming harness, normalizer, scorer
 extension/             (Stage 1) Chrome MV3: service worker, offscreen document, side panel (React), Meet adapter (esbuild)
-web/                   (S4) library web app, React + Vite, mock API until S2-09
+web/                   (S4) library web app, React + Vite; web/server proxies /v1 to the API (mock in Vite dev)
 backend/apps/gateway   (S1-05) realtime gateway, local dev
 backend/packages/db    (S2-01) Postgres schema, migrations, workspace-scoped access (Kysely)
 backend/packages/auth  (S2-02) Google sign-in, JWT access/stream tokens, rotating refresh tokens
@@ -148,7 +148,9 @@ backend/packages/queue (S2-06) graphile-worker: transactional enqueue, worker, d
 backend/packages/video (S2-14) video.finalize: ffmpeg join/remux/gap fill/poster, queue task
 backend/packages/storage Cloud Storage: bucket interface, object layout, video store, V4 signed URLs
 backend/apps/api       (S2-08, Gaurav) Fastify REST API
-backend/apps/worker    (S2-06) background worker: queue jobs (video.finalize), health endpoint
+backend/apps/worker    (S2-06) background worker: video.finalize, meeting/account delete, retention sweep, queue depth
+backend/apps/smoke     (S2-12) staging smoke job: synthetic speech through gateway → segments via API
+backend/packages/log   (S2-11) content-free structured logs (field allow-list, Cloud Logging severity)
 docs/                  PRD, features, architecture, design, plan, research, ADRs, benchmark kit, legal drafts,
                        STAGING_SETUP.md (step-by-step cloud setup runbook)
 ```

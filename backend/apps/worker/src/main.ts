@@ -1,6 +1,7 @@
 import process from 'node:process';
 
 import { createPgPool } from '@meetyou/db';
+import { createLogger } from '@meetyou/log';
 import { GcsBucket } from '@meetyou/storage';
 
 import { loadWorkerEnv } from './config.ts';
@@ -25,6 +26,6 @@ const worker = await runWorker({
   port: env.PORT,
   concurrency: env.WORKER_CONCURRENCY,
 });
-console.log(JSON.stringify({ event: 'worker.started', appEnv: env.APP_ENV, port: env.PORT }));
+createLogger('worker').log('worker.started', { appEnv: env.APP_ENV, port: env.PORT });
 await worker.runner.promise;
 await worker.stop();

@@ -40,7 +40,11 @@ export type CaptureError =
   | 'no_active_tab'
   | 'capture_not_allowed'
   | 'offscreen_failed'
-  | 'capture_lost';
+  | 'capture_lost'
+  /** Cloud mode: no account on this browser, or the session expired (DESIGN §9). */
+  | 'signed_out'
+  /** Cloud mode: the API did not start the session (network or server). */
+  | 'server_unreachable';
 
 export interface CaptureState {
   status: CaptureStatus;
@@ -233,6 +237,8 @@ const ERRORS = new Set<string>([
   'capture_not_allowed',
   'offscreen_failed',
   'capture_lost',
+  'signed_out',
+  'server_unreachable',
 ]);
 const LINKS = new Set<string>(['off', 'connecting', 'online', 'reconnecting']);
 const VIDEO = new Set<string>(['off', 'recording', 'unsupported', 'failed']);

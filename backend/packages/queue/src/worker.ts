@@ -19,6 +19,11 @@ export interface WorkerOptions {
   /** Tests and embedded use; Cloud Run workers keep graceful SIGTERM handling (ADR-0005 §3.2). */
   handleSignals?: boolean;
   pollIntervalMs?: number;
+  /**
+   * Tests on PGlite (one shared session behind pglite-socket): named prepared statements from two
+   * connections collide there ("already exists"). Real Postgres keeps them.
+   */
+  noPreparedStatements?: boolean;
   /** Alert hook after a job used all its attempts (it is already recorded in `failed_jobs`). */
   onPermanentFailure?: (failure: { task: string; jobId: string; errorCode: string }) => void;
 }
@@ -73,6 +78,7 @@ export async function startWorker(options: WorkerOptions): Promise<Runner> {
     concurrency: options.concurrency ?? 4,
     noHandleSignals: options.handleSignals === false,
     pollInterval: options.pollIntervalMs ?? 2_000,
+    noPreparedStatements: options.noPreparedStatements === true,
     ...(options.crontab !== undefined ? { crontab: options.crontab } : {}),
   });
   runner.events.on('job:failed', ({ job, error }) => {

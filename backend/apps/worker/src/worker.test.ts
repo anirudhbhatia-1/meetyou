@@ -13,7 +13,7 @@ import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { loadWorkerEnv } from './config.ts';
-import { runWorker, type RunningWorker } from './worker.ts';
+import { bucketCleanup, queueDepth, runWorker, workerTasks, type RunningWorker } from './worker.ts';
 
 const PART = 'vp_01J00000000000000000000PRT';
 
@@ -26,6 +26,39 @@ describe('worker configuration', () => {
     expect(
       loadWorkerEnv({ DATABASE_URL: 'postgres://x', GCS_AUDIO_BUCKET: 'bucket', PORT: '9000' }),
     ).toMatchObject({ PORT: 9000, WORKER_CONCURRENCY: 2, APP_ENV: 'local' });
+  });
+});
+
+describe('lifecycle jobs (S2-10)', () => {
+  it('runs finalize, deletion and retention tasks', () => {
+    const names = workerTasks({ db: {} as never, bucket: new MemoryBucket() }).map((t) => t.name);
+    expect(names).toEqual([
+      'video.finalize',
+      'meeting.delete',
+      'account.delete',
+      'retention.sweep',
+    ]);
+  });
+
+  it('deletes a whole meeting, or one video file with its poster, and nothing else', async () => {
+    const bucket = new MemoryBucket();
+    const keep = 'ws/w/meetings/other/audio/me/0000000000.ogg';
+    const keys = [
+      'ws/w/meetings/m1/audio/me/0000000000.ogg',
+      'ws/w/meetings/m1/video/playback.mp4',
+      'ws/w/meetings/m1/video/poster.jpg',
+      keep,
+    ];
+    for (const key of keys) await bucket.save(key, new Uint8Array([1]), 'application/octet-stream');
+    const cleanup = bucketCleanup(bucket);
+
+    await cleanup.deleteVideoFile?.('ws/w/meetings/m1/video/playback.mp4');
+    expect([...bucket.objects.keys()]).toEqual([keys[0], keep]);
+
+    await cleanup.deleteMeetingFiles?.('w', 'm1');
+    expect([...bucket.objects.keys()]).toEqual([keep]);
+    // Idempotent: a retry finds nothing left and does not fail.
+    await cleanup.deleteMeetingFiles?.('w', 'm1');
   });
 });
 
@@ -102,6 +135,7 @@ describe.runIf(hasFfmpeg())('worker runs video.finalize from the queue (S2-06, S
       host: '127.0.0.1',
       handleSignals: false,
       pollIntervalMs: 100,
+      noPreparedStatements: true,
     });
     const { port } = worker.health.address() as AddressInfo;
     expect((await fetch(`http://127.0.0.1:${port}/healthz`)).status).toBe(200);
@@ -125,7 +159,12 @@ describe.runIf(hasFfmpeg())('worker runs video.finalize from the queue (S2-06, S
       `ws/${workspaceId}/meetings/${meetingId}/video/playback.mp4`,
       `ws/${workspaceId}/meetings/${meetingId}/video/poster.jpg`,
     ]);
-    const jobs = await env.pool.query('select count(*)::int as n from graphile_worker.jobs');
-    expect(jobs.rows[0]).toEqual({ n: 0 });
+    // Finalize ran once and is gone; only the retention sweep waits for the video's expiry.
+    const jobs = await env.pool.query<{ task_identifier: string }>(
+      'select task_identifier from graphile_worker.jobs',
+    );
+    expect(jobs.rows).toEqual([{ task_identifier: 'retention.sweep' }]);
+    // The sweep is days away: nothing is due, so the backlog metric reads 0.
+    expect(await queueDepth(env.pool)).toEqual({ count: 0, oldestMs: 0 });
   }, 120_000);
 });

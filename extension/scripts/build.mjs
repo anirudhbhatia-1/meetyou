@@ -10,6 +10,13 @@ import { build } from 'esbuild';
 const gatewayUrl = process.env.MINUTES_GATEWAY_URL ?? '';
 // MINUTES_AUDIO_CODEC=pcm16 turns off Opus transport (ADR-0003), e.g. to compare CPU in S1-11.
 const audioCodec = process.env.MINUTES_AUDIO_CODEC === 'pcm16' ? 'pcm16' : 'opus';
+// Cloud mode (staging/production): the API, its Google OAuth client ID and the library web app.
+const apiUrl = process.env.MINUTES_API_URL ?? '';
+const googleClientId = process.env.MINUTES_GOOGLE_CLIENT_ID ?? '';
+const webUrl = process.env.MINUTES_WEB_URL ?? '';
+if (apiUrl !== '' && googleClientId === '') {
+  throw new Error('MINUTES_GOOGLE_CLIENT_ID is required with MINUTES_API_URL');
+}
 
 await rm('dist', { force: true, recursive: true });
 
@@ -30,6 +37,9 @@ const common = {
     'process.env.NODE_ENV': JSON.stringify('production'),
     __GATEWAY_URL__: JSON.stringify(gatewayUrl),
     __AUDIO_CODEC__: JSON.stringify(audioCodec),
+    __API_URL__: JSON.stringify(apiUrl),
+    __GOOGLE_CLIENT_ID__: JSON.stringify(googleClientId),
+    __WEB_URL__: JSON.stringify(webUrl),
   },
 };
 
@@ -52,5 +62,5 @@ await build({
 
 await cp('public', 'dist', { recursive: true });
 console.log(
-  `extension built to dist/ (gateway: ${gatewayUrl === '' ? 'off' : gatewayUrl}, codec: ${audioCodec})`,
+  `extension built to dist/ (api: ${apiUrl === '' ? 'off' : apiUrl}, gateway: ${gatewayUrl === '' ? 'off' : gatewayUrl}, codec: ${audioCodec})`,
 );

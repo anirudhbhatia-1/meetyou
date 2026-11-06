@@ -33,10 +33,38 @@ export type BackgroundMessage =
   | { target: 'background'; type: 'prompt.start-recording' }
   | { target: 'background'; type: 'prompt.open-sidepanel' }
   /** Click on the Meet recording pill (DESIGN §8.4). */
-  | { target: 'background'; type: 'pill.open-sidepanel' };
+  | { target: 'background'; type: 'pill.open-sidepanel' }
+  /** Cloud mode sign-in from the side panel; replies `AuthReply`. */
+  | { target: 'background'; type: 'auth.sign_in' }
+  | { target: 'background'; type: 'auth.sign_out' }
+  /** The offscreen document asks for an access token; replies `AccessTokenReply`. */
+  | { target: 'background'; type: 'auth.token' };
+
+export interface AuthReply {
+  ok: boolean;
+}
+
+export interface AccessTokenReply {
+  token: string | null;
+}
+
+/** A session the service worker started on the API, handed to the offscreen recorder. */
+export interface StartedSession {
+  sessionId: string;
+  meetingId: string;
+  streamUrl: string;
+  streamToken: string;
+}
 
 export type OffscreenMessage =
-  | { target: 'offscreen'; type: 'capture.start'; streamId: string; recordVideo: boolean }
+  | {
+      target: 'offscreen';
+      type: 'capture.start';
+      streamId: string;
+      recordVideo: boolean;
+      /** Cloud mode: the API session to stream to (absent with the dev gateway). */
+      session?: StartedSession;
+    }
   | { target: 'offscreen'; type: 'capture.stop' }
   | { target: 'offscreen'; type: 'capture.pause' }
   | { target: 'offscreen'; type: 'capture.resume' }
@@ -144,6 +172,9 @@ const SIMPLE_BACKGROUND = new Set<string>([
   'prompt.start-recording',
   'prompt.open-sidepanel',
   'pill.open-sidepanel',
+  'auth.sign_in',
+  'auth.sign_out',
+  'auth.token',
 ]);
 
 export function parseBackgroundMessage(message: unknown): BackgroundMessage | null {
@@ -183,11 +214,13 @@ export function parseOffscreenMessage(message: unknown): OffscreenMessage | null
     message.streamId.length > 0 &&
     typeof message.recordVideo === 'boolean'
   ) {
+    const session = parseStartedSession(message.session);
     return {
       target: 'offscreen',
       type: 'capture.start',
       streamId: message.streamId,
       recordVideo: message.recordVideo,
+      ...(session !== null ? { session } : {}),
     };
   }
   return null;
@@ -276,4 +309,25 @@ export function parseCaptureStartResult(value: unknown): CaptureStartResult | nu
 export function parseCaptureStatusReply(value: unknown): CaptureStatusReply | null {
   if (!isRecord(value) || typeof value.active !== 'boolean') return null;
   return { active: value.active, busy: value.busy === true };
+}
+
+function parseStartedSession(value: unknown): StartedSession | null {
+  if (!isRecord(value)) return null;
+  const { sessionId, meetingId, streamUrl, streamToken } = value;
+  if (
+    typeof sessionId !== 'string' ||
+    typeof meetingId !== 'string' ||
+    typeof streamUrl !== 'string' ||
+    !/^wss:\/\//.test(streamUrl) ||
+    typeof streamToken !== 'string'
+  ) {
+    return null;
+  }
+  return { sessionId, meetingId, streamUrl, streamToken };
+}
+
+export function parseAccessTokenReply(value: unknown): AccessTokenReply {
+  return isRecord(value) && typeof value.token === 'string'
+    ? { token: value.token }
+    : { token: null };
 }

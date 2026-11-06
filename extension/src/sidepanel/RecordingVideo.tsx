@@ -1,7 +1,8 @@
 import { Icon } from '@meetyou/ui';
 import { useEffect, useState } from 'react';
 
-import { GATEWAY_URL } from '../build-config.ts';
+import { API_URL, GATEWAY_URL, WEB_URL } from '../build-config.ts';
+import { LAST_RECORDING_KEY, parseLastRecording } from '../last-recording.ts';
 import { devVideoState } from '../offscreen/dev-gateway.ts';
 import { listLastVideo, revokeVideoLinks, type VideoLink } from './dev-video.ts';
 import { videoFilesFromState, type VideoFile } from './recording-video.ts';
@@ -21,6 +22,46 @@ type Loaded =
  * TODO(S4-17, S2-14): the library's meeting page plays the finalized MP4 (DESIGN §6.19, §12.5).
  */
 export function RecordingVideo({ sessionId, live }: { sessionId: string; live: boolean }) {
+  if (API_URL !== '') return <LibraryLink sessionId={sessionId} />;
+  return <DevRecordingVideo sessionId={sessionId} live={live} />;
+}
+
+/**
+ * Cloud mode: the video plays on the meeting's page in the library web app once the server has
+ * finalized it (DESIGN §12.5, ADR-0011 §3.4); the link carries only the meeting ID.
+ */
+function LibraryLink({ sessionId }: { sessionId: string }) {
+  const [meetingId, setMeetingId] = useState<string | null>(null);
+  useEffect(() => {
+    let current = true;
+    chrome.storage.local
+      .get(LAST_RECORDING_KEY)
+      .then((items) => {
+        const last = parseLastRecording(items[LAST_RECORDING_KEY]);
+        if (current && last?.sessionId === sessionId) setMeetingId(last.meetingId ?? null);
+      })
+      .catch((error: unknown) => console.error('sidepanel: read last recording failed', error));
+    return () => {
+      current = false;
+    };
+  }, [sessionId]);
+  if (meetingId === null || WEB_URL === '') return null;
+  const href = `${WEB_URL}/#/meetings/${encodeURIComponent(meetingId)}/transcript`;
+  return (
+    <div className="video-file">
+      <Icon name="video" size={14} />
+      <span className="video-file-label">
+        Transcript and video in your library
+        <span className="option-help"> · video appears a few minutes after upload</span>
+      </span>
+      <a className="btn btn-primary btn-sm" href={href} target="_blank" rel="noreferrer">
+        Open
+      </a>
+    </div>
+  );
+}
+
+function DevRecordingVideo({ sessionId, live }: { sessionId: string; live: boolean }) {
   const [loaded, setLoaded] = useState<Loaded>({ kind: 'loading' });
 
   useEffect(() => {

@@ -18,6 +18,7 @@ async function main() {
   if (config.databaseUrl) {
     const pool = createPgPool(config.databaseUrl);
     db = new Db(pool);
+    // Refuse a role that bypasses row-level security (ARCHITECTURE §11.3, STAGING_SETUP §6).
     await db.assertRowSecurityEnforced();
   }
 

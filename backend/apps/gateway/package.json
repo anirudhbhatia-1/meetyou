@@ -4,6 +4,11 @@
   "private": true,
   "type": "module",
   "description": "Realtime capture gateway (ARCHITECTURE \u00a76): WebSocket ingest, durable 10 s chunks, acks, live STT.",
+  "exports": {
+    "./server": "./src/server.ts",
+    "./chunk-store": "./src/chunk-store.ts",
+    "./record-fixture": "./src/record-fixture.ts"
+  },
   "scripts": {
     "typecheck": "tsc -p tsconfig.json",
     "test": "vitest run",
@@ -14,6 +19,7 @@
     "@meetyou/contracts": "workspace:*",
     "@meetyou/db": "workspace:*",
     "@meetyou/hinglish": "workspace:*",
+    "@meetyou/log": "workspace:*",
     "@meetyou/providers": "workspace:*",
     "@meetyou/queue": "workspace:*",
     "@meetyou/storage": "workspace:*",

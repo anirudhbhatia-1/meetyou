@@ -209,3 +209,4 @@ export const VideoPlaybackResponse = z.object({
   startMs: z.number().int().nonnegative(),
   durationMs: z.number().int().nonnegative(),
 });
+export type VideoPlaybackResponse = z.infer<typeof VideoPlaybackResponse>;

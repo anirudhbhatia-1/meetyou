@@ -1,5 +1,6 @@
 import { z } from 'zod';
 
+import type { SessionSource } from './recorder.ts';
 import { FragmentRejected, UploadRejected, type SignedFragment } from './video-uploader.ts';
 
 /**
@@ -50,6 +51,17 @@ export async function createDevSessionWithRetry(
     }
   }
   return null;
+}
+
+/** The dev gateway as the recorder's session source. */
+export function devSessionSource(
+  baseUrl: string,
+  onError: (context: string, error: unknown) => void,
+): SessionSource {
+  return {
+    open: () => createDevSessionWithRetry(baseUrl, onError),
+    token: (sessionId) => devStreamToken(baseUrl, sessionId),
+  };
 }
 
 export async function devStreamToken(baseUrl: string, sessionId: string): Promise<string> {

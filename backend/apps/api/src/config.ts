@@ -13,6 +13,8 @@ export interface ApiConfig {
   googleClientSecret?: string;
   allowedRedirectUris: string[];
   gatewayWsUrl: string;
+  /** Recordings bucket (video upload and playback URLs, S2-14). */
+  gcsAudioBucket?: string;
 }
 
 export function loadConfig(env: NodeJS.ProcessEnv = process.env): ApiConfig {
@@ -73,5 +75,6 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): ApiConfig {
     googleClientSecret: env.GOOGLE_CLIENT_SECRET,
     allowedRedirectUris,
     gatewayWsUrl,
+    ...(env.GCS_AUDIO_BUCKET ? { gcsAudioBucket: env.GCS_AUDIO_BUCKET } : {}),
   };
 }

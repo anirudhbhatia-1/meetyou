@@ -27,3 +27,9 @@ variable "gateway_image" {
   default     = "gcr.io/google-samples/hello-app:1.0"
 }
 
+
+variable "alert_emails" {
+  description = "Who receives staging alerts (S2-11), e.g. [\"you@example.com\"]."
+  type        = list(string)
+  default     = []
+}

@@ -3,7 +3,10 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "Fastify REST API service (ARCHITECTURE §12, S2-08): auth, meetings, notes, transcripts, idempotency, OpenAPI.",
+  "description": "Fastify REST API service (ARCHITECTURE \u00a712, S2-08): auth, meetings, notes, transcripts, idempotency, OpenAPI.",
+  "exports": {
+    "./app": "./src/app.ts"
+  },
   "scripts": {
     "typecheck": "tsc -p tsconfig.json",
     "test": "vitest run",
@@ -25,6 +28,7 @@
   },
   "devDependencies": {
     "@electric-sql/pglite": "0.5.11",
+    "@google-cloud/storage": "8.4.0",
     "@meetyou/db": "workspace:*",
     "@types/node": "^24.0.0"
   }
