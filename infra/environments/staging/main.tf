@@ -9,9 +9,9 @@ terraform {
   }
 
   # For initial bootstrap, state is local.
-  # Once bucket is created, uncomment the GCS backend below:
+  # Once bucket is created, uncomment the GCS backend below (STAGING_SETUP §3):
   # backend "gcs" {
-  #   bucket = "meetyou-staging-tfstate"
+  #   bucket = "meetyou-staging-tfstate-project-7ddc1bbe-aea4-44f7-bd0"
   #   prefix = "terraform/state/staging"
   # }
 }
@@ -25,14 +25,16 @@ provider "google" {
 locals {
   services = [
     "cloudresourcemanager.googleapis.com", # Master Resource Manager API
-    "iam.googleapis.com",              # Identity and Access Management for service accounts
-    "run.googleapis.com",              # Cloud Run for Gateway & API
-    "sqladmin.googleapis.com",         # Cloud SQL for PostgreSQL 16
-    "storage.googleapis.com",          # Cloud Storage for audio/video chunks
-    "secretmanager.googleapis.com",    # Secret Manager for keys & tokens
-    "vpcaccess.googleapis.com",        # Serverless VPC Access connector
-    "servicenetworking.googleapis.com",# Private service networking for Cloud SQL
-    "compute.googleapis.com",          # Compute Engine API for VPC networks
+    "iam.googleapis.com",                  # Identity and Access Management for service accounts
+    "run.googleapis.com",                  # Cloud Run for Gateway, API, Worker & Jobs
+    "sqladmin.googleapis.com",             # Cloud SQL for PostgreSQL 16
+    "storage.googleapis.com",              # Cloud Storage for audio/video chunks
+    "secretmanager.googleapis.com",        # Secret Manager for keys & tokens
+    "vpcaccess.googleapis.com",            # Serverless VPC Access connector
+    "servicenetworking.googleapis.com",    # Private service networking for Cloud SQL & Redis
+    "compute.googleapis.com",              # Compute Engine API for VPC networks
+    "artifactregistry.googleapis.com",     # Artifact Registry for container images
+    "redis.googleapis.com",                # Memorystore for Redis (Gateway sessions)
   ]
 }
 
@@ -57,15 +59,15 @@ module "storage" {
 
 # 3. VPC Network & Serverless Connector for Private IP
 module "vpc" {
-  source     = "../../modules/vpc"
-  project_id = var.project_id
-  region     = var.region
+  source      = "../../modules/vpc"
+  project_id  = var.project_id
+  region      = var.region
   environment = "staging"
 
   depends_on = [google_project_service.enabled_services]
 }
 
-# 4. Cloud Run Realtime Gateway (60-minute WebSocket session timeout)
+# 4. Cloud Run Services & Jobs (Gateway, REST API, Background Worker, Migration Job)
 module "cloud_run" {
   source            = "../../modules/cloud-run"
   project_id        = var.project_id
@@ -78,12 +80,15 @@ module "cloud_run" {
   depends_on = [google_project_service.enabled_services]
 }
 
-# 5. Secrets Container and IAM Access
+# 5. Secrets Container and Per-Service Accessor IAM Roles (STAGING_SETUP §5.2, §7)
 module "secrets" {
-  source                = "../../modules/secrets"
-  project_id            = var.project_id
-  environment           = "staging"
-  service_account_email = module.cloud_run.service_account_email
+  source           = "../../modules/secrets"
+  project_id       = var.project_id
+  environment      = "staging"
+  gateway_sa_email = module.cloud_run.service_account_email
+  api_sa_email     = module.cloud_run.api_sa_email
+  worker_sa_email  = module.cloud_run.worker_sa_email
+  migrate_sa_email = module.cloud_run.migrate_sa_email
 
   depends_on = [google_project_service.enabled_services]
 }
@@ -101,10 +106,30 @@ module "cloud_sql" {
   depends_on = [google_project_service.enabled_services]
 }
 
-# 7. Grant Gateway Service Account Object Access to Audio Bucket
-resource "google_storage_bucket_iam_member" "gateway_audio_writer" {
-  bucket = module.storage.bucket_name
-  role   = "roles/storage.objectUser"
-  member = "serviceAccount:${module.cloud_run.service_account_email}"
+# 7. Artifact Registry Docker Repository for container images (STAGING_SETUP §5.2)
+resource "google_artifact_registry_repository" "docker_repo" {
+  project       = var.project_id
+  location      = var.region
+  repository_id = "meetyou"
+  description   = "MeetYou Docker container images"
+  format        = "DOCKER"
+
+  depends_on = [google_project_service.enabled_services]
 }
 
+# 8. Memorystore for Redis for Gateway Session State (S2-04, STAGING_SETUP §5.2)
+resource "google_redis_instance" "session_redis" {
+  name           = "meetyou-staging-redis"
+  tier           = "BASIC"
+  memory_size_gb = 1
+  region         = var.region
+  project        = var.project_id
+
+  authorized_network = module.vpc.network_id
+  connect_mode       = "PRIVATE_SERVICE_ACCESS"
+
+  depends_on = [
+    google_project_service.enabled_services,
+    module.vpc.private_vpc_connection
+  ]
+}

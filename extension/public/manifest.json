@@ -4,7 +4,15 @@
   "description": "Bot-free meeting recording and notes for Google Meet.",
   "version": "0.1.0",
   "minimum_chrome_version": "116",
-  "permissions": ["offscreen", "sidePanel", "storage", "tabCapture", "unlimitedStorage"],
+  "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAp2d5ScqSqzWjZSXqZDqG/baxKxKiMNaK1ag2QQO3s2PYDWfGa0WxBpzT2Blamm1UVqdAEWk02FZq2Orun4M/nJz+gfzanudgJKU6uAJ3S2THmPzU/m6qtbiGfvvuBEqTogLmZS4gIppqboHrMM+pa7tydC9stCdasCHfGSMTDFubN6RiSRvxb/JcsBv16fKPeldwKhSX6ME/zA6qudK+Xxs83yK6StVTu1etCxThp8wtRHwBWwIS8aW7Zta9DVziYUGHJAG90HOmRftWmE3JPmQt8MGZHWhYUfnzjzjE3G7k04txSbCTD/KgKUL8c5l/wMuRNhPpFd7DYkQOP+tj4wIDAQAB",
+  "permissions": [
+    "identity",
+    "offscreen",
+    "sidePanel",
+    "storage",
+    "tabCapture",
+    "unlimitedStorage"
+  ],
   "host_permissions": ["https://meet.google.com/*"],
   "background": {
     "service_worker": "background/service-worker.js",
