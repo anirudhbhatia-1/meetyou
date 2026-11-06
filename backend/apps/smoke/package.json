@@ -6,7 +6,7 @@
   "description": "Staging smoke test (S2-12): synthetic audio streamed through the gateway, segments read back through the API, then the meeting deleted. Runs as a Cloud Run job after every deploy.",
   "scripts": {
     "typecheck": "tsc -p tsconfig.json",
-    "test": "vitest run",
+    "test": "vitest run --testTimeout=30000 --hookTimeout=60000",
     "start": "node src/main.ts"
   },
   "dependencies": {

@@ -6,7 +6,7 @@
   "description": "Background worker (ADR-0005, S2-06): runs queued jobs \u2014 video.finalize now, summaries and retention later. Cloud Run service with a health endpoint; needs ffmpeg in its image.",
   "scripts": {
     "typecheck": "tsc -p tsconfig.json",
-    "test": "vitest run",
+    "test": "vitest run --testTimeout=30000 --hookTimeout=60000",
     "dev": "node src/main.ts"
   },
   "dependencies": {

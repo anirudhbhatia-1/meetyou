@@ -9,7 +9,7 @@
   },
   "scripts": {
     "typecheck": "tsc -p tsconfig.json",
-    "test": "vitest run"
+    "test": "vitest run --testTimeout=30000 --hookTimeout=60000"
   },
   "dependencies": {
     "@google-cloud/storage": "8.4.0",
