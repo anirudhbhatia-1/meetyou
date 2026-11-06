@@ -4,7 +4,7 @@
 FROM node:24-slim AS build
 RUN corepack enable
 WORKDIR /app
-COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml tsconfig.base.json ./
 COPY shared/ ./shared/
 COPY web/ ./web/
 RUN pnpm install --frozen-lockfile --filter @meetyou/web...
