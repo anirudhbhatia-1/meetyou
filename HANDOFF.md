@@ -6,7 +6,7 @@ pointer to where the full detail lives — the linked document stays the source 
 
 | Field | Value |
 |---|---|
-| Last updated | 2026-11-06 (Anirudh: merged S2-10 with fixes; S2-10 wiring, S2-11 observability and S2-12 CI/CD + smoke built; sign-in, web app, cloud recording) |
+| Last updated | 2026-11-06 (Anirudh: S2-12 CI/CD live on staging — WIF applied, smoke job passing, first automatic deploy green) |
 | Updated by | Anirudh (Claude Code) |
 | Repository | [anirudhbhatia-1/meetyou](https://github.com/anirudhbhatia-1/meetyou) — branches `main`, `anirudh`, `Gauravbro` |
 | Current stage | **Stage 2** in progress — S2-08 & S2-09 complete; Gaurav next: S2-10 data lifecycle (§7) |
@@ -192,7 +192,25 @@ Stage 0 is complete (status table: IMPLEMENTATION_PLAN.md → "Stage 0 status").
 
 Newest first. One entry per working session (either person).
 
-### 2026-11-06 (latest) — Anirudh (Claude Code): S2-10 merged and fixed, S2-11 and S2-12 built
+### 2026-11-06 (latest) — Anirudh (Claude Code): S2-12 CI/CD live on staging
+- **Smoke job** `meetyou-staging-smoke` created (API service account, VPC connector, secrets
+  `meetyou-staging-database-url` + `meetyou-staging-auth-signing-jwks`) and run by hand:
+  `smoke.passed`, all 66 frames acked, 3 segments, meeting deleted.
+- **`terraform apply -target=module.ci`** from Cloud Shell (Terraform 1.9.8 installed into `~/bin`;
+  state is local in `infra/environments/staging` there): WIF pool `meetyou-staging-github`,
+  provider `github`, deployer SA, its three roles, and the four missing APIs (iamcredentials,
+  logging, monitoring, sts). 11 added, 0 changed, 0 destroyed.
+- **GitHub variables** `GCP_PROJECT_ID`, `GCP_WIF_PROVIDER`, `GCP_DEPLOY_SA` set with `gh`.
+- **First deploy** ([run 42244940247](https://github.com/anirudhbhatia-1/meetyou/actions/runs/42244940247),
+  manual, commit `8c750c0`) green in 6 min: migrate job, worker → api → gateway → web rolled out,
+  smoke job passed. From now on every green CI on `main` deploys staging. The web app on staging now
+  has the list-row delete menu.
+- STAGING_SETUP §9.3 step 1 fixed (`terraform output` takes one name; Terraform install note).
+- Still open: `-target=module.monitoring` (needs `alert_emails`), GitHub Actions Node 20
+  deprecation warnings (bump `actions/checkout`, `google-github-actions/*` later),
+  failover/crash/60-min tests.
+
+### 2026-11-06 — Anirudh (Claude Code): S2-10 merged and fixed, S2-11 and S2-12 built
 Anirudh asked to finish everything left in S2, including S2-11 and S2-12 (owned by Gaurav until
 now — **Gaurav: please don't start them; review instead**). Runbook: STAGING_SETUP §9.3.
 - **Merged `main` (Gaurav's S2-10, `0d725f1`)** and fixed what broke `pnpm check`: formatting,

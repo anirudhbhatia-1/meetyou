@@ -437,11 +437,16 @@ every frame was acked, reads the segments back through the API and deletes the m
 real gateway and API with scripted STT.
 
 One-time setup:
-1. Identity (adds a pool, a provider and the deployer account only):
+1. Identity (adds a pool, a provider and the deployer account, plus any of the listed APIs not
+   yet enabled). Cloud Shell has no Terraform: install it once into `~/bin`, which survives
+   sessions (`curl -fsSLo /tmp/tf.zip https://releases.hashicorp.com/terraform/1.9.8/terraform_1.9.8_linux_amd64.zip && unzip -o /tmp/tf.zip terraform -d ~/bin`).
+   The plan must show `0 to change, 0 to destroy`:
    ```bash
    cd ~/meetyou/infra/environments/staging
-   terraform apply -target=module.ci
-   terraform output github_wif_provider github_deploy_service_account
+   terraform plan -target=module.ci -var project_id=<project> -var db_password=not-used-by-ci -out ci.tfplan
+   terraform apply ci.tfplan
+   terraform output github_wif_provider
+   terraform output github_deploy_service_account
    ```
 2. GitHub → repository → Settings → Secrets and variables → Actions → **Variables**:
    `GCP_PROJECT_ID` = the project ID, `GCP_WIF_PROVIDER` and `GCP_DEPLOY_SA` = the two outputs.
