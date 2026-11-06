@@ -123,17 +123,10 @@ describe('Core REST API Endpoints (S2-09)', () => {
       });
       expect(res.statusCode).toBe(200);
       const body = JSON.parse(res.body);
-      expect(body.user).toEqual({
-        id: userIdA,
-        email: 'alpha@example.com',
-        displayName: 'Alpha Tester',
-      });
-      expect(body.workspace).toEqual({
-        id: workspaceIdA,
-        name: 'Alpha Tester',
-        plan: 'free',
-        role: 'owner',
-      });
+      expect(body.userId).toBe(userIdA);
+      expect(body.workspaceId).toBe(workspaceIdA);
+      expect(body.email).toBe('alpha@example.com');
+      expect(body.displayName).toBe('Alpha Tester');
     });
   });
 

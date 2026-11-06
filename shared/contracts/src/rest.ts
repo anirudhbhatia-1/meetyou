@@ -30,22 +30,6 @@ export const TemplateId = z.enum(['general', 'standup', 'client_call', 'intervie
 
 export const VideoStatus = z.enum(['uploading', 'processing', 'ready', 'failed', 'expired']);
 
-// GET /v1/me (ARCHITECTURE §12.1)
-export const MeResponse = z.object({
-  user: z.object({
-    id: z.string().min(1),
-    email: z.string(),
-    displayName: z.string(),
-  }),
-  workspace: z.object({
-    id: z.string().min(1),
-    name: z.string(),
-    plan: z.enum(['free']),
-    role: z.enum(['owner']),
-  }),
-});
-export type MeResponse = z.infer<typeof MeResponse>;
-
 export const Meeting = z.object({
   id: z.string().min(1),
   platform: Platform,

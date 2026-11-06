@@ -2,7 +2,7 @@ import type { FastifyPluginAsync } from 'fastify';
 import {
   DEFAULT_USER_SETTINGS,
   StartSessionRequest,
-  type StartSessionResponse,
+  StartSessionResponse,
   newUlid,
 } from '@meetyou/contracts';
 import { createMeetingForSession, endMeeting, meetingForSession } from '@meetyou/db';
@@ -35,7 +35,8 @@ export const sessionsRoutes: FastifyPluginAsync<SessionsRoutesOptions> = async (
     },
     async (request, reply) => {
       const workspaceId = request.workspaceId;
-      if (!workspaceId || !request.inWorkspace) {
+      const userId = request.userId;
+      if (!workspaceId || !userId || !request.inWorkspace) {
         throw new UnauthorizedError('Unauthorized');
       }
 
@@ -57,7 +58,7 @@ export const sessionsRoutes: FastifyPluginAsync<SessionsRoutesOptions> = async (
           .selectFrom('userSettings')
           .select(['retentionPolicy', 'recordVideo'])
           .where('workspaceId', '=', workspaceId)
-          .where('userId', '=', request.userId ?? '')
+          .where('userId', '=', userId)
           .executeTakeFirst();
       });
 
@@ -110,7 +111,7 @@ export const sessionsRoutes: FastifyPluginAsync<SessionsRoutesOptions> = async (
       const response: StartSessionResponse = {
         sessionId,
         meetingId,
-        streamUrl: config.gatewayWsUrl,
+        streamUrl: StartSessionResponse.shape.streamUrl.parse(config.gatewayWsUrl),
         streamToken: streamToken.token,
         expiresAt: streamToken.expiresAt.toISOString(),
         audioFormat: {

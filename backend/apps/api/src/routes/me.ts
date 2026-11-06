@@ -16,24 +16,12 @@ export const meRoutes: FastifyPluginAsync = async (fastify) => {
           200: {
             type: 'object',
             properties: {
-              user: {
-                type: 'object',
-                properties: {
-                  id: { type: 'string' },
-                  email: { type: 'string' },
-                  displayName: { type: 'string' },
-                },
-              },
-              workspace: {
-                type: 'object',
-                properties: {
-                  id: { type: 'string' },
-                  name: { type: 'string' },
-                  plan: { type: 'string' },
-                  role: { type: 'string' },
-                },
-              },
+              userId: { type: 'string' },
+              workspaceId: { type: 'string' },
+              email: { type: 'string' },
+              displayName: { type: 'string' },
             },
+            required: ['userId', 'workspaceId', 'email', 'displayName'],
           },
         },
       },
@@ -76,17 +64,10 @@ export const meRoutes: FastifyPluginAsync = async (fastify) => {
       }
 
       const response: MeResponse = {
-        user: {
-          id: result.user.id,
-          email: result.user.email,
-          displayName: result.user.displayName,
-        },
-        workspace: {
-          id: result.workspace.id,
-          name: result.workspace.name,
-          plan: result.workspace.plan,
-          role: result.membership?.role ?? 'owner',
-        },
+        userId: result.user.id,
+        workspaceId: result.workspace.id,
+        email: result.user.email,
+        displayName: result.user.displayName,
       };
 
       return reply.send(response);
