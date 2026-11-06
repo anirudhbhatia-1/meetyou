@@ -1,5 +1,5 @@
 import type { FastifyPluginAsync } from 'fastify';
-import { AuthService, TokenService } from '@meetyou/auth';
+import { AuthService, type TokenService } from '@meetyou/auth';
 import type { Db } from '@meetyou/db';
 import { GoogleSignInRequest, RefreshRequest, type TokenResponse } from '@meetyou/contracts';
 
