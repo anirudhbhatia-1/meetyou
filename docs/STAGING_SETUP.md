@@ -454,9 +454,17 @@ gcloud logging read 'jsonPayload.sessionId="ses_..." OR jsonPayload.meetingId="m
 (audio sent → final), `ackLagP50Ms`/`ackLagP95Ms` (chunk ready → durable ack) and
 `estimatedCostUsd`; the monitoring module turns them into dashboard tiles and an "Expensive STT
 session" alert (`stt_session_cost_alert_usd`, default 1.5 USD). Google Cloud spend: set
-`billing_account_id` in `terraform.tfvars` and re-apply `-target=module.monitoring` for a monthly
-budget with 50/90/100 % and forecast alerts (needs Billing Account Administrator or Costs Manager;
-with user credentials the provider may also need a quota project **[Verify]**).
+`billing_account_id` and re-apply `-target=module.monitoring` for a monthly budget (default
+₹5,000) with 50/90/100 % and forecast alerts (needs Billing Account Administrator or Costs
+Manager). With user credentials the billing API needs a quota project, and every monitoring apply
+must pass the alert email again or the channel is planned for removal:
+```bash
+export GOOGLE_BILLING_PROJECT=<project> USER_PROJECT_OVERRIDE=true
+terraform plan -target=module.monitoring -var project_id=<project> -var db_password=not-used \
+  -var 'alert_emails=["you@example.com"]' -var billing_account_id=<billing account> -out mon.tfplan
+```
+A new log-based metric takes up to 10 minutes before an alert can use it ("Cannot find metric"):
+apply again after a few minutes. Applied on staging 2026-11-06 (budget on `013C6E-…`, INR).
 Not done: summary latency (S3).
 
 **CI/CD (S2-12).** `.github/workflows/deploy-staging.yml` runs after every green `CI` run on

@@ -368,29 +368,33 @@ resource "google_monitoring_dashboard" "overview" {
     displayName = "Minutes ${var.environment}"
     mosaicLayout = {
       columns = 12
-      tiles = [for i, k in sort(keys(local.tile)) : {
-        xPos   = (i % 2) * 6
-        yPos   = floor(i / 2) * 4
-        width  = 6
-        height = 4
-        widget = {
-          title = local.tile[k].title
-          xyChart = {
-            dataSets = [{
-              plotType = "LINE"
-              timeSeriesQuery = {
-                timeSeriesFilter = {
-                  filter = "${local.tile[k].filter} AND resource.type=\"cloud_run_revision\""
-                  aggregation = {
-                    alignmentPeriod  = "300s"
-                    perSeriesAligner = local.tile[k].aligner
+      # Written the way the API stores it (zero positions omitted, `targetAxis` set), or every plan
+      # shows a change to the dashboard.
+      tiles = [for i, k in sort(keys(local.tile)) : merge(
+        { for axis, at in { xPos = (i % 2) * 6, yPos = floor(i / 2) * 4 } : axis => at if at != 0 },
+        {
+          width  = 6
+          height = 4
+          widget = {
+            title = local.tile[k].title
+            xyChart = {
+              dataSets = [{
+                plotType   = "LINE"
+                targetAxis = "Y1"
+                timeSeriesQuery = {
+                  timeSeriesFilter = {
+                    filter = "${local.tile[k].filter} AND resource.type=\"cloud_run_revision\""
+                    aggregation = {
+                      alignmentPeriod  = "300s"
+                      perSeriesAligner = local.tile[k].aligner
+                    }
                   }
                 }
-              }
-            }]
+              }]
+            }
           }
-        }
-      }]
+        },
+      )]
     }
   })
   depends_on = [

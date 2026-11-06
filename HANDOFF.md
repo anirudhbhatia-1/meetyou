@@ -241,7 +241,12 @@ Newest first. One entry per working session (either person).
     PRD and needs a recorder change (open is awaited, video keyed by session): left as a TODO.
   - Known, not fixed: worker logs `MaxListenersExceededWarning … [PassThrough]` from inside the
     Cloud Storage client during fragment downloads; finalize succeeds; not reproducible locally.
-- **S2 code is complete.** Cloud steps (Anirudh, later): `-target=google_project_iam_member.telemetry`
+- **Cloud setup applied (Anirudh, Cloud Shell):** `-target=google_project_iam_member.telemetry`
+  (Telemetry + billingbudgets APIs, 6 role grants); `-target=module.monitoring` (3 metrics, cost
+  alert after the 10-minute metric delay, ₹5,000 monthly budget on the INR billing account);
+  smoke run green afterwards. Dashboard JSON now written in the API's stored form (it showed a
+  change on every plan).
+- **S2 code is complete.** Cloud steps (done 2026-11-06, see above): `-target=google_project_iam_member.telemetry`
   and re-apply `-target=module.monitoring` (new metrics/alert, optional budget). Tests (later): live
   failover (S2-04), worker shutdown mid-job (S2-06), 60-min video sync and website playback (S2-14).
 
