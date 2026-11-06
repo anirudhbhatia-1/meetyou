@@ -30,6 +30,22 @@ export const TemplateId = z.enum(['general', 'standup', 'client_call', 'intervie
 
 export const VideoStatus = z.enum(['uploading', 'processing', 'ready', 'failed', 'expired']);
 
+// GET /v1/me (ARCHITECTURE §12.1)
+export const MeResponse = z.object({
+  user: z.object({
+    id: z.string().min(1),
+    email: z.string(),
+    displayName: z.string(),
+  }),
+  workspace: z.object({
+    id: z.string().min(1),
+    name: z.string(),
+    plan: z.enum(['free']),
+    role: z.enum(['owner']),
+  }),
+});
+export type MeResponse = z.infer<typeof MeResponse>;
+
 export const Meeting = z.object({
   id: z.string().min(1),
   platform: Platform,
@@ -141,6 +157,7 @@ export const TokenResponse = z.object({
   refreshToken: z.string().min(1),
   refreshExpiresAt: IsoDateTime,
 });
+export type TokenResponse = z.infer<typeof TokenResponse>;
 
 // POST /v1/auth/refresh and POST /v1/auth/logout
 export const RefreshRequest = z.object({
@@ -176,6 +193,7 @@ export const StartSessionResponse = z.object({
     })
     .nullable(),
 });
+export type StartSessionResponse = z.infer<typeof StartSessionResponse>;
 
 // POST /v1/sessions/{sessionId}/video/fragments:sign (ADR-0011 §3.3)
 export const SignVideoFragmentsRequest = z.object({
