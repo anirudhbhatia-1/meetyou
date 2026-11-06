@@ -6,10 +6,10 @@ pointer to where the full detail lives — the linked document stays the source 
 
 | Field | Value |
 |---|---|
-| Last updated | 2026-11-06 (S2-08 Fastify API service scaffold complete; Gaurav next: S2-09) |
+| Last updated | 2026-11-06 (Cloud staging infra, DB migrations & live API /health verified; Gaurav next: S2-09) |
 | Updated by | Gaurav (Google Antigravity) |
 | Repository | [anirudhbhatia-1/meetyou](https://github.com/anirudhbhatia-1/meetyou) — branches `main`, `anirudh`, `Gauravbro` |
-| Current stage | **Stage 2** in progress — S2-08 complete; Gaurav next: S2-09 core endpoints (§7) |
+| Current stage | **Stage 2** in progress — Cloud Staging live; Gaurav next: S2-09 core endpoints (§7) |
 
 ---
 
@@ -192,7 +192,32 @@ Stage 0 is complete (status table: IMPLEMENTATION_PLAN.md → "Stage 0 status").
 
 Newest first. One entry per working session (either person).
 
-### 2026-11-06 (latest) — Gaurav (Google Antigravity): S2-08 API service scaffold implemented and verified
+### 2026-11-06 (latest) — Gaurav (Google Antigravity): Cloud Staging Setup, DB Migration & Live API /health Verified
+**Done** (branch `Gauravbro`)
+- **Pinned Extension ID & OAuth Manifest (`manifest.json`):** Generated RSA 2048 keypair, pinned extension ID to `hjimcofnjnikbeepahmclaniopbnhbbe`, authorized redirect `https://hjimcofnjnikbeepahmclaniopbnhbbe.chromiumapp.org/oauth2`.
+- **Google Cloud Console OAuth Staging Setup:** Configured OAuth consent screen (External, test users) and created Web application Client ID `189397093016-ghfptods39aies7sbt4hnph78nflc0cl.apps.googleusercontent.com` with authorized origins and redirect URI.
+- **Terraform Staging Additions (`infra/` — `STAGING_SETUP.md` §5.2):**
+  - Enabled Artifact Registry & Memorystore Redis APIs.
+  - Added Docker repository `meetyou` in `asia-south1`.
+  - Added Memorystore Redis instance (1 GiB, Basic tier, VPC private IP `10.254.5.203`).
+  - Added Cloud Run services (`meetyou-staging-api`, `meetyou-staging-worker`, `meetyou-staging-gateway`) and Cloud Run Job (`meetyou-staging-migrate`) with dedicated service accounts and VPC connector egress.
+  - Added Secret Manager secrets (`database-url`, `auth-signing-jwks`, `google-oauth-client-secret`) with per-service accessor IAM bindings.
+  - Ran `terraform apply` cleanly in Cloud Shell (`26 added, 2 changed, 4 destroyed`).
+- **Secret Manager Population:**
+  - `meetyou-staging-auth-signing-jwks`: populated with P-256 signing JWKS (`stg-2026-11`).
+  - `meetyou-staging-deepgram-api-key`: populated with paid Deepgram key.
+  - `meetyou-staging-google-oauth-client-secret`: populated with Google OAuth web client secret.
+  - `meetyou-staging-database-url`: populated with URL-encoded PostgreSQL connection string (`encodeURIComponent` on DB password).
+- **Docker Containerization (`Dockerfile.migrate`, `Dockerfile.api`, `.dockerignore`):**
+  - Node 24 slim container images created and pushed to Artifact Registry (`asia-south1-docker.pkg.dev/project-7ddc1bbe-aea4-44f7-bd0/meetyou/migrate:latest` and `api:latest`).
+- **Cloud SQL Database Migrations (`meetyou-staging-migrate`):**
+  - Executed Cloud Run Job in VPC: successfully applied initial schema migrations `0001, 0002, 0003` to Cloud SQL PostgreSQL 16.
+- **Cloud Run REST API Deployment (`meetyou-staging-api`):**
+  - Updated service with `api:latest`, wired `DATABASE_URL`, `AUTH_SIGNING_JWKS`, `GOOGLE_CLIENT_SECRET` secrets and `GOOGLE_CLIENT_ID` env.
+  - Live probe verified: `curl https://meetyou-staging-api-7oflznia2a-el.a.run.app/health` returned `{"status":"ok","uptimeSeconds":13,"version":"0.1.0","db":"ok"}`.
+- **Next Task:** S2-09 Core Endpoints (`/me`, `/settings`, `/meetings`, `/notes`, `/segments`, `/consent-log`, `/sessions`).
+
+### 2026-11-06 — Gaurav (Google Antigravity): S2-08 API service scaffold implemented and verified
 **Done** (branch `Gauravbro`)
 - Pulled and fast-forward merged latest updates from `origin/main` (`87e2932`):
   - Added `@meetyou/auth`, `@meetyou/providers`, `@meetyou/queue`, `@meetyou/video`, `@meetyou/hinglish`, `@meetyou/fixtures`, `@meetyou/ui`, and `web/`.

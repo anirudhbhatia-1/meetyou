@@ -21,3 +21,4 @@ EXPOSE 8080
 
 # Execute Fastify API server
 CMD ["node", "backend/apps/api/src/main.ts"]
+
