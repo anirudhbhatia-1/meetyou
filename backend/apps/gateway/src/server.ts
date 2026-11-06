@@ -6,6 +6,7 @@ import type { StreamTokenVerification } from '@meetyou/auth';
 import { newUlid, SignVideoFragmentsRequest } from '@meetyou/contracts';
 import { createMeetingForSession, glossaryTerms, meetingForSession, type Db } from '@meetyou/db';
 import type { DisplayTextPolicy } from '@meetyou/hinglish';
+import { recordSpan } from '@meetyou/tracing';
 import { WebSocketServer } from 'ws';
 
 import type { ChunkStore } from './chunk-store.ts';
@@ -663,6 +664,7 @@ export function createGateway(options: GatewayOptions): Gateway {
       return;
     }
     const token = tokenFromProtocols(req.headers['sec-websocket-protocol']);
+    const admitStartMs = Date.now();
     (token === null ? Promise.resolve(null) : admit(token))
       .then((session) => {
         if (session === null) {
@@ -670,6 +672,12 @@ export function createGateway(options: GatewayOptions): Gateway {
           reject(socket, 401, 'Unauthorized');
           return;
         }
+        recordSpan(
+          'stream.admit',
+          session.meetingId,
+          { sessionId: session.sessionId },
+          admitStartMs,
+        );
         wss.handleUpgrade(req, socket, head, (ws) => {
           log('stream.connected', { sessionId: session.sessionId });
           session.attach(ws);

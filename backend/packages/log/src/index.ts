@@ -54,6 +54,17 @@ export function allowedField(name: string): boolean {
   return ALLOWED.has(name) || ALLOWED_SUFFIX.test(name);
 }
 
+/** An allow-listed name with a value that cannot carry content (shared with `@meetyou/tracing`). */
+export function safeField(name: string, value: unknown): boolean {
+  return (
+    allowedField(name) &&
+    (value === null ||
+      typeof value === 'boolean' ||
+      (typeof value === 'number' && Number.isFinite(value)) ||
+      (typeof value === 'string' && SAFE_STRING.test(value)))
+  );
+}
+
 /** Severity from the event name: `*_failed` / `*.error` → ERROR; refusals → WARNING. */
 export function severityOf(event: string): Severity {
   if (/(_failed|[._]error)$/.test(event)) return 'ERROR';
@@ -73,13 +84,7 @@ export function formatLine(
   const kept: LogFields = {};
   let dropped = 0;
   for (const [key, value] of Object.entries(fields)) {
-    const ok =
-      allowedField(key) &&
-      (value === null ||
-        typeof value === 'boolean' ||
-        (typeof value === 'number' && Number.isFinite(value)) ||
-        (typeof value === 'string' && SAFE_STRING.test(value)));
-    if (ok) kept[key] = value;
+    if (safeField(key, value)) kept[key] = value;
     else dropped += 1;
   }
   return JSON.stringify({

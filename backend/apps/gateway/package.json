@@ -23,6 +23,7 @@
     "@meetyou/providers": "workspace:*",
     "@meetyou/queue": "workspace:*",
     "@meetyou/storage": "workspace:*",
+    "@meetyou/tracing": "workspace:*",
     "@meetyou/video": "workspace:*",
     "ioredis": "6.0.0",
     "ws": "^8.22.0",

@@ -1,9 +1,11 @@
 import { Db, createPgPool } from '@meetyou/db';
+import { startTracing } from '@meetyou/tracing';
 import { buildApp } from './app.ts';
 import { loadConfig } from './config.ts';
 
 async function main() {
   const config = loadConfig();
+  const tracing = startTracing('api');
 
   if (config.env === 'staging' || config.env === 'production') {
     if (!config.databaseUrl) {
@@ -40,6 +42,7 @@ async function main() {
     if (db) {
       await db.destroy();
     }
+    await tracing.shutdown();
     process.exit(0);
   };
 

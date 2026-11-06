@@ -9,6 +9,7 @@ import { asProvidedPolicy, romanRulesPolicy } from '@meetyou/hinglish';
 import { createProviders } from '@meetyou/providers';
 
 import { GcsBucket } from '@meetyou/storage';
+import { startTracing } from '@meetyou/tracing';
 
 import { LocalChunkStore, type ChunkStore } from './chunk-store.ts';
 import { GcsChunkStore } from './gcs-chunk-store.ts';
@@ -100,6 +101,7 @@ const store: ChunkStore =
     ? new LocalChunkStore(env.DATA_DIR)
     : new GcsChunkStore(new GcsBucket(env.GCS_AUDIO_BUCKET));
 
+const tracing = startTracing('gateway');
 const gateway = createGateway({
   store,
   stt,
@@ -140,6 +142,7 @@ for (const signal of ['SIGINT', 'SIGTERM'] as const) {
       .close()
       .then(() => registry.close())
       .then(() => db?.destroy())
+      .then(() => tracing.shutdown())
       .then(() => process.exit(0));
   });
 }

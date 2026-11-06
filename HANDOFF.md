@@ -6,7 +6,7 @@ pointer to where the full detail lives — the linked document stays the source 
 
 | Field | Value |
 |---|---|
-| Last updated | 2026-11-06 (Anirudh: S2-12 CI/CD and S2-11 monitoring live on staging; smoke now checks usage rows and the meeting delete job) |
+| Last updated | 2026-11-06 (Anirudh: S2 code complete — CI/CD, monitoring and OpenTelemetry tracing; live failover/crash/60-min tests remain) |
 | Updated by | Anirudh (Claude Code) |
 | Repository | [anirudhbhatia-1/meetyou](https://github.com/anirudhbhatia-1/meetyou) — branches `main`, `anirudh`, `Gauravbro` |
 | Current stage | **Stage 2** in progress — S2-08 & S2-09 complete; Gaurav next: S2-10 data lifecycle (§7) |
@@ -215,8 +215,18 @@ Newest first. One entry per working session (either person).
   test runs a real worker for this. Deploy of `2e46699` green with these checks.
 - GitHub Actions moved to their Node 24 majors (`checkout@v5`, `setup-node@v5`,
   `pnpm/action-setup@v5`, `google-github-actions/auth@v3`, `setup-gcloud@v3`).
-- Still open: live failover test (S2-04), worker shutdown mid-job (S2-06), 60-min video sync and
-  website playback check (S2-14), OpenTelemetry tracing (dependency approval).
+- **Tracing (S2-11, dependencies approved by Anirudh)**: new `backend/packages/tracing` —
+  OpenTelemetry spans with the trace ID derived from the meeting ID, so API (`session.start`,
+  `session.recover`, `session.end_request`), gateway (`stream.admit`, `stream.ready`, `stt.open`,
+  `segment.store`, `usage.save`, `session.end`) and worker (`job.<task>`, in `@meetyou/queue`)
+  land in one trace per meeting without passing context. Attributes use the log allow-list
+  (`safeField`, now exported by `@meetyou/log`). Export: OTLP/HTTP to `telemetry.googleapis.com`
+  with ADC — `@google-cloud/opentelemetry-cloud-trace-exporter` is deprecated (archived after
+  2026-10-30), so it is not used. On only inside Cloud Run; `TRACING=off`, `TRACE_SAMPLE_RATIO`.
+  Terraform: Telemetry API + `roles/telemetry.tracesWriter` / `serviceUsageConsumer` for the three
+  runtime accounts (`-target=google_project_iam_member.telemetry`, STAGING_SETUP §9.3).
+- **S2 code is complete.** Still open (testing, Anirudh will run later): live failover test
+  (S2-04), worker shutdown mid-job (S2-06), 60-min video sync and website playback (S2-14).
 
 ### 2026-11-06 — Anirudh (Claude Code): S2-10 merged and fixed, S2-11 and S2-12 built
 Anirudh asked to finish everything left in S2, including S2-11 and S2-12 (owned by Gaurav until

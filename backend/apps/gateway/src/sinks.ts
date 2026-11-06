@@ -8,6 +8,7 @@ import {
 } from '@meetyou/db';
 
 import { enqueue } from '@meetyou/queue';
+import { traced } from '@meetyou/tracing';
 import { videoFinalizeJob, videoFinalizeJobKey } from '@meetyou/video';
 
 import type { ChunkStore, VideoPartInfo } from './chunk-store.ts';
@@ -84,12 +85,24 @@ export class DbSink implements SessionSink {
   }
 
   segments(target: SessionTarget, segments: readonly Segment[]): Promise<void> {
-    return this.#db.inWorkspace(target.workspaceId, (tx) =>
-      storeSegments(tx, segments, () => `spc_${newUlid()}`),
+    return traced(
+      'segment.store',
+      target.meetingId,
+      { sessionId: target.sessionId, count: segments.length },
+      () =>
+        this.#db.inWorkspace(target.workspaceId, (tx) =>
+          storeSegments(tx, segments, () => `spc_${newUlid()}`),
+        ),
     );
   }
 
   async usage(target: SessionTarget, usage: SessionUsage): Promise<void> {
+    await traced('usage.save', target.meetingId, { sessionId: target.sessionId }, () =>
+      this.#saveUsage(target, usage),
+    );
+  }
+
+  async #saveUsage(target: SessionTarget, usage: SessionUsage): Promise<void> {
     await this.#store.putUsage(usage, target.meetingId);
     await this.#db.inWorkspace(target.workspaceId, (tx) =>
       upsertRealtimeUsage(tx, {
@@ -105,6 +118,12 @@ export class DbSink implements SessionSink {
   }
 
   ended(target: SessionTarget, endedAt: Date): Promise<void> {
+    return traced('session.end', target.meetingId, { sessionId: target.sessionId }, () =>
+      this.#ended(target, endedAt),
+    );
+  }
+
+  #ended(target: SessionTarget, endedAt: Date): Promise<void> {
     return this.#db.inWorkspace(target.workspaceId, async (tx) => {
       await endMeeting(tx, target.meetingId, endedAt);
       if (this.#enqueueVideoFinalize) {

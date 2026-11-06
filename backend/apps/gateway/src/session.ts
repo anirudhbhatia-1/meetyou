@@ -12,6 +12,7 @@ import {
   type Lane,
   type ServerMessage,
 } from '@meetyou/contracts';
+import { recordSpan } from '@meetyou/tracing';
 import WebSocket from 'ws';
 
 import type { DisplayTextPolicy } from '@meetyou/hinglish';
@@ -207,6 +208,7 @@ export class StreamSession {
   }
 
   async #hello(socket: WebSocket, text: string): Promise<void> {
+    const helloStartMs = Date.now();
     const parsed = parseClient(text);
     if (parsed?.type !== 'hello' || parsed.protocolVersion !== PROTOCOL_VERSION) {
       this.#fail(socket, 'bad_hello', false);
@@ -261,8 +263,26 @@ export class StreamSession {
         resumeMe: parsed.resumeFrom.me,
         resumeThem: parsed.resumeFrom.them,
       });
+      recordSpan(
+        'stream.ready',
+        this.meetingId,
+        {
+          sessionId: this.sessionId,
+          resumeMe: parsed.resumeFrom.me,
+          resumeThem: parsed.resumeFrom.them,
+        },
+        helloStartMs,
+      );
     } catch (error: unknown) {
       log('stream.resume_failed', { sessionId: this.sessionId, code: errorCode(error) });
+      recordSpan(
+        'stream.ready',
+        this.meetingId,
+        { sessionId: this.sessionId },
+        helloStartMs,
+        Date.now(),
+        error,
+      );
       this.#fail(socket, 'storage_unavailable', true);
     }
   }
@@ -534,6 +554,8 @@ export class StreamSession {
     if (!opening) return;
 
     const timeline = stt.timeline;
+    const openStartMs = Date.now();
+    const sttFields = { sessionId: this.sessionId, lane, provider: provider.name };
     stt.opening = provider
       .open(
         packets === null ? 'pcm16' : 'ogg_opus',
@@ -565,10 +587,12 @@ export class StreamSession {
         this.#setHealth('ok');
         this.#meter.sttStreamOpened();
         log('stt.opened', { sessionId: this.sessionId, lane, provider: provider.name });
+        recordSpan('stt.open', this.meetingId, sttFields, openStartMs);
       })
       .catch((error: unknown) => {
         // Audio stays durable; transcription of this gap is left to the batch pass (§6.3).
         log('stt.open_failed', { sessionId: this.sessionId, lane, code: errorCode(error) });
+        recordSpan('stt.open', this.meetingId, sttFields, openStartMs, Date.now(), error);
         stt.queued = [];
         stt.retryAt = Date.now() + STT_RETRY_MS;
         this.#openFailures += 1;

@@ -422,8 +422,22 @@ cd ~/meetyou/infra/environments/staging
 terraform init && terraform plan -target=module.monitoring
 terraform apply -target=module.monitoring
 ```
-Not done yet: OpenTelemetry tracing (needs new dependencies, awaiting approval); spend anomalies
-(use a Billing budget alert, §11); summary latency (S3).
+**Tracing** (`@meetyou/tracing`, OpenTelemetry): one trace per meeting across API, gateway and
+worker — the trace ID is derived from the meeting ID, so no context is passed between services.
+Spans: `session.start`, `session.recover`, `session.end_request` (API); `stream.admit`,
+`stream.ready`, `stt.open`, `segment.store`, `usage.save`, `session.end` (gateway); `job.<task>`
+(worker). Attributes use the log allow-list (IDs, counts, codes). Export is OTLP/HTTP to the
+Telemetry API with the service account's credentials (the old Cloud Trace exporter is deprecated).
+Tracing turns itself on inside Cloud Run; `TRACING=off` disables it and `TRACE_SAMPLE_RATIO`
+(default 1) samples meetings. One-time IAM (Telemetry API + `roles/telemetry.tracesWriter` and
+`roles/serviceusage.serviceUsageConsumer` for the api/gateway/worker accounts; adds only):
+```bash
+cd ~/meetyou/infra/environments/staging
+terraform plan -target=google_project_iam_member.telemetry -var project_id=<project> -var db_password=not-used -out tel.tfplan
+terraform apply tel.tfplan
+```
+Then Cloud Trace → Trace explorer, filter on `meetingId`, shows a meeting's spans on one timeline.
+Not done: spend anomalies (use a Billing budget alert, §11); summary latency (S3).
 
 **CI/CD (S2-12).** `.github/workflows/deploy-staging.yml` runs after every green `CI` run on
 `main` (or by hand): build and push `api gateway worker web migrate smoke` tagged with the commit,

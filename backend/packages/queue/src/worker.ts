@@ -1,6 +1,7 @@
 import { randomBytes } from 'node:crypto';
 
 import { run, runMigrations, type Job, type Runner, type Task } from 'graphile-worker';
+import { traced } from '@meetyou/tracing';
 import type pg from 'pg';
 
 import type { TaskDefinition } from './tasks.ts';
@@ -29,6 +30,12 @@ export interface WorkerOptions {
 }
 
 const WORKSPACE_ID = /^ws_[0-9A-HJKMNP-TV-Z]{26}$/;
+
+function meetingOf(payload: unknown): string | null {
+  if (typeof payload !== 'object' || payload === null) return null;
+  const value = (payload as { meetingId?: unknown }).meetingId;
+  return typeof value === 'string' ? value : null;
+}
 
 function workspaceOf(payload: unknown): string | null {
   if (typeof payload !== 'object' || payload === null) return null;
@@ -69,7 +76,17 @@ export async function startWorker(options: WorkerOptions): Promise<Runner> {
         });
         return;
       }
-      await task.handle(parsed.data, helpers);
+      const meetingId = meetingOf(parsed.data);
+      const work = () => task.handle(parsed.data, helpers);
+      // Each pipeline job joins its meeting's trace (ARCHITECTURE §20).
+      await (meetingId === null
+        ? work()
+        : traced(
+            `job.${task.name}`,
+            meetingId,
+            { task: task.name, jobId: helpers.job.id, attempt: helpers.job.attempts },
+            work,
+          ));
     };
   }
   const runner = await run({

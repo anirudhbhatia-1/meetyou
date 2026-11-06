@@ -7,6 +7,7 @@ import {
 } from '@meetyou/contracts';
 import { createMeetingForSession, endMeeting, meetingForSession } from '@meetyou/db';
 import type { TokenService } from '@meetyou/auth';
+import { recordSpan } from '@meetyou/tracing';
 
 import type { ApiConfig } from '../config.ts';
 import { BadRequestError, NotFoundError, UnauthorizedError } from '../errors.ts';
@@ -48,6 +49,7 @@ export const sessionsRoutes: FastifyPluginAsync<SessionsRoutesOptions> = async (
       }
 
       const body = parseResult.data;
+      const startMs = Date.now();
       const sessionId = `ses_${newUlid()}`;
       const meetingId = `mtg_${newUlid()}`;
       const startedAt = new Date();
@@ -131,6 +133,8 @@ export const sessionsRoutes: FastifyPluginAsync<SessionsRoutesOptions> = async (
           : null,
       };
 
+      // First span of the meeting's trace (ARCHITECTURE §20); the gateway and worker join it.
+      recordSpan('session.start', meetingId, { sessionId, workspaceId }, startMs);
       return reply.status(201).send(response);
     },
   );
@@ -160,6 +164,7 @@ export const sessionsRoutes: FastifyPluginAsync<SessionsRoutesOptions> = async (
       }
 
       const endedAt = new Date();
+      const startMs = endedAt.getTime();
 
       const ended = await request.inWorkspace(async (tx) => {
         const meeting = await meetingForSession(tx, sessionId);
@@ -173,6 +178,7 @@ export const sessionsRoutes: FastifyPluginAsync<SessionsRoutesOptions> = async (
         throw new NotFoundError(`Session ${sessionId} not found`);
       }
 
+      recordSpan('session.end_request', ended.id, { sessionId }, startMs);
       return reply.send({
         status: 'ended',
         sessionId,
@@ -206,6 +212,7 @@ export const sessionsRoutes: FastifyPluginAsync<SessionsRoutesOptions> = async (
         throw new UnauthorizedError('Unauthorized');
       }
 
+      const startMs = Date.now();
       const meeting = await request.inWorkspace(async (tx) => {
         return meetingForSession(tx, sessionId);
       });
@@ -225,6 +232,7 @@ export const sessionsRoutes: FastifyPluginAsync<SessionsRoutesOptions> = async (
         lanes: ['me', 'them'],
       });
 
+      recordSpan('session.recover', meeting.id, { sessionId }, startMs);
       return reply.send({
         state: 'resumable',
         sessionId,

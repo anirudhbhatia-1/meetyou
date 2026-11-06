@@ -151,6 +151,7 @@ backend/apps/api       (S2-08, Gaurav) Fastify REST API
 backend/apps/worker    (S2-06) background worker: video.finalize, meeting/account delete, retention sweep, queue depth
 backend/apps/smoke     (S2-12) staging smoke job: synthetic speech through gateway → segments via API
 backend/packages/log   (S2-11) content-free structured logs (field allow-list, Cloud Logging severity)
+backend/packages/tracing (S2-11) OpenTelemetry spans, one trace per meeting, OTLP to Google's Telemetry API
 docs/                  PRD, features, architecture, design, plan, research, ADRs, benchmark kit, legal drafts,
                        STAGING_SETUP.md (step-by-step cloud setup runbook)
 ```
@@ -272,6 +273,9 @@ Work like a careful senior engineer pairing with the developer.
   Hindi display text stays **as the STT provider returns it** for now (assembler display policy
   `as_provided`; `roman_rules` exists for D-01 and Anirudh will switch later). The free Gemini key
   is still never used on real meetings.
+- **2026-11-06 — Tracing (Anirudh):** OpenTelemetry approved as a dependency (`@opentelemetry/api`,
+  `sdk-trace`, `resources`, `exporter-trace-otlp-proto`, plus `google-auth-library`). Spans go over
+  OTLP to Google's Telemetry API (the Cloud Trace exporter is deprecated); IDs and counts only.
 
 ### Open (do not assume an answer)
 - LLM for summaries (D-04, ADR-0007). Gemini Flash is a candidate — paid tier only for user data.

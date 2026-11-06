@@ -14,6 +14,7 @@
     "@meetyou/log": "workspace:*",
     "@meetyou/queue": "workspace:*",
     "@meetyou/storage": "workspace:*",
+    "@meetyou/tracing": "workspace:*",
     "@meetyou/video": "workspace:*",
     "graphile-worker": "0.18.0",
     "pg": "8.23.1",

@@ -1,0 +1,22 @@
+{
+  "name": "@meetyou/tracing",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Content-free OpenTelemetry spans exported over OTLP to Google Cloud's Telemetry API (S2-11, ARCHITECTURE \u00a720): one trace per meeting across API, gateway and worker; IDs and counts only.",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@meetyou/log": "workspace:*",
+    "@opentelemetry/api": "1.10.0",
+    "@opentelemetry/exporter-trace-otlp-proto": "0.300.0",
+    "@opentelemetry/resources": "3.0.0",
+    "@opentelemetry/sdk-trace": "3.0.0",
+    "google-auth-library": "11.3.2"
+  }
+}

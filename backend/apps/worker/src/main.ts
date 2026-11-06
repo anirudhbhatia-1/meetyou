@@ -3,6 +3,7 @@ import process from 'node:process';
 import { createPgPool } from '@meetyou/db';
 import { createLogger } from '@meetyou/log';
 import { GcsBucket } from '@meetyou/storage';
+import { startTracing } from '@meetyou/tracing';
 
 import { loadWorkerEnv } from './config.ts';
 import { runWorker } from './worker.ts';
@@ -19,6 +20,7 @@ try {
   process.exit(1);
 }
 
+const tracing = startTracing('worker');
 const pool = createPgPool(env.DATABASE_URL);
 const worker = await runWorker({
   pool,
@@ -29,3 +31,4 @@ const worker = await runWorker({
 createLogger('worker').log('worker.started', { appEnv: env.APP_ENV, port: env.PORT });
 await worker.runner.promise;
 await worker.stop();
+await tracing.shutdown();

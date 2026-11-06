@@ -39,6 +39,7 @@ locals {
     "monitoring.googleapis.com",           # Alert policies and dashboards (S2-11)
     "iamcredentials.googleapis.com",       # signBlob for V4 signed URLs on Cloud Run (S2-14)
     "sts.googleapis.com",                  # Workload Identity Federation for GitHub Actions (S2-12)
+    "telemetry.googleapis.com",            # OTLP trace ingestion for Cloud Trace (S2-11)
   ]
 }
 
@@ -145,6 +146,24 @@ module "monitoring" {
   project_id   = var.project_id
   environment  = "staging"
   alert_emails = var.alert_emails
+
+  depends_on = [google_project_service.enabled_services]
+}
+
+# Tracing (S2-11): API, gateway and worker export OTLP spans to the Telemetry API with their own
+# service accounts. Emails are spelled out (not read from module.cloud_run) so a targeted apply
+# never pulls the Cloud Run services into the plan:
+#   terraform apply -target=google_project_iam_member.telemetry
+resource "google_project_iam_member" "telemetry" {
+  for_each = {
+    for pair in setproduct(["api", "gateway", "worker"], [
+      "roles/telemetry.tracesWriter",
+      "roles/serviceusage.serviceUsageConsumer",
+    ]) : "${pair[0]}:${pair[1]}" => { sa = pair[0], role = pair[1] }
+  }
+  project = var.project_id
+  role    = each.value.role
+  member  = "serviceAccount:meetyou-staging-${each.value.sa}-sa@${var.project_id}.iam.gserviceaccount.com"
 
   depends_on = [google_project_service.enabled_services]
 }
