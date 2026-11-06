@@ -66,6 +66,21 @@ export async function startApiSession(
   );
 }
 
+/** Deletes the meeting of a session whose capture never started (no audio, nothing to keep). */
+export async function discardApiMeeting(
+  apiUrl: string,
+  accessToken: string,
+  meetingId: string,
+): Promise<void> {
+  const path = `/v1/meetings/${encodeURIComponent(meetingId)}`;
+  const response = await fetch(new URL(path, apiUrl).href, {
+    method: 'DELETE',
+    headers: { authorization: `Bearer ${accessToken}` },
+    signal: AbortSignal.timeout(API_TIMEOUT_MS),
+  });
+  if (!response.ok) throw new ApiError(path, response.status);
+}
+
 /** A new stream token for a reconnect (FR-CAP-08); throws when the session has ended. */
 export async function recoverStreamToken(
   apiUrl: string,

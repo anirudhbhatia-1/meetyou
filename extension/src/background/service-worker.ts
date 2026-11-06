@@ -28,7 +28,7 @@ import {
 import { isMeetUrl, meetingCodeOf } from './meet-tab.ts';
 import { LAST_RECORDING_KEY, type LastRecording } from '../last-recording.ts';
 import { RECORD_VIDEO_KEY, recordVideoFrom } from '../settings.ts';
-import { startApiSession } from '../api-client.ts';
+import { discardApiMeeting, startApiSession } from '../api-client.ts';
 import { API_URL, GOOGLE_CLIENT_ID } from '../build-config.ts';
 import { ExtensionAuth } from './auth.ts';
 
@@ -223,6 +223,20 @@ async function startCloudSession(
   }
 }
 
+/**
+ * Capture failed after the API session was created: delete its meeting so a failed start does not
+ * leave an empty "recording" in the library. Best effort; the start error is what the user sees.
+ */
+async function discardCloudSession(session: StartedSession | undefined): Promise<void> {
+  if (auth === null || session === undefined) return;
+  try {
+    const token = await auth.accessToken();
+    if (token !== null) await discardApiMeeting(API_URL, token, session.meetingId);
+  } catch (error: unknown) {
+    logError('discard API session failed', error);
+  }
+}
+
 async function startRecording(tabId: number | undefined): Promise<void> {
   const state = await loadCaptureState();
   if (!canStart(state)) {
@@ -256,6 +270,7 @@ async function startRecording(tabId: number | undefined): Promise<void> {
     await ensureOffscreenDocument();
   } catch (error: unknown) {
     logError('offscreen create failed', error);
+    await discardCloudSession(session);
     await failCapture({ type: 'failed', error: 'offscreen_failed' });
     return;
   }
@@ -267,6 +282,7 @@ async function startRecording(tabId: number | undefined): Promise<void> {
     streamId = await chrome.tabCapture.getMediaStreamId({ targetTabId: tabId });
   } catch (error: unknown) {
     logError('tabCapture.getMediaStreamId failed', error);
+    await discardCloudSession(session);
     await failCapture({ type: 'failed', error: 'capture_not_allowed' });
     return;
   }
@@ -285,6 +301,7 @@ async function startRecording(tabId: number | undefined): Promise<void> {
   }
   const result = parseCaptureStartResult(reply);
   if (result === null || !result.ok) {
+    await discardCloudSession(session);
     await failCapture({ type: 'failed', error: result?.reason ?? 'offscreen_failed' });
     return;
   }

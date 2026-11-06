@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { apiSessionSource, signApiVideoFragments } from './api-client.ts';
+import { apiSessionSource, discardApiMeeting, signApiVideoFragments } from './api-client.ts';
 import { parseAccessTokenReply, parseMeetTitle, parseOffscreenMessage } from './messages.ts';
 import { parseLastRecording } from './last-recording.ts';
 import { UploadRejected } from './offscreen/video-uploader.ts';
@@ -49,6 +49,18 @@ describe('cloud session source', () => {
     const source = apiSessionSource(API, session, () => Promise.resolve('access'));
     await source.token('ses_1');
     await expect(source.token('ses_1')).rejects.toThrow('HTTP 410');
+  });
+});
+
+describe('discarding a failed start', () => {
+  it('deletes the empty meeting with the access token', async () => {
+    const fetchMock = vi.fn(() => Promise.resolve(new Response(null, { status: 204 })));
+    vi.stubGlobal('fetch', fetchMock);
+    await discardApiMeeting(API, 'access', 'mtg_1');
+    expect(fetchMock).toHaveBeenCalledWith(
+      `${API}/v1/meetings/mtg_1`,
+      expect.objectContaining({ method: 'DELETE', headers: { authorization: 'Bearer access' } }),
+    );
   });
 });
 
