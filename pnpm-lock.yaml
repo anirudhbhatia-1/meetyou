@@ -50,6 +50,12 @@ importers:
       '@meetyou/db':
         specifier: workspace:*
         version: link:../../packages/db
+      '@meetyou/queue':
+        specifier: workspace:*
+        version: link:../../packages/queue
+      '@meetyou/storage':
+        specifier: workspace:*
+        version: link:../../packages/storage
       fastify:
         specifier: ^5.2.1
         version: 5.12.8
@@ -196,6 +202,9 @@ importers:
 
   backend/packages/queue:
     dependencies:
+      '@meetyou/contracts':
+        specifier: workspace:*
+        version: link:../../../shared/contracts
       '@meetyou/db':
         specifier: workspace:*
         version: link:../db
@@ -218,9 +227,6 @@ importers:
       '@electric-sql/pglite-socket':
         specifier: 0.2.14
         version: 0.2.14(@electric-sql/pglite-age@0.0.12(@electric-sql/pglite@0.5.11))(@electric-sql/pglite-pg_hashids@0.0.12(@electric-sql/pglite@0.5.11))(@electric-sql/pglite-pg_ivm@0.0.12(@electric-sql/pglite@0.5.11))(@electric-sql/pglite-pg_textsearch@0.0.13(@electric-sql/pglite@0.5.11))(@electric-sql/pglite-pg_uuidv7@0.0.12(@electric-sql/pglite@0.5.11))(@electric-sql/pglite-pgtap@0.0.12(@electric-sql/pglite@0.5.11))(@electric-sql/pglite-pgvector@0.0.12(@electric-sql/pglite@0.5.11))(@electric-sql/pglite@0.5.11)
-      '@meetyou/contracts':
-        specifier: workspace:*
-        version: link:../../../shared/contracts
       '@types/pg':
         specifier: 8.23.1
         version: 8.23.1

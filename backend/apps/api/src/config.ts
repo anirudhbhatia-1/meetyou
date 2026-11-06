@@ -27,9 +27,15 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): ApiConfig {
     // Local Vite dev server
     'http://localhost:5173',
     'http://127.0.0.1:5173',
-    // Chrome extension IDs
-    /^chrome-extension:\/\/[a-z]{32}$/,
   ];
+
+  if (appEnv === 'staging' || appEnv === 'production') {
+    // Pinned Extension ID only in staging/production (ADR-0004 §4.1, STAGING_SETUP §4)
+    corsOrigins.push('chrome-extension://hjimcofnjnikbeepahmclaniopbnhbbe');
+  } else {
+    // Arbitrary extension IDs allowed in local/test development
+    corsOrigins.push(/^chrome-extension:\/\/[a-z]{32}$/);
+  }
 
   if (env.CORS_ALLOWED_ORIGINS) {
     const extra = env.CORS_ALLOWED_ORIGINS.split(',')

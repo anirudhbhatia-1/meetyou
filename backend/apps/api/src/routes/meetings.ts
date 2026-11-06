@@ -1,5 +1,6 @@
 import type { FastifyPluginAsync, FastifyReply, FastifyRequest } from 'fastify';
 import type { WorkspaceTx } from '@meetyou/db';
+import { cancelMeetingDeletion, scheduleMeetingDeletion } from '@meetyou/queue';
 import { type Meeting as MeetingType, TemplateId } from '@meetyou/contracts';
 import { z } from 'zod';
 
@@ -359,17 +360,25 @@ export const meetingsRoutes: FastifyPluginAsync = async (fastify) => {
         throw new UnauthorizedError('Unauthorized');
       }
 
-      const deleted = await request.inWorkspace(async (tx) => {
-        return tx
-          .updateTable('meetings')
-          .set({ deletedAt: new Date() })
+      const scheduled = await request.inWorkspace(async (tx) => {
+        const meeting = await tx
+          .selectFrom('meetings')
+          .select('id')
           .where('workspaceId', '=', workspaceId)
           .where('id', '=', id)
           .where('deletedAt', 'is', null)
           .executeTakeFirst();
+
+        if (!meeting) return null;
+
+        return scheduleMeetingDeletion(tx, {
+          workspaceId,
+          meetingId: id,
+          graceMs: 10_000,
+        });
       });
 
-      if (!deleted || Number(deleted.numUpdatedRows) === 0) {
+      if (!scheduled) {
         throw new NotFoundError(`Meeting ${id} not found`);
       }
 
@@ -388,20 +397,17 @@ export const meetingsRoutes: FastifyPluginAsync = async (fastify) => {
     }
 
     const restored = await request.inWorkspace(async (tx: WorkspaceTx) => {
-      return tx
-        .updateTable('meetings')
-        .set({ deletedAt: null })
-        .where('workspaceId', '=', workspaceId)
-        .where('id', '=', id)
-        .returningAll()
-        .executeTakeFirst();
+      return cancelMeetingDeletion(tx, {
+        workspaceId,
+        meetingId: id,
+      });
     });
 
     if (!restored) {
       throw new NotFoundError(`Meeting ${id} not found`);
     }
 
-    return reply.send({ status: 'restored', id: restored.id });
+    return reply.send({ status: 'restored', id });
   };
 
   fastify.post(

@@ -5,10 +5,20 @@ import { loadConfig } from './config.ts';
 async function main() {
   const config = loadConfig();
 
+  if (config.env === 'staging' || config.env === 'production') {
+    if (!config.databaseUrl) {
+      throw new Error(`DATABASE_URL is required in ${config.env}`);
+    }
+    if (!config.authSigningJwks) {
+      throw new Error(`AUTH_SIGNING_JWKS is required in ${config.env}`);
+    }
+  }
+
   let db: Db | undefined;
   if (config.databaseUrl) {
     const pool = createPgPool(config.databaseUrl);
     db = new Db(pool);
+    await db.assertRowSecurityEnforced();
   }
 
   const app = await buildApp({

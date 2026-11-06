@@ -13,6 +13,7 @@
     "test": "vitest run"
   },
   "dependencies": {
+    "@meetyou/contracts": "workspace:*",
     "@meetyou/db": "workspace:*",
     "graphile-worker": "0.18.0",
     "kysely": "0.29.7",
@@ -22,7 +23,6 @@
   "devDependencies": {
     "@electric-sql/pglite": "0.5.11",
     "@electric-sql/pglite-socket": "0.2.14",
-    "@types/pg": "8.23.1",
-    "@meetyou/contracts": "workspace:*"
+    "@types/pg": "8.23.1"
   }
 }

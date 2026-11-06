@@ -16,6 +16,8 @@
     "@meetyou/auth": "workspace:*",
     "@meetyou/contracts": "workspace:*",
     "@meetyou/db": "workspace:*",
+    "@meetyou/queue": "workspace:*",
+    "@meetyou/storage": "workspace:*",
     "fastify": "^5.2.1",
     "fastify-plugin": "^5.0.1",
     "kysely": "0.29.7",

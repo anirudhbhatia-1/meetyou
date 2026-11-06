@@ -15,6 +15,7 @@ COPY backend/ ./backend/
 RUN pnpm install --frozen-lockfile --prod
 
 ENV NODE_ENV=production
+USER node
 
 # Execute database migrations
 CMD ["node", "backend/packages/db/src/migrate-cli.ts"]
