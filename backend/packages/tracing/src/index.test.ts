@@ -2,7 +2,14 @@ import { SpanStatusCode, trace, TraceFlags } from '@opentelemetry/api';
 import { InMemorySpanExporter, SimpleSpanProcessor } from '@opentelemetry/sdk-trace';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
-import { meetingParent, recordSpan, startTracing, traced, type TracingHandle } from './index.ts';
+import {
+  exportProblemLogger,
+  meetingParent,
+  recordSpan,
+  startTracing,
+  traced,
+  type TracingHandle,
+} from './index.ts';
 
 describe('meeting trace IDs', () => {
   it('derives the same trace for a meeting in every service, and different ones per meeting', () => {
@@ -76,5 +83,33 @@ describe('startTracing', () => {
     expect(startTracing('api', { K_SERVICE: 'meetyou-staging-api', TRACING: 'off' }).enabled).toBe(
       false,
     );
+  });
+});
+
+describe('export problems', () => {
+  it('logs the error class and code only, at most once a minute, with a count', () => {
+    const lines: { event: string; fields: Record<string, unknown> }[] = [];
+    const logger = {
+      log: (event: string, fields = {}) => lines.push({ event, fields }),
+      error: (event: string, fields = {}) => lines.push({ event, fields }),
+    };
+    let now = 0;
+    const diagLogger = exportProblemLogger(logger, () => now);
+    class OTLPExporterError extends Error {
+      override name = 'OTLPExporterError';
+      code = 403;
+    }
+    diagLogger.error(
+      'export failed for https://telemetry.googleapis.com',
+      new OTLPExporterError('denied'),
+    );
+    diagLogger.error('again', new OTLPExporterError('denied'));
+    now = 61_000;
+    diagLogger.error('third');
+    expect(lines).toEqual([
+      { event: 'tracing.export_failed', fields: { code: 'OTLPExporterError:403', count: 1 } },
+      { event: 'tracing.export_failed', fields: { code: 'otel', count: 2 } },
+    ]);
+    expect(JSON.stringify(lines)).not.toContain('googleapis');
   });
 });

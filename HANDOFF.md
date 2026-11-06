@@ -204,6 +204,9 @@ invoked (toolbar icon or keyboard command); a click in the page or in the side p
   stays.
 - Extension tests 198 pass. Tester zip rebuilt. **Verified by Anirudh in Chrome:** starting from
   the M icon records.
+- Cloud checks: monitoring re-plan shows **No changes** (dashboard fix works). Trace read from Cloud
+  Shell needs `x-goog-user-project` (user ADC). OpenTelemetry export problems were silent: they now
+  log `tracing.export_failed` (class/code only, once a minute).
 
 ### 2026-11-06 — Anirudh (Claude Code): S2-12 CI/CD and S2-11 monitoring live on staging
 - **Smoke job** `meetyou-staging-smoke` created (API service account, VPC connector, secrets

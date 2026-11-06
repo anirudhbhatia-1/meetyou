@@ -1,12 +1,15 @@
 import { createHash } from 'node:crypto';
 
 import {
+  diag,
+  DiagLogLevel,
   ROOT_CONTEXT,
   SpanStatusCode,
   trace,
   TraceFlags,
   type Attributes,
   type Context,
+  type DiagLogger,
   type Tracer,
 } from '@opentelemetry/api';
 import { OTLPTraceExporter } from '@opentelemetry/exporter-trace-otlp-proto';
@@ -18,7 +21,7 @@ import {
   TraceIdRatioBasedSampler,
   type SpanProcessor,
 } from '@opentelemetry/sdk-trace';
-import { errorCode, safeField } from '@meetyou/log';
+import { createLogger, errorCode, safeField, type Logger } from '@meetyou/log';
 import { GoogleAuth } from 'google-auth-library';
 
 /**
@@ -105,6 +108,40 @@ export async function traced<T>(
   }
 }
 
+const REPORT_EVERY_MS = 60_000;
+
+/**
+ * OpenTelemetry reports its own problems (a refused or timed-out export) through `diag`, which is
+ * silent by default, so spans could vanish unnoticed. This logs them as content-free lines — the
+ * error class and code only (`OTLPExporterError:403`), never the message — at most once a minute
+ * per level, with how many were folded into it.
+ */
+export function exportProblemLogger(
+  logger: Logger = createLogger('tracing'),
+  now: () => number = Date.now,
+): DiagLogger {
+  const reporter = (event: string, write: Logger['log']) => {
+    let lastMs = -Infinity;
+    let folded = 0;
+    return (...args: unknown[]): void => {
+      folded += 1;
+      if (now() - lastMs < REPORT_EVERY_MS) return;
+      lastMs = now();
+      const error = args.find((arg) => arg instanceof Error);
+      write(event, { code: error === undefined ? 'otel' : errorCode(error), count: folded });
+      folded = 0;
+    };
+  };
+  const ignore = (): void => undefined;
+  return {
+    error: reporter('tracing.export_failed', logger.error),
+    warn: reporter('tracing.warning', logger.log),
+    info: ignore,
+    debug: ignore,
+    verbose: ignore,
+  };
+}
+
 export interface TracingHandle {
   enabled: boolean;
   /** Flushes buffered spans; call on SIGTERM (Cloud Run allows 10 s). */
@@ -137,12 +174,14 @@ export function startTracing(
     spanProcessors: [processor ?? new BatchSpanProcessor({ exporter: cloudExporter() })],
   });
   trace.setGlobalTracerProvider(provider);
+  if (processor === undefined) diag.setLogger(exportProblemLogger(), DiagLogLevel.WARN);
   const active = provider;
   return {
     enabled: true,
     shutdown: async () => {
       await active.shutdown();
       trace.disable();
+      diag.disable();
       provider = undefined;
     },
   };

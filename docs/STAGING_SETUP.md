@@ -441,6 +441,14 @@ terraform plan -target=google_project_iam_member.telemetry -var project_id=<proj
 terraform apply tel.tfplan
 ```
 Then Cloud Trace → Trace explorer, filter on `meetingId`, shows a meeting's spans on one timeline.
+From Cloud Shell (user credentials need the quota-project header):
+```bash
+curl -s -H "Authorization: Bearer $(gcloud auth print-access-token)" -H "x-goog-user-project: <project>" \
+  "https://cloudtrace.googleapis.com/v1/projects/<project>/traces?view=COMPLETE&pageSize=20&startTime=$(date -u -d '-3 hours' +%FT%TZ)" \
+  | jq -r '.error.message // empty, (.traces[]?.spans[]?.name)' | sort | uniq -c
+```
+A refused export shows up as a `tracing.export_failed` log line (error class and code, at most once
+a minute per service).
 
 **Session timeline** (§20, no content): every log line carries the session ID, so one query lists a
 session's events across services in order (connections, resumes, STT health, chunk failures, end
