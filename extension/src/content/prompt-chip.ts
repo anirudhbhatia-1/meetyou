@@ -29,8 +29,8 @@ export function reminderText(recordVideo: boolean): string {
 }
 
 const PROBLEM_TEXT: Record<PromptProblem, string> = {
-  start_failed: 'Recording did not start. Click the Minutes icon in the toolbar to start.',
-  panel_failed: 'Recording started. Open Minutes from the toolbar to see notes.',
+  start_failed: 'Recording did not start. Click the MeetYou (M) icon in Chrome’s toolbar to start.',
+  panel_failed: 'Recording started. Click the MeetYou (M) icon in Chrome’s toolbar to see notes.',
 };
 
 export class PromptChip {

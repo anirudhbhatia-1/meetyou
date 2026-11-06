@@ -512,10 +512,18 @@ chrome.action.onClicked.addListener((tab) => {
   if (tab.id === undefined || !isMeetUrl(tab.url)) {
     return;
   }
+  const tabId = tab.id;
   // Called synchronously so it runs inside the click's user gesture.
   chrome.sidePanel
-    .open({ tabId: tab.id })
+    .open({ tabId })
     .catch((error: unknown) => logError('open side panel failed', error));
+  // This click is what Chrome needs before tab capture: if the last start was refused for lack
+  // of it, start again now instead of making the user press Start once more.
+  void loadCaptureState().then((state) => {
+    if (state.status === 'error' && state.error === 'capture_not_allowed') {
+      enqueueCapture(() => startRecording(tabId));
+    }
+  });
 });
 
 chrome.runtime.onInstalled.addListener((details) => {

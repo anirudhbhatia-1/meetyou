@@ -104,7 +104,7 @@ export const ERROR_TEXT: Record<CaptureError, string> = {
   not_meet_tab: 'Open this panel on a Google Meet tab to record.',
   no_active_tab: 'We could not find the Meet tab. Click the Meet tab and try again.',
   capture_not_allowed:
-    'Chrome did not allow recording this tab. Click the Minutes icon in the toolbar, then press Start again.',
+    'Chrome only lets us record a tab after you click our icon. Click the MeetYou (M) icon in Chrome’s toolbar while on this Meet tab — the recording then starts. If you don’t see it, pin it from the puzzle-piece menu.',
   tab_capture_failed: "We couldn't record the Meet tab's sound.",
   audio_context_failed: 'Something went wrong and recording stopped.',
   offscreen_failed: 'Something went wrong and recording stopped.',
