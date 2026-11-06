@@ -49,11 +49,12 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): ApiConfig {
         'http://localhost:5173/auth/callback',
       ];
 
+  // The gateway accepts WebSockets on /v1/stream only (backend/apps/gateway server.ts).
   const gatewayWsUrl =
     env.GATEWAY_WS_URL ??
     (appEnv === 'staging'
-      ? 'wss://meetyou-staging-gateway-7oflznia2a-el.a.run.app'
-      : 'wss://gateway.meetyou.local');
+      ? 'wss://meetyou-staging-gateway-7oflznia2a-el.a.run.app/v1/stream'
+      : 'wss://gateway.meetyou.local/v1/stream');
 
   return {
     port: Number.isNaN(port) ? 8080 : port,

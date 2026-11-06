@@ -41,7 +41,7 @@ describe('Core REST API Endpoints (S2-09)', () => {
         settingsId: `set_${newUlid()}`,
       },
     );
-    workspaceIdA = accountA.workspaceId!;
+    workspaceIdA = accountA.workspaceId ?? '';
     userIdA = accountA.userId;
 
     const accountB = await testDb.db.signInGoogleUser(
@@ -57,7 +57,7 @@ describe('Core REST API Endpoints (S2-09)', () => {
         settingsId: `set_${newUlid()}`,
       },
     );
-    workspaceIdB = accountB.workspaceId!;
+    workspaceIdB = accountB.workspaceId ?? '';
     userIdB = accountB.userId;
 
     // 4. Issue access tokens
@@ -289,7 +289,7 @@ describe('Core REST API Endpoints (S2-09)', () => {
           clientInfo: { extensionVersion: '0.1.0', browser: 'Chrome' },
         },
       });
-      const meetingA2Id = JSON.parse(start2.body).meetingId;
+      expect(start2.statusCode).toBe(201);
 
       // List with limit 1
       const listRes = await app.inject({

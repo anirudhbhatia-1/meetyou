@@ -57,7 +57,7 @@ export const sessionsRoutes: FastifyPluginAsync<SessionsRoutesOptions> = async (
           .selectFrom('userSettings')
           .select(['retentionPolicy', 'recordVideo'])
           .where('workspaceId', '=', workspaceId)
-          .where('userId', '=', request.userId!)
+          .where('userId', '=', request.userId ?? '')
           .executeTakeFirst();
       });
 
@@ -110,7 +110,7 @@ export const sessionsRoutes: FastifyPluginAsync<SessionsRoutesOptions> = async (
       const response: StartSessionResponse = {
         sessionId,
         meetingId,
-        streamUrl: config.gatewayWsUrl as any,
+        streamUrl: config.gatewayWsUrl,
         streamToken: streamToken.token,
         expiresAt: streamToken.expiresAt.toISOString(),
         audioFormat: {

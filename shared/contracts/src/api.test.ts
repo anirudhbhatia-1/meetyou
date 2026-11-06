@@ -6,7 +6,6 @@ import {
   EndSessionRequest,
   ListActionItemsQuery,
   ListMeetingsQuery,
-  MeResponse,
   PatchMeetingRequest,
   PatchSettingsRequest,
   PatchSummaryItemRequest,
@@ -14,6 +13,7 @@ import {
   PutNotesRequest,
   RecoverSessionResponse,
 } from './api.ts';
+import { MeResponse } from './rest.ts';
 
 const ULID = '01J00000000000000000000000';
 
@@ -61,10 +61,8 @@ describe('Phase 1 endpoint shapes (ARCHITECTURE §12.1)', () => {
   it('parses responses the clients read', () => {
     expect(
       MeResponse.safeParse({
-        userId: 'usr_1',
-        workspaceId: 'ws_1',
-        email: 'a@example.com',
-        displayName: 'A',
+        user: { id: 'usr_1', email: 'a@example.com', displayName: 'A' },
+        workspace: { id: 'ws_1', name: 'A', plan: 'free', role: 'owner' },
       }).success,
     ).toBe(true);
     expect(

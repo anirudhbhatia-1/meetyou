@@ -33,14 +33,7 @@ function nonEmpty<T extends z.ZodObject>(schema: T) {
 
 // ---------- Me & settings ----------
 
-// GET /v1/me
-export const MeResponse = z.object({
-  userId: z.string().min(1),
-  workspaceId: z.string().min(1),
-  email: z.email(),
-  displayName: z.string().min(1).max(200),
-});
-export type MeResponse = z.infer<typeof MeResponse>;
+// GET /v1/me → MeResponse (rest.ts, as the API implements it).
 
 // GET /v1/settings → UserSettings. PATCH /v1/settings: only the fields that change.
 // `consentAcknowledged: true` records the onboarding acknowledgement (FR-ONB-06); the server sets
