@@ -10,7 +10,7 @@ The only package that talks to vendors (AGENTS §3 rule 3, ARCHITECTURE §7).
 | `LlmProvider` | Structured JSON calls; no adapter until D-04 / ADR-0007 |
 | `Transliterator` | Devanagari → Roman (D-01); implemented in S2-05 |
 | `createProviders(env)` | Registry from `APP_ENV`, `STT_PROVIDER` (`none` / `deepgram`), `DEEPGRAM_API_KEY` |
-| `assertFreeKeyAllowed(env)` | `GEMINI_FREE_TIER_ACCEPTED=true` is refused outside `local` and `ci` (ADR-0001 §7) |
+| `assertFreeKeyAllowed(env)` | `GEMINI_FREE_TIER_ACCEPTED=true` is refused outside `local` and `ci`; staging only with the temporary `GEMINI_FREE_TIER_ON_STAGING=true`; production always (ADR-0001 §7) |
 
 Data-use controls live inside each adapter and cannot be turned off by callers. Vendor error bodies
 are never surfaced (they can echo request details); only HTTP status codes are.

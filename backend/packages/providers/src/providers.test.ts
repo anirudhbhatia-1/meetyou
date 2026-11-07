@@ -178,4 +178,15 @@ describe('provider registry (ARCHITECTURE §7.3)', () => {
       createProviders({ APP_ENV: 'production', GEMINI_FREE_TIER_ACCEPTED: 'true' }),
     ).toThrow();
   });
+
+  it('allows the free key on staging only with the explicit temporary exception, never in production', () => {
+    const env = (APP_ENV: string) =>
+      ProviderEnv.parse({
+        APP_ENV,
+        GEMINI_FREE_TIER_ACCEPTED: 'true',
+        GEMINI_FREE_TIER_ON_STAGING: 'true',
+      });
+    expect(() => assertFreeKeyAllowed(env('staging'))).not.toThrow();
+    expect(() => assertFreeKeyAllowed(env('production'))).toThrow(/refused in production/);
+  });
 });

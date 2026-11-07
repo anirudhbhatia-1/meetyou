@@ -276,6 +276,13 @@ Work like a careful senior engineer pairing with the developer.
   `sdk-trace`, `resources`, `exporter-trace-otlp-proto`, plus `google-auth-library`). Spans go over
   OTLP to Google's Telemetry API (the Cloud Trace exporter is deprecated); IDs and counts only.
 
+- **2026-11-07 — Free Gemini key on staging, temporarily (Anirudh):** staging may use the free key
+  (`GEMINI_FREE_TIER_ON_STAGING=true`) until Anirudh switches to a paid key, only for test meetings
+  where everyone agreed and testers are told; production always refuses it (ADR-0001 §7 amendment).
+- **2026-11-07 — "Ask this meeting" in Phase 1 (Anirudh):** website Q&A pulled forward from
+  Phase 2 (FEATURES E4/H3), limited to **one recording and its owner**: answers only from that
+  meeting's transcript and notes, with citations; off-topic questions refused; length and rate
+  limits against misuse; cost tracked.
 - **2026-11-07 — Before Stage 3 (Anirudh):** S3 builds the summary engine on **Gemini Flash** first
   (D-04 stays open until the S3-05 evaluation and ADR-0007; paid tier for any user data, the free
   key only for synthetic/CI). **D-05:** consent notice default **One click**. **D-10:** the `me` lane

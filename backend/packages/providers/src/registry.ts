@@ -20,6 +20,11 @@ export const ProviderEnv = z.object({
   GEMINI_MODEL: z.string().min(1).default(GEMINI_DEFAULT_MODEL),
   /** Set only for development with synthetic or public data (ADR-0001 §7). */
   GEMINI_FREE_TIER_ACCEPTED: z.enum(['true', 'false']).optional(),
+  /**
+   * Temporary staging-only exception (Anirudh, 2026-11-07, ADR-0001 §7 amendment): the free key on
+   * staging until the paid key is in place. Never honoured in production.
+   */
+  GEMINI_FREE_TIER_ON_STAGING: z.enum(['true', 'false']).optional(),
 });
 export type ProviderEnv = z.infer<typeof ProviderEnv>;
 
@@ -46,12 +51,14 @@ export function createLlmProvider(
 
 /**
  * The free Gemini key is for development and testing only (AGENTS §9, ADR-0001 §7): Google may
- * train on it and humans may review it. Staging and production refuse to start with it.
+ * train on it, humans may review it, and its terms forbid personal information. Production always
+ * refuses it; staging refuses it unless the temporary `GEMINI_FREE_TIER_ON_STAGING=true` exception
+ * is set (Anirudh, 2026-11-07, until the paid key is in place).
  */
 export function assertFreeKeyAllowed(env: ProviderEnv): void {
-  if (env.GEMINI_FREE_TIER_ACCEPTED === 'true' && !DEV_ENVS.has(env.APP_ENV)) {
-    throw new Error(`free-tier Gemini key refused in ${env.APP_ENV} (ADR-0001 §7)`);
-  }
+  if (env.GEMINI_FREE_TIER_ACCEPTED !== 'true' || DEV_ENVS.has(env.APP_ENV)) return;
+  if (env.APP_ENV === 'staging' && env.GEMINI_FREE_TIER_ON_STAGING === 'true') return;
+  throw new Error(`free-tier Gemini key refused in ${env.APP_ENV} (ADR-0001 §7)`);
 }
 
 /**

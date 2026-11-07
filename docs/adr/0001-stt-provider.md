@@ -223,6 +223,13 @@ The provider layer enforces this: `GEMINI_FREE_TIER_ACCEPTED` is honoured only w
 `APP_ENV` is `local` or `ci`. Staging and production refuse to start with a free key
 (ARCHITECTURE §15.2). D-04 (the summary LLM for real meetings) still needs a paid tier.
 
+**Amendment — temporary staging exception (Anirudh, 2026-11-07).** Until Anirudh moves the key to
+the paid tier, staging may use the free key for summaries when `GEMINI_FREE_TIER_ON_STAGING=true`
+is set on the service. Anirudh accepted that this conflicts with Google's terms quoted above and
+that staging transcripts may be used for training and read by reviewers. Conditions: only test
+meetings where every participant knows and agrees; testers are told (tester guide); production
+always refuses the free key; remove the setting when the paid key is in place.
+
 ## 8. Run log
 
 | Date | Phase | Runs | Clips | Who | Notes |
