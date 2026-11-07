@@ -150,6 +150,7 @@ backend/apps/worker    (S2-06) background worker: video.finalize, meeting/accoun
 backend/apps/smoke     (S2-12) staging smoke job: synthetic speech through gateway → segments via API
 backend/packages/log   (S2-11) content-free structured logs (field allow-list, Cloud Logging severity)
 backend/packages/tracing (S2-11) OpenTelemetry spans, one trace per meeting, OTLP to Google's Telemetry API
+backend/packages/summarizer (S3-01) summary engine: data-wrapped prompt, templates as data, chunked fallback, schema retry
 docs/                  PRD, features, architecture, design, plan, research, ADRs, benchmark kit, legal drafts,
                        STAGING_SETUP.md (step-by-step cloud setup runbook)
 ```

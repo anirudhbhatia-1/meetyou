@@ -252,7 +252,7 @@ failover tests pass · tenancy tests pass · smoke test runs on every deploy.
 ### Tasks
 | ID | Task and approach | Owner | Depends on | Done when |
 |---|---|---|---|---|
-| S3-01 | **Summarization engine** (ARCHITECTURE §10): prompt builder with data-wrapped transcript and notes, templates stored as data, single-pass with chunked fallback, JSON schema validation and retry | Anirudh | S2-03, S2-05 | Summaries validate on the golden set |
+| S3-01 | **Summarization engine** (ARCHITECTURE §10): **Code done 2026-11-07** (`backend/packages/summarizer` + Gemini adapter in `@meetyou/providers`, `gemini-3.6-flash`; real run on the synthetic standup passes the schema in Hinglish with citations). Golden-set check in S3-05. prompt builder with data-wrapped transcript and notes, templates stored as data, single-pass with chunked fallback, JSON schema validation and retry | Anirudh | S2-03, S2-05 | Summaries validate on the golden set |
 | S3-02 | **Validation chain:** citation existence, owner restriction to participants, relative-date resolution with `due_phrase`, unverified flags, numbers/dates check (P2) | Anirudh | S3-01 | Validation unit tests pass |
 | S3-03 | **Fast-path pipeline:** finalize → summarize → validate → index → notify, `processing_step` updates, SSE `GET /meetings/{id}/events` | Anirudh | S2-06, S3-02 | 60-minute meeting summary ≤ 60 s P95 on staging |
 | S3-04 | **Batch path:** batch re-transcription, speaker resolution (diarization clusters aligned with `speaker.active`), segment-ID mapping, compare-and-resummarize, action-item status carry-over | Anirudh | S3-03, S1-08 | "Notes updated" flow works; citations survive |

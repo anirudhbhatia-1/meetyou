@@ -1,0 +1,23 @@
+{
+  "name": "@meetyou/summarizer",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Summarization engine (S3-01, ARCHITECTURE §10): prompt builder with data-wrapped transcript and notes, templates as data, single pass with chunked fallback, schema validation with one retry. No vendor code: the LLM comes in through the provider interface.",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json",
+    "test": "vitest run",
+    "summarize:fixture": "node src/cli.ts"
+  },
+  "dependencies": {
+    "@meetyou/contracts": "workspace:*",
+    "@meetyou/providers": "workspace:*",
+    "zod": "^4.6.7"
+  },
+  "devDependencies": {
+    "@meetyou/fixtures": "workspace:*"
+  }
+}

@@ -38,6 +38,7 @@ describe('smoke run end to end (local)', () => {
   let token = '';
   let workspaceId = '';
   let worker: Awaited<ReturnType<typeof startWorker>>;
+  let workerRunning = false;
 
   beforeAll(async () => {
     env = await createQueueTestEnv();
@@ -86,7 +87,9 @@ describe('smoke run end to end (local)', () => {
       handleSignals: false,
       pollIntervalMs: 200,
       noPreparedStatements: true,
+      concurrency: 1,
     });
+    workerRunning = true;
     token = (
       await tokens.issueAccessToken({
         userId: account.userId,
@@ -97,13 +100,21 @@ describe('smoke run end to end (local)', () => {
   }, 30_000);
 
   afterAll(async () => {
-    await worker.stop();
+    if (workerRunning) await worker.stop();
     await app.close();
     await gateway.close();
     await env.close();
   });
 
   it('streams, stores, reads back and cleans up', async () => {
+    // PGlite is one database session behind every connection: reading while the worker writes
+    // can interleave their extended-protocol portals ("portal does not exist"). So the test waits
+    // for the worker's own success event, stops it (pending completions finish), then reads once.
+    const deleteDone = new Promise<void>((resolve) => {
+      worker.events.on('job:success', ({ job }) => {
+        if (job.task_identifier === 'meeting.delete') resolve();
+      });
+    });
     const result = await runSmoke({
       apiUrl,
       accessToken: token,
@@ -120,8 +131,11 @@ describe('smoke run end to end (local)', () => {
     expect(result).toMatchObject({ framesSent: 20, acked: true, deleted: true });
     expect(result.segments).toBeGreaterThan(0);
     // The worker deletes the meeting for good after the 10 s grace.
-    expect(await waitForDeletion(env.db, workspaceId, result.meetingId, 30_000, 500)).toBeLessThan(
-      30_000,
+    await deleteDone;
+    await worker.stop();
+    workerRunning = false;
+    expect(await waitForDeletion(env.db, workspaceId, result.meetingId, 1_000, 100)).toBeLessThan(
+      1_000,
     );
   }, 60_000);
 

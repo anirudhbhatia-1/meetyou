@@ -6,10 +6,10 @@ pointer to where the full detail lives — the linked document stays the source 
 
 | Field | Value |
 |---|---|
-| Last updated | 2026-11-07 (Anirudh: pre-S3 decisions — Gemini Flash first, D-05 One click, D-10 follow mute, English for agents) |
+| Last updated | 2026-11-07 (Anirudh: S3-01 summarization engine on the Gemini API — adapter, prompt, templates, chunking, retry) |
 | Updated by | Anirudh (Claude Code) |
 | Repository | [anirudhbhatia-1/meetyou](https://github.com/anirudhbhatia-1/meetyou) — branches `main`, `anirudh`, `Gauravbro` |
-| Current stage | **Stage 2 code complete** (live tests pending); **Stage 3 next** — Anirudh S3-01 on Gemini Flash; Gaurav S3-07..S3-11 (§7) |
+| Current stage | **Stage 3** in progress — S3-01 code done (Anirudh); next S3-02 validation chain; Gaurav S3-09..S3-11 can start (§7) |
 
 ---
 
@@ -198,7 +198,35 @@ deploys and smoke-tests). Next, **Stage 3 — notes and summaries** (IMPLEMENTAT
 
 Newest first. One entry per working session (either person).
 
-### 2026-11-07 (latest) — Anirudh (Claude Code): decisions before Stage 3
+### 2026-11-07 (latest) — Anirudh (Claude Code): S3-01 summarization engine (Gemini API)
+Anirudh chose the **Gemini API with a key** (Google AI Studio), not Vertex AI. Verified against
+aistudio.google.com docs (2026-11-07): latest stable Flash is **`gemini-3.6-flash`** (setting
+`GEMINI_MODEL`); JSON via `generationConfig.responseFormat.text` (`APPLICATION_JSON` + standard
+JSON Schema; `pattern` ignored, so our zod check stays authoritative); `temperature` is ignored on
+3.6 and will be rejected later, so it is never sent; `systemInstruction` carries the rules.
+- **`@meetyou/providers`**: `llm/gemini.ts` (plain fetch, key in `x-goog-api-key`, error bodies
+  never read), vendor-neutral `LlmHttpError` / `LlmRefusedError` / `LlmOutputError`, usage with
+  thinking tokens; registry `createLlmProvider` (`LLM_PROVIDER=none|gemini`, `GEMINI_API_KEY`,
+  free key still refused outside local/CI). 16 tests.
+- **`backend/packages/summarizer`** (new, no vendor code): prompt builder (rules AI-01..07, data
+  blocks with `<`/`>` neutralised against injection, `[seg_id] (mm:ss) Speaker: text`, echo
+  excluded, English/Hindi-Devanagari/Hinglish-Roman), templates as data with versions (first
+  wording; S3-07 refines), single pass with chunked map-reduce above 200k tokens, schema
+  validation with one retry carrying the problems (`retryReasons` keeps paths/codes only),
+  `SummaryFailedError` (`no_transcript`, `invalid_output`, `refused`); HTTP errors propagate for
+  the queue. 13 tests on the synthetic Hinglish standup.
+- **Real run** (`pnpm --filter @meetyou/summarizer summarize:fixture`, free key, synthetic only):
+  schema-valid Hinglish summary, owner from the participant list, `due_phrase: "aaj"` with no
+  invented date, the fixture's explicit decision found. 13–32 s for a 1-minute meeting; thinking
+  tokens (2–4.6k) dominate; one run needed the retry. **Latency against the ≤ 40 s budget for 60
+  minutes is the main risk** — measure in S3-05.
+- Not yet: citation/owner/date checks (S3-02), storing summaries and the worker job (S3-03), paid
+  key in Secret Manager for staging.
+- Fixed a flaky local smoke test (`portal "" does not exist` from graphile-worker): PGlite is one
+  session behind every connection, so test reads overlapping the worker's writes collided. The
+  test now waits for the worker's `job:success` event, stops it, then reads once (5/5 runs clean).
+
+### 2026-11-07 — Anirudh (Claude Code): decisions before Stage 3
 Anirudh decided (asked as one set): **Gemini Flash** first for S3 summaries (D-04 still closes via
 S3-05/ADR-0007); **D-05 One click**; **D-10 `me` lane follows Meet mute**; **agents reply in
 English** (AGENTS §1 changed — Gaurav's agent too). D-05/D-10 needed no code change: contracts

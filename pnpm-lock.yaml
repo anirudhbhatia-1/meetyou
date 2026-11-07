@@ -306,6 +306,22 @@ importers:
         specifier: ^4.6.7
         version: 4.6.7
 
+  backend/packages/summarizer:
+    dependencies:
+      '@meetyou/contracts':
+        specifier: workspace:*
+        version: link:../../../shared/contracts
+      '@meetyou/providers':
+        specifier: workspace:*
+        version: link:../providers
+      zod:
+        specifier: ^4.6.7
+        version: 4.6.7
+    devDependencies:
+      '@meetyou/fixtures':
+        specifier: workspace:*
+        version: link:../../../shared/fixtures
+
   backend/packages/tracing:
     dependencies:
       '@meetyou/log':
