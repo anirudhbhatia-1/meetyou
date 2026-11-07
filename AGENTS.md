@@ -11,17 +11,15 @@ tasks owned by your developer unless they say otherwise.
 single source of truth for scope, architecture, and working style. If a rule here conflicts with an
 agent's default behavior, this file wins.
 
-> **Project status: Stage 0 complete (2026-11-01); Stage 1 in progress.** The pnpm workspace,
-> `shared/contracts`, `shared/design-tokens`, and `tools/stt-benchmark` exist; `extension/` (S1-01..)
-> and `backend/apps/gateway` (S1-05, local dev) have started. Create other product code only for
-> IMPLEMENTATION_PLAN tasks your developer has started.
+> **Project status: Stage 2 code complete and running on staging (2026-11-07); Stage 3 (notes and
+> summaries) is next.** Live S2 tests (gateway failover, worker crash, 60-min video sync) are still
+> to run. Create other product code only for IMPLEMENTATION_PLAN tasks your developer has started.
 
 ---
 
 ## 1. Communication
 
-- Reply to developers in **Hinglish** (Roman-script Hindi + English technical terms) unless asked
-  otherwise.
+- Reply to developers in **English** (Anirudh, 2026-11-07; replaces the earlier Hinglish rule).
 - Code, code comments, commit messages, PR descriptions, and docs in `docs/` are in **English**.
 - Be direct. Say what is verified and what is assumed. Never present a guess as a fact.
 
@@ -277,8 +275,13 @@ Work like a careful senior engineer pairing with the developer.
   `sdk-trace`, `resources`, `exporter-trace-otlp-proto`, plus `google-auth-library`). Spans go over
   OTLP to Google's Telemetry API (the Cloud Trace exporter is deprecated); IDs and counts only.
 
+- **2026-11-07 — Before Stage 3 (Anirudh):** S3 builds the summary engine on **Gemini Flash** first
+  (D-04 stays open until the S3-05 evaluation and ADR-0007; paid tier for any user data, the free
+  key only for synthetic/CI). **D-05:** consent notice default **One click**. **D-10:** the `me` lane
+  **follows Meet mute** by default. Agents reply in **English**.
+
 ### Open (do not assume an answer)
-- LLM for summaries (D-04, ADR-0007). Gemini Flash is a candidate — paid tier only for user data.
+- LLM for summaries (D-04, ADR-0007): building on Gemini Flash first; the evaluation decides.
 
 ---
 

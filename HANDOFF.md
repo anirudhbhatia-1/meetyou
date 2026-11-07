@@ -6,10 +6,10 @@ pointer to where the full detail lives — the linked document stays the source 
 
 | Field | Value |
 |---|---|
-| Last updated | 2026-11-06 (Anirudh: Meet prompt no longer offers a Start Chrome refuses; S2 code complete, cloud setup applied) |
+| Last updated | 2026-11-07 (Anirudh: pre-S3 decisions — Gemini Flash first, D-05 One click, D-10 follow mute, English for agents) |
 | Updated by | Anirudh (Claude Code) |
 | Repository | [anirudhbhatia-1/meetyou](https://github.com/anirudhbhatia-1/meetyou) — branches `main`, `anirudh`, `Gauravbro` |
-| Current stage | **Stage 2** in progress — S2-08 & S2-09 complete; Gaurav next: S2-10 data lifecycle (§7) |
+| Current stage | **Stage 2 code complete** (live tests pending); **Stage 3 next** — Anirudh S3-01 on Gemini Flash; Gaurav S3-07..S3-11 (§7) |
 
 ---
 
@@ -140,11 +140,11 @@ All dated 2026-10-28 unless noted.
 | ID | Question | Status / next step | Owner of next step |
 |---|---|---|---|
 | STT outage | With Deepgram as the only provider, what the product does during a Deepgram outage (audio is still stored) | Decide before beta (ADR-0001 §0) | Anirudh |
-| D-04 | LLM for summaries | Evaluation in S3-05 → ADR-0007; Gemini Flash is a candidate | Anirudh |
-| D-05 | Consent notice default mode | Proposed One click (used in DESIGN) — confirm | Both |
+| D-04 | LLM for summaries | Build on **Gemini Flash** first (2026-11-07); S3-05 evaluation → ADR-0007 | Anirudh |
+| D-05 | ✅ Closed 2026-11-07: **One click** (code and DB defaults already `one_click`) | — | — |
 | D-06 | ✅ Closed 2026-10-29: Opus 24 kbps ([ADR-0003](docs/adr/0003-audio-transport-format.md), accepted) | Re-check with chosen provider in S1-11 | Anirudh |
 | D-09 | Product name | "Minutes" is a working name | Both |
-| D-10 | `me` lane follows Meet mute by default | Proposed On — confirm in M1 | Both |
+| D-10 | ✅ Closed 2026-11-07: **On** (`followMeetMute: true` already the default) | — | — |
 | D-11 | Hinglish note markers (`faisla:`, `kaam:`, `sawaal:`, `zaroori:`) | Decide by M2 | Both |
 | ADR-0002 / 0003 / 0004 / 0005 / 0011 | Accepted; run their verification items in Stage 1 (S1-11, S1-13) | Accepted | Anirudh |
 
@@ -171,12 +171,18 @@ Facts learned so far that change how we build. Full sources in STT_PREFLIGHT.md 
 
 ## 7. What happens next
 
-Stage 0 is complete (status table: IMPLEMENTATION_PLAN.md → "Stage 0 status"). Next, Stage 1:
+Stages 0–2 are complete in code; Stage 2 is deployed to staging with CI/CD (every green `main`
+deploys and smoke-tests). Next, **Stage 3 — notes and summaries** (IMPLEMENTATION_PLAN Stage 3):
 
-1. **Gaurav:** S1-01, S1-07, S1-08, S1-09, S1-10, S1-12 complete; next: Stage 2 (S2-08 Fastify API scaffold, S2-09 core endpoints).
-2. **Anirudh:** S1-02..S1-06 capture path, **S1-13 video capture spike** (ADR-0011 checks), S1-14 was
-   cancelled 2026-11-05 (Deepgram only, ADR-0001 §0).
-3. Record consented dogfooding meetings for benchmark Phases E–G (kit in `docs/benchmark/`).
+1. **Anirudh:** S3-01 summarization engine on **Gemini Flash** (LLM adapter behind the provider
+   interface), then S3-02 validation chain, S3-03 fast-path pipeline, S3-05 evaluation → ADR-0007.
+   Needs a **paid-tier Gemini key in Secret Manager** before real meetings on staging.
+2. **Gaurav:** S3-07 template content (after the S3-01 template format exists), S3-08 summary
+   endpoints (after S3-03), and now: **S3-09 search**, **S3-10 glossary endpoint**, **S3-11 export
+   job** — these depend only on S2 and can start today. Language rule changed: agents reply in
+   English (AGENTS §1).
+3. Still to run (Anirudh): live S2 tests — gateway failover (S2-04), worker crash mid-job (S2-06),
+   60-min video sync (S2-14); trace arrival check (STAGING_SETUP §9.3).
 
 ## 8. Conventions for this file
 
@@ -192,7 +198,15 @@ Stage 0 is complete (status table: IMPLEMENTATION_PLAN.md → "Stage 0 status").
 
 Newest first. One entry per working session (either person).
 
-### 2026-11-06 (latest) — Anirudh (Claude Code): Meet prompt cannot start recording — fixed the UI
+### 2026-11-07 (latest) — Anirudh (Claude Code): decisions before Stage 3
+Anirudh decided (asked as one set): **Gemini Flash** first for S3 summaries (D-04 still closes via
+S3-05/ADR-0007); **D-05 One click**; **D-10 `me` lane follows Meet mute**; **agents reply in
+English** (AGENTS §1 changed — Gaurav's agent too). D-05/D-10 needed no code change: contracts
+(`DEFAULT_USER_SETTINGS`) and the 0001 migration already default to `one_click` / `true`. Updated
+AGENTS (status, §1, §9), PRD decision table, this file's §5 and §7 (Gaurav: S3-09/10/11 can start).
+Offline start (recording while the server is unreachable) stays a backlog item, not in the PRD.
+
+### 2026-11-06 — Anirudh (Claude Code): Meet prompt cannot start recording — fixed the UI
 Anirudh's test: the in-Meet prompt's **Start** always ended in "Recording did not start" and the
 panel's "Start again" failed the same way. Chrome grants `tabCapture` only after the extension is
 invoked (toolbar icon or keyboard command); a click in the page or in the side panel never counts
