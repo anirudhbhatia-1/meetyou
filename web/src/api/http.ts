@@ -81,7 +81,11 @@ export function createHttpApi(auth: WebAuth): LibraryApi {
       const res = await auth.authorized(`/v1/meetings/${encodeURIComponent(meetingId)}/ask`, {
         method: 'POST',
         headers: { 'content-type': 'application/json', accept: 'application/json' },
-        body: JSON.stringify({ question }),
+        // The browser's time zone, so start and end times are answered in local time.
+        body: JSON.stringify({
+          question,
+          timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+        }),
       });
       if (res.ok) return { ok: true, ...AskQuestionResponse.parse(await res.json()) };
       if (res.status === 429) return { ok: false, error: 'rate_limited' };

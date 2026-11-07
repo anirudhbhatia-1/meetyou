@@ -88,6 +88,8 @@ export function inputBlock(
     `date: ${input.meeting.date}`,
     `duration: ${clock(input.meeting.durationMs)}`,
   ];
+  if (input.meeting.startedAt !== undefined) lines.push(`started: ${input.meeting.startedAt}`);
+  if (input.meeting.endedAt !== undefined) lines.push(`ended: ${input.meeting.endedAt}`);
   if (part !== undefined && first !== undefined && last !== undefined) {
     lines.push(
       `part: ${part.index} of ${part.count}, ${clock(first.startMs)} to ${clock(last.endMs)}.`,

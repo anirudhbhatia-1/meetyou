@@ -2,6 +2,7 @@ import {
   parseBackgroundMessage,
   parseMeetCallState,
   parseMeetStateReply,
+  parseMeetMuteReply,
   parseMeetTitle,
   senderTabId,
   type MeetCallState,
@@ -322,6 +323,29 @@ async function startRecording(tabId: number | undefined): Promise<void> {
   }
   // Usually recording starts inside the call; the adapter only reports state changes, so ask.
   if ((await readCallState(tabId)) === 'in_call') await applyCaptureEvent({ type: 'call_joined' });
+  // Already muted in Meet when recording starts: the adapter reports only changes (FR-CAP-11).
+  if ((await readMuteState(tabId)) === true) await forwardMute(true);
+}
+
+async function readMuteState(tabId: number): Promise<boolean | null> {
+  try {
+    return parseMeetMuteReply(await chrome.tabs.sendMessage(tabId, { type: 'meet.get-state' }));
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Meet's mute on the recorded tab reaches the recorder (FR-CAP-11, D-10 "follow Meet mute"): muted
+ * mic audio is never stored, sent to STT or mixed into the video.
+ * TODO(S4-12): honour the `followMeetMute` setting once settings sync to the extension.
+ */
+async function forwardMute(muted: boolean): Promise<void> {
+  try {
+    await sendToOffscreen({ target: 'offscreen', type: 'capture.mic_muted', muted });
+  } catch (error: unknown) {
+    logError('forward mute failed', error);
+  }
 }
 
 async function stopRecording(): Promise<void> {
@@ -632,10 +656,14 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       });
       return true;
     }
-    // TODO(FR-CAP-11, S2-04): forward mute and speaker events of the recording tab to the
-    // offscreen document for me-lane gating and speaker naming; today they are only observed.
-    if (record.type === 'meet.mute-changed') {
-      console.log(`[MeetYou] Background observed mic.mute_changed: muted=${Boolean(record.muted)}`);
+    // TODO(S3-04): forward speaker events for speaker naming; today they are only observed.
+    if (record.type === 'meet.mute-changed' && typeof record.muted === 'boolean') {
+      const muted = record.muted;
+      // Only the recorded tab's mute counts, and only while it is being recorded.
+      enqueueCapture(async () => {
+        const state = await loadCaptureState();
+        if (fromTab !== null && state.tabId === fromTab && canStop(state)) await forwardMute(muted);
+      });
       return false;
     }
     if (record.type === 'meet.speaker-active' && typeof record.participantId === 'string') {

@@ -278,6 +278,10 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
       return reply(stop());
     case 'capture.pause':
       return reply((recorder?.pause() ?? Promise.resolve()).then(() => ({ ok: true })));
+    case 'capture.mic_muted':
+      recorder?.setMicMuted(parsed.muted);
+      sendResponse({ ok: true });
+      return false;
     case 'capture.resume':
       recorder?.resume();
       sendResponse({ ok: true });

@@ -10,7 +10,13 @@ import type { JobHelpers } from 'graphile-worker';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { PartTiming, VideoStore } from './finalize.ts';
-import { RECHECK_MS, VIDEO_FINALIZE, videoFinalizeJobKey, videoFinalizeTask } from './task.ts';
+import {
+  recheckDelayMs,
+  RECHECK_MS,
+  VIDEO_FINALIZE,
+  videoFinalizeJobKey,
+  videoFinalizeTask,
+} from './task.ts';
 import { hasFfmpeg, synthFragments } from './testing.ts';
 
 const PART = 'vp_01J00000000000000000000PRT';
@@ -103,11 +109,23 @@ describe.runIf(hasFfmpeg())('video.finalize task (S2-14, ADR-0005)', () => {
     await task.handle({ workspaceId, meetingId }, h.helpers);
     expect(h.addJob).toHaveBeenCalledWith(
       VIDEO_FINALIZE,
-      { workspaceId, meetingId },
-      { runAt: new Date(now + RECHECK_MS), jobKey: videoFinalizeJobKey(meetingId) },
+      { workspaceId, meetingId, checks: 1 },
+      { runAt: new Date(now + 30_000), jobKey: videoFinalizeJobKey(meetingId) },
     );
     expect(store.deleted).toBe(false);
   }, 60_000);
+
+  it('re-checks soon after the meeting, then backs off to every 15 minutes', () => {
+    expect([0, 1, 2, 3, 4, 5, 9].map(recheckDelayMs)).toEqual([
+      30_000,
+      60_000,
+      120_000,
+      240_000,
+      480_000,
+      RECHECK_MS,
+      RECHECK_MS,
+    ]);
+  });
 
   it('finalizes when complete: ready row with retention, then deletes the fragments', async () => {
     const endedAt = new Date('2026-11-06T10:30:00Z');

@@ -65,7 +65,9 @@ export type OffscreenMessage =
   | { target: 'offscreen'; type: 'capture.stop' }
   | { target: 'offscreen'; type: 'capture.pause' }
   | { target: 'offscreen'; type: 'capture.resume' }
-  | { target: 'offscreen'; type: 'capture.status' };
+  | { target: 'offscreen'; type: 'capture.status' }
+  /** Meet's mic mute on the recorded tab (FR-CAP-11, D-10). */
+  | { target: 'offscreen'; type: 'capture.mic_muted'; muted: boolean };
 
 export type SidePanelMessage =
   /** Per-lane RMS level in dBFS; `me` is null when the microphone lane is not captured. */
@@ -137,6 +139,13 @@ export function parseMeetTitle(reply: unknown): string | null {
   const trimmed = title.trim().slice(0, 200);
   // The adapter's placeholder is not a real title; the web app names untitled meetings itself.
   return trimmed === '' || trimmed === 'Untitled Meeting' ? null : trimmed;
+}
+
+/** Meet's mic mute from a `meet.get-state` reply; null when the mic button was not found. */
+export function parseMeetMuteReply(reply: unknown): boolean | null {
+  if (!isRecord(reply) || !isRecord(reply.muteState)) return null;
+  const muted = reply.muteState.isMuted;
+  return typeof muted === 'boolean' ? muted : null;
 }
 
 /** Tab ID of a runtime message sender, when it came from a content script. */
@@ -212,6 +221,9 @@ export function parseOffscreenMessage(message: unknown): OffscreenMessage | null
   if (typeof message.type !== 'string') return null;
   if (SIMPLE_OFFSCREEN.has(message.type)) {
     return { target: 'offscreen', type: message.type } as OffscreenMessage;
+  }
+  if (message.type === 'capture.mic_muted' && typeof message.muted === 'boolean') {
+    return { target: 'offscreen', type: 'capture.mic_muted', muted: message.muted };
   }
   if (
     message.type === 'capture.start' &&

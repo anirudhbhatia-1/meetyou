@@ -6,7 +6,7 @@ pointer to where the full detail lives — the linked document stays the source 
 
 | Field | Value |
 |---|---|
-| Last updated | 2026-11-07 (Anirudh: Ask this meeting (S3-12) built; free Gemini key allowed on staging behind a switch) |
+| Last updated | 2026-11-07 (Anirudh: Meet mute now gates the me lane; Ask answers meeting details; faster video finalize) |
 | Updated by | Anirudh (Claude Code) |
 | Repository | [anirudhbhatia-1/meetyou](https://github.com/anirudhbhatia-1/meetyou) — branches `main`, `anirudh`, `Gauravbro` |
 | Current stage | **Stage 3** in progress — S3-01 code done (Anirudh); next S3-02 validation chain; Gaurav S3-09..S3-11 can start (§7) |
@@ -198,7 +198,29 @@ deploys and smoke-tests). Next, **Stage 3 — notes and summaries** (IMPLEMENTAT
 
 Newest first. One entry per working session (either person).
 
-### 2026-11-07 (latest) — Anirudh (Claude Code): "Ask this meeting" and the staging free-key switch
+### 2026-11-07 (latest) — Anirudh (Claude Code): mute gating, Ask details, faster video finalize
+From Anirudh's staging test (Ask live with the free key):
+- **Muted mic was still transcribed.** The content script detected Meet's mute, but the service
+  worker only logged it (`TODO(FR-CAP-11)`). Now (D-10): the worker forwards the **recorded tab's**
+  mute changes (`capture.mic_muted`) and checks the mute state right after start; the recorder
+  drops `me` frames while muted (before encoding, storage, STT), silences the mic in the video's
+  audio mix, and sends `mic.mute_changed` to the gateway. `them` is untouched.
+  `TODO(S4-12)`: honour the `followMeetMute` setting once settings reach the extension. 200
+  extension tests. Needs a reload of the new build to take effect.
+- **Ask could not answer "when did the meeting end".** The meeting block now carries start and
+  end time in the asker's time zone (the website sends `timeZone`; validated IANA name) and the
+  prompt (`ask-v2`) answers detail questions (title, date, times, duration, who took part) with
+  `source: "meeting_details"` and no citation; the API accepts only those without citations, the
+  website labels them "From the meeting details" (DESIGN §12.7). Real Gemini: end time, people
+  (Hinglish), and a transcript answer with citation all correct. Fixed on the way: `Intl` rejects
+  `dateStyle` with `timeZoneName` (500 in the first test run).
+- **Video stayed "still uploading" after the call.** `video.finalize` runs at the end of the
+  session, usually before the last fragments land, and re-checked only every 15 minutes. It now
+  re-checks after 30 s, 1, 2, 4, 8 min, then every 15 min (`recheckDelayMs`, `checks` in the job
+  payload). If video still never arrives, the upload itself needs the log checks in this entry's
+  chat (signing requests and fragments in the bucket).
+
+### 2026-11-07 — Anirudh (Claude Code): "Ask this meeting" and the staging free-key switch
 Anirudh decided: (1) **free Gemini key on staging** until he moves to a paid key — implemented as an
 explicit switch `GEMINI_FREE_TIER_ON_STAGING=true` (production always refuses; ADR-0001 §7
 amendment records that this conflicts with Google's terms for unpaid services, test meetings only,

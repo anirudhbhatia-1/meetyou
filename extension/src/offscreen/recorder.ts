@@ -50,6 +50,11 @@ export interface Recorder {
   pause(): Promise<void>;
   resume(): void;
   /**
+   * Meet's mute (FR-CAP-11, D-10): while muted, `me` frames are dropped before they are encoded,
+   * stored or sent, and the mic leaves the video mix. The `them` lane is never affected.
+   */
+  setMicMuted(muted: boolean): void;
+  /**
    * Stops capture now. `drained` settles once the buffered audio reached the gateway (or the
    * deadline passed); the offscreen document stays open until then.
    */
@@ -96,6 +101,7 @@ export async function startRecorder(options: {
   const nextSeq: Record<Lane, number> = { me: 0, them: 0 };
   const writes: Record<Lane, Promise<void>> = { me: Promise.resolve(), them: Promise.resolve() };
   let paused = false;
+  let micMuted = false;
   let client: StreamClient | null = null;
   let link: StreamLink = 'off';
 
@@ -152,6 +158,7 @@ export async function startRecorder(options: {
       callbacks: {
         onFrame(lane, pcm, captureMs) {
           if (paused || (store === null && !sessionPending)) return;
+          if (lane === 'me' && micMuted) return;
           const encoder = encoders[lane];
           if (encoder !== undefined) {
             encoder.encode(pcm, captureMs);
@@ -312,6 +319,12 @@ export async function startRecorder(options: {
       client?.control('pause', capture.nowMs());
       await switching;
       await stopPart('paused');
+    },
+    setMicMuted(muted) {
+      if (muted === micMuted) return;
+      micMuted = muted;
+      capture.setMicInMix(!muted);
+      emit({ type: 'mic.mute_changed', sessionId, muted, at: capture.nowMs() });
     },
     resume() {
       if (!paused) return;

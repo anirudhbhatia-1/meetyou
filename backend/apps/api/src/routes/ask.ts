@@ -31,6 +31,21 @@ export interface AskRoutesOptions {
 }
 
 const HOUR_MS = 60 * 60 * 1000;
+
+/** "7 Nov 2026, 14:03 GMT+5:30": the meeting's wall-clock times in the asker's time zone. */
+function wallClock(at: Date, timeZone: string): string {
+  // Explicit fields: `dateStyle`/`timeStyle` cannot be combined with `timeZoneName`.
+  return new Intl.DateTimeFormat('en-GB', {
+    timeZone,
+    day: 'numeric',
+    month: 'short',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+    hourCycle: 'h23',
+    timeZoneName: 'short',
+  }).format(at);
+}
 const DAY_MS = 24 * HOUR_MS;
 
 class TooManyQuestionsError extends AppError {
@@ -188,6 +203,7 @@ export const askRoutes: FastifyPluginAsync<AskRoutesOptions> = async (fastify, o
         selfName,
       );
       const endedAt = data.meeting.endedAt ?? data.meeting.startedAt;
+      const timeZone = body.data.timeZone ?? 'UTC';
 
       let run;
       try {
@@ -197,6 +213,10 @@ export const askRoutes: FastifyPluginAsync<AskRoutesOptions> = async (fastify, o
               title: data.meeting.title === '' ? null : data.meeting.title,
               date: data.meeting.startedAt.toISOString().slice(0, 10),
               durationMs: Math.max(0, endedAt.getTime() - data.meeting.startedAt.getTime()),
+              startedAt: wallClock(data.meeting.startedAt, timeZone),
+              ...(data.meeting.endedAt !== null
+                ? { endedAt: wallClock(data.meeting.endedAt, timeZone) }
+                : {}),
             },
             participants: data.participants.map((p) => ({
               id: p.id,
@@ -244,9 +264,16 @@ export const askRoutes: FastifyPluginAsync<AskRoutesOptions> = async (fastify, o
       // Citations must be this meeting's own, non-echo segments (AGENTS §3 rule 7).
       const visible = new Map(segments.filter((s) => !s.echo).map((s) => [s.id, s.startMs]));
       const cited = [...new Set(run.output.segment_ids)].filter((id) => visible.has(id));
+      // Details answers (title, date, times, duration, people) come from data we supplied and cite
+      // no segment; every other answer needs at least one of this meeting's segments.
+      const fromDetails = run.output.source === 'meeting_details';
       let status: QuestionStatus = 'answered';
       if (!run.output.about_this_meeting) status = 'off_topic';
-      else if (!run.output.found || cited.length === 0 || run.output.answer.trim() === '') {
+      else if (
+        !run.output.found ||
+        run.output.answer.trim() === '' ||
+        (!fromDetails && cited.length === 0)
+      ) {
         status = 'not_in_meeting';
       }
 
@@ -261,7 +288,7 @@ export const askRoutes: FastifyPluginAsync<AskRoutesOptions> = async (fastify, o
             question: body.data.question,
             status,
             answer: status === 'answered' ? run.output.answer.trim() : null,
-            segmentIds: status === 'answered' ? cited : [],
+            segmentIds: status === 'answered' && !fromDetails ? cited : [],
             model: run.model,
             inputTokens: run.usage.inputTokens,
             outputTokens: run.usage.outputTokens,

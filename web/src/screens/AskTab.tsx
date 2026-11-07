@@ -102,6 +102,9 @@ export function AskTab({
               {q.status === 'answered' ? (
                 <p className="ask-a">
                   {q.answer}{' '}
+                  {q.citations.length === 0 && (
+                    <span className="meta small ask-source">From the meeting details</span>
+                  )}
                   {q.citations.map((c, i) => {
                     const key = `${q.id}:${i}`;
                     return (

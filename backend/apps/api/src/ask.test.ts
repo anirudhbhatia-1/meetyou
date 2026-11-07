@@ -122,6 +122,7 @@ describe('Ask this meeting', () => {
     answers.push({
       about_this_meeting: true,
       found: true,
+      source: 'transcript',
       answer: '40,000 rupees per month.',
       segment_ids: [segA.id],
     });
@@ -144,6 +145,7 @@ describe('Ask this meeting', () => {
     answers.push({
       about_this_meeting: false,
       found: false,
+      source: 'transcript',
       answer: 'Sure, here is a poem…',
       segment_ids: [],
     });
@@ -155,11 +157,42 @@ describe('Ask this meeting', () => {
     answers.push({
       about_this_meeting: true,
       found: true,
+      source: 'transcript',
       answer: 'Invented.',
       segment_ids: [`seg_${newUlid()}`],
     });
     const body = AskQuestionResponse.parse((await ask(meetingA, 'Who decided?')).json());
     expect(body.question).toMatchObject({ status: 'not_in_meeting', answer: null });
+  });
+
+  it("answers meeting details (end time) in the asker's time zone, without citations", async () => {
+    answers.push({
+      about_this_meeting: true,
+      found: true,
+      source: 'meeting_details',
+      answer: 'It started at 15:30.',
+      segment_ids: [],
+    });
+    const res = await app.inject({
+      method: 'POST',
+      url: `/v1/meetings/${meetingA}/ask`,
+      headers: { authorization: `Bearer ${accounts[0]?.token}` },
+      payload: { question: 'When did the meeting start?', timeZone: 'Asia/Kolkata' },
+    });
+    const body = AskQuestionResponse.parse(res.json());
+    expect(body.question).toMatchObject({ status: 'answered', citations: [] });
+    // 10:00 UTC is 15:30 in India.
+    expect(seen.at(-1)?.input).toMatch(/started: 7 Nov 2026, 15:30 (IST|GMT\+5:30)/);
+  });
+
+  it('rejects an unknown time zone', async () => {
+    const res = await app.inject({
+      method: 'POST',
+      url: `/v1/meetings/${meetingA}/ask`,
+      headers: { authorization: `Bearer ${accounts[0]?.token}` },
+      payload: { question: 'When?', timeZone: 'Mars/Olympus' },
+    });
+    expect(res.statusCode).toBe(400);
   });
 
   it("returns 404 for another user's recording, on ask and on the history", async () => {
@@ -181,8 +214,13 @@ describe('Ask this meeting', () => {
       headers: { authorization: `Bearer ${accounts[0]?.token}` },
     });
     const body = MeetingQuestionsResponse.parse(res.json());
-    expect(body.items.map((q) => q.status)).toEqual(['answered', 'off_topic', 'not_in_meeting']);
-    expect(body.usage.usedLastHour).toBe(3);
+    expect(body.items.map((q) => q.status)).toEqual([
+      'answered',
+      'off_topic',
+      'not_in_meeting',
+      'answered',
+    ]);
+    expect(body.usage.usedLastHour).toBe(4);
     const other = await app.inject({
       method: 'GET',
       url: `/v1/meetings/${otherMeetingA}/questions`,
@@ -202,7 +240,7 @@ describe('Ask this meeting', () => {
     const a = accounts[0];
     if (a === undefined) throw new Error('setup');
     await env.db.inWorkspace(a.workspaceId, async (tx) => {
-      for (let i = 0; i < 27; i += 1) {
+      for (let i = 0; i < 26; i += 1) {
         await tx
           .insertInto('meetingQuestions')
           .values({

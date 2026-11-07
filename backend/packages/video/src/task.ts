@@ -22,12 +22,21 @@ export const VIDEO_FINALIZE = 'video.finalize';
 export const VideoFinalizePayload = z.object({
   workspaceId: z.string().min(1),
   meetingId: z.string().min(1),
+  /** How many times uploads were found incomplete; drives the re-check backoff. */
+  checks: z.number().int().nonnegative().optional(),
 });
 
 /** ADR-0011 §3.4: finalize once every fragment arrived, or 24 h after the meeting ended anyway. */
 export const UPLOAD_WAIT_MS = 24 * 60 * 60 * 1000;
-/** While uploads are still arriving, the job looks again after this long. */
+/** While uploads are still arriving, the job looks again after this long at most. */
 export const RECHECK_MS = 15 * 60 * 1000;
+/** The first re-check: the last fragments usually land seconds after the meeting ends. */
+export const FIRST_RECHECK_MS = 30 * 1000;
+
+/** 30 s, 1, 2, 4, 8 min, then every 15 min: video is ready soon after a normal upload finishes. */
+export function recheckDelayMs(checks: number): number {
+  return Math.min(RECHECK_MS, FIRST_RECHECK_MS * 2 ** checks);
+}
 
 /** What a service that only creates the job needs (the gateway, at the end of a recording). */
 export const videoFinalizeJob = {
@@ -68,10 +77,12 @@ export function videoFinalizeTask(deps: {
     const waited = endedAt !== null && now() - endedAt >= UPLOAD_WAIT_MS;
     if ((endedAt === null || !uploadsComplete(stored, timing)) && !waited) {
       // Still recording or uploading: look again later under the same job key (one job).
-      await helpers.addJob(VIDEO_FINALIZE, payload, {
-        runAt: new Date(now() + RECHECK_MS),
-        jobKey: videoFinalizeJobKey(meetingId),
-      });
+      const checks = payload.checks ?? 0;
+      await helpers.addJob(
+        VIDEO_FINALIZE,
+        { workspaceId, meetingId, checks: checks + 1 },
+        { runAt: new Date(now() + recheckDelayMs(checks)), jobKey: videoFinalizeJobKey(meetingId) },
+      );
       return;
     }
 

@@ -775,3 +775,6 @@
     animation: none;
   }
 }
+.ask-source {
+  white-space: nowrap;
+}

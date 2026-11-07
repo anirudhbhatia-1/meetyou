@@ -663,7 +663,10 @@ citation card (§12.6), which shows the selected answer chip's source.
 - **History** (oldest first, gap 22): each entry is the question (15/600 `ink`) and below it the
   answer (15/1.6 `muted`) followed by its citation chips (§6.13, numbered 1…n per answer;
   clicking one pins it in the citation card, whose **Play from** and **Show in transcript** work as
-  in §12.6). Refusals are fixed texts, never model-written, in `muted` italic with no chip:
+  in §12.6). Answers from the meeting's details (title, date, start and end time in the viewer's
+  time zone, duration, who took part) cite no transcript line: instead of chips they end with
+  "From the meeting details" (12 `muted`). Refusals are fixed texts, never model-written, in
+  `muted` italic with no chip:
   `off_topic` → "I can only answer questions about this recording." · `not_in_meeting` → "This
   recording doesn't say."
 - **Empty history**: one `muted` line "For example: What did we decide about pricing?"
@@ -979,7 +982,7 @@ Sentence case everywhere. All strings in an i18n resource file from day one; Hin
 | Context | Strings |
 |---|---|
 | Meet prompt | "Take notes for this call?" · "Nothing joins the call. To start, press {shortcut} or click the MeetYou (M) icon in Chrome's toolbar, then Start." · Not now |
-| Ask tab | "Ask about this recording. Answers come only from what was said in it. Only you can see your questions." · "Ask a question about this meeting" · Ask · "Reading the recording…" · "I can only answer questions about this recording." · "This recording doesn't say." · "{used} of 30 questions this hour" · "You've reached the question limit. Try again in an hour." · "Answers aren't available right now. Try again later." · "This recording has no transcript yet." · "Couldn't answer that. Try again." · "For example: What did we decide about pricing?" |
+| Ask tab | "Ask about this recording. Answers come only from what was said in it. Only you can see your questions." · "Ask a question about this meeting" · Ask · "Reading the recording…" · "I can only answer questions about this recording." · "This recording doesn't say." · "{used} of 30 questions this hour" · "You've reached the question limit. Try again in an hour." · "Answers aren't available right now. Try again later." · "This recording has no transcript yet." · "Couldn't answer that. Try again." · "For example: What did we decide about pricing?" · "From the meeting details" |
 | Meet prompt reminder | "Audio and the Meet tab's video will be recorded." · "Audio will be recorded." |
 | Panel ready | "Ready when you are" · "Your mic and the Meet tab are recorded as two separate lanes, so you're always labelled correctly." · Start taking notes |
 | Recording options | Record video · "Records what the Meet tab shows — the video grid and anything people present." · Video quality · Standard · Data saver · "Data saver uses less upload — good for slow or mobile connections." · What to record · Meet tab · Whole screen (P1) · "Video is off because recordings are deleted as soon as your notes are ready. Video is only kept for replay." · Change in Settings |

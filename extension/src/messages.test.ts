@@ -6,6 +6,7 @@ import {
   parseCaptureStatusReply,
   parseCaptureStopReply,
   parseMeetCallState,
+  parseMeetMuteReply,
   parseMeetStateReply,
   parseOffscreenMessage,
   parseSidePanelMessage,
@@ -128,5 +129,28 @@ describe('message parsers', () => {
     expect(parseMeetStateReply(undefined)).toBeNull();
     expect(senderTabId({ tab: { id: 12 } })).toBe(12);
     expect(senderTabId({ id: 'extension' })).toBeNull();
+  });
+});
+
+describe('Meet mute (FR-CAP-11, D-10)', () => {
+  it('parses the offscreen mute message and nothing malformed', () => {
+    expect(
+      parseOffscreenMessage({ target: 'offscreen', type: 'capture.mic_muted', muted: true }),
+    ).toEqual({
+      target: 'offscreen',
+      type: 'capture.mic_muted',
+      muted: true,
+    });
+    expect(parseOffscreenMessage({ target: 'offscreen', type: 'capture.mic_muted' })).toBeNull();
+    expect(
+      parseOffscreenMessage({ target: 'offscreen', type: 'capture.mic_muted', muted: 'yes' }),
+    ).toBeNull();
+  });
+
+  it("reads the mute state from the tab's meet.get-state reply", () => {
+    expect(parseMeetMuteReply({ muteState: { isMuted: true, matchedBy: 'x' } })).toBe(true);
+    expect(parseMeetMuteReply({ muteState: { isMuted: false } })).toBe(false);
+    expect(parseMeetMuteReply({ muteState: { isMuted: null } })).toBeNull();
+    expect(parseMeetMuteReply(undefined)).toBeNull();
   });
 });

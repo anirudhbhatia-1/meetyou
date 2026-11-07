@@ -31,6 +31,9 @@ export interface SummaryInput {
     /** The meeting's local date, YYYY-MM-DD: due dates are resolved against it (S3-02). */
     date: string;
     durationMs: number;
+    /** Wall-clock start and end, already formatted in the user's time zone ("14:03 IST"). */
+    startedAt?: string;
+    endedAt?: string;
   };
   participants: SummaryParticipant[];
   notes: Note[];

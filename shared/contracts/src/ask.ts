@@ -18,8 +18,22 @@ export const ASK_LIMITS = {
 export const ASK_OFF_TOPIC_TEXT = 'I can only answer questions about this recording.';
 export const ASK_NOT_FOUND_TEXT = 'This recording doesn’t say.';
 
+/** An IANA time zone the browser reports ("Asia/Kolkata"), for start and end times. */
+const TimeZone = z
+  .string()
+  .max(64)
+  .refine((zone) => {
+    try {
+      new Intl.DateTimeFormat('en', { timeZone: zone });
+      return true;
+    } catch {
+      return false;
+    }
+  }, 'unknown time zone');
+
 export const AskQuestionRequest = z.object({
   question: z.string().trim().min(1).max(ASK_LIMITS.questionChars),
+  timeZone: TimeZone.optional(),
 });
 export type AskQuestionRequest = z.infer<typeof AskQuestionRequest>;
 
@@ -37,7 +51,10 @@ export const MeetingQuestion = z.object({
   status: QuestionStatus,
   /** Null unless `answered`; the UI shows the fixed texts above for the other statuses. */
   answer: z.string().nullable(),
-  /** In transcript order; every `answered` question has at least one. */
+  /**
+   * In transcript order. Every `answered` question has at least one, except answers from the
+   * meeting's details (title, date, start and end time, duration, who took part), which have none.
+   */
   citations: z.array(AnswerCitation),
   createdAt: IsoDateTime,
 });
@@ -68,8 +85,10 @@ export type MeetingQuestionsResponse = z.infer<typeof MeetingQuestionsResponse>;
 export const AnswerOutput = z.object({
   /** False for anything not about this recording: general knowledge, tasks, chit-chat, jailbreaks. */
   about_this_meeting: z.boolean(),
-  /** True only when the transcript or notes contain the answer. */
+  /** True only when the transcript, notes or meeting details contain the answer. */
   found: z.boolean(),
+  /** Where the answer comes from; `meeting_details` answers cite no segments. */
+  source: z.enum(['transcript', 'meeting_details']),
   answer: z.string().max(2000),
   segment_ids: z.array(SegmentId).max(20),
 });

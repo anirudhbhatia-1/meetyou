@@ -51,7 +51,13 @@ if (env.ASK_QUESTION !== undefined) {
   try {
     const run = await answerQuestion(
       {
-        meeting: { title: 'Daily standup', date: '2026-11-07', durationMs: lastEnd },
+        meeting: {
+          title: 'Daily standup',
+          date: '2026-11-07',
+          durationMs: lastEnd,
+          startedAt: '7 Nov 2026, 10:00 GMT+5:30',
+          endedAt: '7 Nov 2026, 10:01 GMT+5:30',
+        },
         participants: [{ id: 'prt_self', name: 'Aman', isSelf: true }],
         notes: [],
         segments: summarySegments(segments, 'Aman'),

@@ -60,6 +60,8 @@ export interface CaptureSession {
   readonly mixedAudio: MediaStreamTrack;
   /** Current session-clock time in ms (ARCHITECTURE §5.5). */
   nowMs(): number;
+  /** Silences the mic in the video's audio mix while Meet is muted (FR-CAP-11, D-10). */
+  setMicInMix(on: boolean): void;
   stop(): Promise<void>;
 }
 
@@ -127,7 +129,9 @@ export async function startCapture(options: {
     tabPlayback.connect(playback.destination);
     const mix = playback.createMediaStreamDestination();
     tabPlayback.connect(mix);
-    if (mic !== null) playback.createMediaStreamSource(mic).connect(mix);
+    const micInMix = playback.createGain();
+    micInMix.connect(mix);
+    if (mic !== null) playback.createMediaStreamSource(mic).connect(micInMix);
     if (playback.state === 'suspended') await playback.resume();
 
     capture = new AudioContext({ sampleRate: SAMPLE_RATE });
@@ -207,6 +211,9 @@ export async function startCapture(options: {
       video: tab.getVideoTracks()[0] ?? null,
       mixedAudio,
       nowMs: () => captureMsFor(Math.round(ctx.currentTime * SAMPLE_RATE), sessionStartFrame),
+      setMicInMix(on) {
+        micInMix.gain.value = on ? 1 : 0;
+      },
       async stop() {
         clearInterval(levelTimer);
         for (const node of Object.values(nodes)) node.port.onmessage = null;
