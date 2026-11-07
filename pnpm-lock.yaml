@@ -50,12 +50,18 @@ importers:
       '@meetyou/db':
         specifier: workspace:*
         version: link:../../packages/db
+      '@meetyou/providers':
+        specifier: workspace:*
+        version: link:../../packages/providers
       '@meetyou/queue':
         specifier: workspace:*
         version: link:../../packages/queue
       '@meetyou/storage':
         specifier: workspace:*
         version: link:../../packages/storage
+      '@meetyou/summarizer':
+        specifier: workspace:*
+        version: link:../../packages/summarizer
       '@meetyou/tracing':
         specifier: workspace:*
         version: link:../../packages/tracing

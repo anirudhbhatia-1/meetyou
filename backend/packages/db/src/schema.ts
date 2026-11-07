@@ -245,6 +245,22 @@ export interface DeletionRequestsTable extends Audit {
   completedAt: NullableTimestamp;
 }
 
+/** `0004_meeting_questions.sql`: "Ask this meeting" (FEATURES E4, Phase 1 since 2026-11-07). */
+export interface MeetingQuestionsTable extends Audit {
+  id: string;
+  workspaceId: string;
+  meetingId: string;
+  userId: string;
+  question: string;
+  status: 'answered' | 'not_in_meeting' | 'off_topic';
+  answer: string | null;
+  segmentIds: Generated<string[]>;
+  model: string;
+  inputTokens: ColumnType<number, number | string | undefined, number | string>;
+  outputTokens: ColumnType<number, number | string | undefined, number | string>;
+  thinkingTokens: ColumnType<number, number | string | undefined, number | string>;
+}
+
 export interface RefreshTokenFamiliesTable extends Audit {
   id: string;
   userId: string;
@@ -282,6 +298,7 @@ export interface Database {
   feedback: FeedbackTable;
   usageRecords: UsageRecordsTable;
   deletionRequests: DeletionRequestsTable;
+  meetingQuestions: MeetingQuestionsTable;
   refreshTokenFamilies: RefreshTokenFamiliesTable;
   refreshTokens: RefreshTokensTable;
 }

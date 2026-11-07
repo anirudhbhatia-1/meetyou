@@ -6,7 +6,7 @@ pointer to where the full detail lives — the linked document stays the source 
 
 | Field | Value |
 |---|---|
-| Last updated | 2026-11-07 (Anirudh: S3-01 summarization engine on the Gemini API — adapter, prompt, templates, chunking, retry) |
+| Last updated | 2026-11-07 (Anirudh: Ask this meeting (S3-12) built; free Gemini key allowed on staging behind a switch) |
 | Updated by | Anirudh (Claude Code) |
 | Repository | [anirudhbhatia-1/meetyou](https://github.com/anirudhbhatia-1/meetyou) — branches `main`, `anirudh`, `Gauravbro` |
 | Current stage | **Stage 3** in progress — S3-01 code done (Anirudh); next S3-02 validation chain; Gaurav S3-09..S3-11 can start (§7) |
@@ -198,7 +198,34 @@ deploys and smoke-tests). Next, **Stage 3 — notes and summaries** (IMPLEMENTAT
 
 Newest first. One entry per working session (either person).
 
-### 2026-11-07 (latest) — Anirudh (Claude Code): S3-01 summarization engine (Gemini API)
+### 2026-11-07 (latest) — Anirudh (Claude Code): "Ask this meeting" and the staging free-key switch
+Anirudh decided: (1) **free Gemini key on staging** until he moves to a paid key — implemented as an
+explicit switch `GEMINI_FREE_TIER_ON_STAGING=true` (production always refuses; ADR-0001 §7
+amendment records that this conflicts with Google's terms for unpaid services, test meetings only,
+testers told — tester guide updated); (2) **website Q&A in Phase 1**, limited to one recording and
+its owner (AGENTS §9, FEATURES E4, new task S3-12).
+- **Migration 0004** `meeting_questions` (forced RLS `workspace_isolation`, cascades with the
+  meeting): question, status (`answered` / `not_in_meeting` / `off_topic`), answer, cited segment
+  IDs, model, token counts. Schema change approved by Anirudh with the plan.
+- **Contracts** `shared/contracts/src/ask.ts`: request/response, `AnswerOutput` (model-facing:
+  `about_this_meeting`, `found`, `answer`, `segment_ids`), limits, fixed refusal texts.
+- **Engine** `answerQuestion` in `@meetyou/summarizer` (question wrapped as data too); the
+  validate-and-retry loop is now shared (`generate.ts`; `SummaryFailedError` →
+  `GenerationFailedError`).
+- **API** `POST /v1/meetings/:id/ask`, `GET /v1/meetings/:id/questions`
+  (`routes/ask.ts`): reads in the caller's workspace only, model call outside the transaction,
+  citations filtered to the meeting's non-echo segments (none → `not_in_meeting`), 429 at 30/h or
+  150/24 h, 503 without a model, `meeting.ask` span. 8 tests (owner-only 404, off-topic, invented
+  citations, limits, other meeting invisible to the model).
+- **Web** Ask tab (DESIGN §12.7 added): history with numbered sources into the existing citation
+  card, fixed refusals, composer with counter, limit and error banners. Checked in the browser
+  against the mock (answer, chip → card → Show in transcript, off-topic). Web tests 15.
+- **Real Gemini** (free key, synthetic standup): Hinglish question answered in Roman Hinglish
+  with the right citation; "budget" → not in meeting; injection ("ignore all previous rules…") →
+  off-topic. ~13 s each.
+- To enable on staging: STAGING_SETUP §9.4 (secret + API settings). Not done yet.
+
+### 2026-11-07 — Anirudh (Claude Code): S3-01 summarization engine (Gemini API)
 Anirudh chose the **Gemini API with a key** (Google AI Studio), not Vertex AI. Verified against
 aistudio.google.com docs (2026-11-07): latest stable Flash is **`gemini-3.6-flash`** (setting
 `GEMINI_MODEL`); JSON via `generationConfig.responseFormat.text` (`APPLICATION_JSON` + standard

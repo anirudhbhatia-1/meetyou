@@ -5,7 +5,9 @@ import { STANDUP_HINGLISH } from '@meetyou/fixtures';
 import { createLlmProvider } from '@meetyou/providers';
 
 import { summarySegments } from './input.ts';
-import { summarize, SummaryFailedError } from './summarize.ts';
+import { answerQuestion } from './ask.ts';
+import { GenerationFailedError } from './generate.ts';
+import { summarize } from './summarize.ts';
 
 /**
  * Summarizes the synthetic Hinglish standup (shared/fixtures) with the configured LLM, to read real
@@ -13,6 +15,7 @@ import { summarize, SummaryFailedError } from './summarize.ts';
  * and nowhere else (ADR-0001 §7):
  *   APP_ENV=local LLM_PROVIDER=gemini GEMINI_FREE_TIER_ACCEPTED=true GEMINI_API_KEY=… \
  *     pnpm --filter @meetyou/summarizer summarize:fixture
+ * With ASK_QUESTION="…" it asks that question about the standup instead (Ask this meeting).
  * Never point it at a real meeting.
  */
 const env: Record<string, string | undefined> = { APP_ENV: 'local', ...process.env };
@@ -44,6 +47,32 @@ const lastEnd = segments.at(-1)?.endMs ?? 0;
 const LANGUAGES = ['english', 'hindi', 'hinglish'] as const;
 
 const started = Date.now();
+if (env.ASK_QUESTION !== undefined) {
+  try {
+    const run = await answerQuestion(
+      {
+        meeting: { title: 'Daily standup', date: '2026-11-07', durationMs: lastEnd },
+        participants: [{ id: 'prt_self', name: 'Aman', isSelf: true }],
+        notes: [],
+        segments: summarySegments(segments, 'Aman'),
+      },
+      env.ASK_QUESTION,
+      llm,
+    );
+    console.log(
+      JSON.stringify({
+        ...run.output,
+        llmCalls: run.llmCalls,
+        retryReasons: run.retryReasons,
+        ms: Date.now() - started,
+      }),
+    );
+  } catch (error) {
+    console.error(error instanceof GenerationFailedError ? error.message : error);
+    process.exitCode = 1;
+  }
+  process.exit();
+}
 try {
   const run = await summarize(
     {
@@ -69,6 +98,6 @@ try {
     }),
   );
 } catch (error) {
-  console.error(error instanceof SummaryFailedError ? error.message : error);
+  console.error(error instanceof GenerationFailedError ? error.message : error);
   process.exitCode = 1;
 }

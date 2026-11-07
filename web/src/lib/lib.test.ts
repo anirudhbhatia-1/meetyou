@@ -47,6 +47,7 @@ describe('router', () => {
       '#/meetings',
       '#/meetings/mtg_1',
       '#/meetings/mtg_1/transcript',
+      '#/meetings/mtg_1/ask',
       '#/action-items',
       '#/settings',
     ]) {
@@ -77,5 +78,27 @@ describe('mock API and citations', () => {
     const before = (await api.listActionItems('open')).length;
     await api.setActionItemStatus('itm_9', 'done');
     expect((await api.listActionItems('open')).length).toBe(before - 1);
+  });
+});
+
+describe('Ask this meeting (mock API, DESIGN §12.7)', () => {
+  it('answers from a transcript line with its citation, refuses off-topic, and lists history', async () => {
+    const api = createMockApi({ latencyMs: 0 });
+    const answered = await api.askQuestion('mtg_q4_launch', 'When is the payments flow fixed?');
+    expect(answered).toMatchObject({ ok: true, question: { status: 'answered' } });
+    if (!answered.ok) throw new Error('expected an answer');
+    expect(answered.question.citations).toHaveLength(1);
+    const refused = await api.askQuestion('mtg_q4_launch', 'Write me a poem');
+    expect(refused).toMatchObject({ ok: true, question: { status: 'off_topic', answer: null } });
+    const missing = await api.askQuestion('mtg_q4_launch', 'Who won the cricket match?');
+    expect(missing).toMatchObject({ ok: true, question: { status: 'not_in_meeting' } });
+    const history = await api.listQuestions('mtg_q4_launch');
+    expect(history?.items.map((q) => q.status)).toEqual([
+      'answered',
+      'off_topic',
+      'not_in_meeting',
+    ]);
+    expect(history?.usage).toMatchObject({ usedLastHour: 3, perHour: 30 });
+    expect((await api.listQuestions('mtg_standup'))?.items).toEqual([]);
   });
 });

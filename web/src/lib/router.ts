@@ -1,10 +1,13 @@
 import { useEffect, useState } from 'react';
 
+/** Meeting detail tabs (DESIGN §12.3); Ask is §12.7. */
+export type DetailTab = 'notes' | 'transcript' | 'ask';
+
 /** DESIGN §3 / §18 screens. Hash routes keep the static build host-agnostic (ADR-0006 pending). */
 export type Route =
   | { screen: 'home' }
   | { screen: 'meetings' }
-  | { screen: 'detail'; meetingId: string; tab: 'notes' | 'transcript' }
+  | { screen: 'detail'; meetingId: string; tab: DetailTab }
   | { screen: 'actions' }
   | { screen: 'settings' };
 
@@ -17,7 +20,7 @@ export function parseRoute(hash: string): Route {
       return {
         screen: 'detail',
         meetingId: id,
-        tab: parts[2] === 'transcript' ? 'transcript' : 'notes',
+        tab: parts[2] === 'transcript' || parts[2] === 'ask' ? parts[2] : 'notes',
       };
     }
     case 'action-items':
@@ -36,7 +39,7 @@ export function href(route: Route): string {
     case 'meetings':
       return '#/meetings';
     case 'detail':
-      return `#/meetings/${encodeURIComponent(route.meetingId)}${route.tab === 'transcript' ? '/transcript' : ''}`;
+      return `#/meetings/${encodeURIComponent(route.meetingId)}${route.tab === 'notes' ? '' : `/${route.tab}`}`;
     case 'actions':
       return '#/action-items';
     case 'settings':

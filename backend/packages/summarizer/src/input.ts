@@ -22,6 +22,9 @@ export interface SummarySegment {
 
 export type SummaryLanguage = 'english' | 'hindi' | 'hinglish';
 
+/** The recording itself: what both summaries and answers are built from. */
+export type MeetingData = Pick<SummaryInput, 'meeting' | 'participants' | 'notes' | 'segments'>;
+
 export interface SummaryInput {
   meeting: {
     title: string | null;

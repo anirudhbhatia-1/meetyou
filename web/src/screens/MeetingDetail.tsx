@@ -23,10 +23,17 @@ import {
   recordingLabel,
   TEMPLATE_LABEL,
 } from '../lib/format.ts';
-import { href, navigate } from '../lib/router.ts';
+import { href, navigate, type DetailTab } from '../lib/router.ts';
 import { useAsync } from '../lib/useAsync.ts';
+import { AskTab, type AskCitation } from './AskTab.tsx';
 import { MoreMenu, useDeleteMeeting } from './MeetingMenu.tsx';
 import { VideoPlayer, type PlayerHandle } from './VideoPlayer.tsx';
+
+const TAB_LABEL: Record<DetailTab, string> = {
+  notes: 'Notes',
+  transcript: 'Transcript',
+  ask: 'Ask',
+};
 
 /** DESIGN §12 */
 export function MeetingDetail({
@@ -35,7 +42,7 @@ export function MeetingDetail({
   onActionsChanged,
 }: {
   meetingId: string;
-  tab: 'notes' | 'transcript';
+  tab: DetailTab;
   onActionsChanged: () => void;
 }) {
   const api = useApi();
@@ -45,6 +52,8 @@ export function MeetingDetail({
   const segments = useAsync(() => api.getSegments(meetingId), [meetingId]);
   const people = useAsync(() => api.getParticipants(meetingId), [meetingId]);
   const [selected, setSelected] = useState<SummaryItem | null>(null);
+  // An answer's citation (Ask tab); the newest pick, note or answer, fills the citation card.
+  const [askCite, setAskCite] = useState<AskCitation | null>(null);
   const [playFrom, setPlayFrom] = useState<number | null>(null);
   const remove = useDeleteMeeting({
     deleted: () => navigate({ screen: 'meetings' }),
@@ -101,7 +110,10 @@ export function MeetingDetail({
         </header>
         <>
           <div className="tabs" role="tablist" aria-label="Meeting">
-            {(['notes', 'transcript'] as const).map((t) => (
+            {(m.status === 'recording'
+              ? (['notes', 'transcript'] as const)
+              : (['notes', 'transcript', 'ask'] as const)
+            ).map((t) => (
               <a
                 key={t}
                 role="tab"
@@ -109,36 +121,52 @@ export function MeetingDetail({
                 className={`tab ${tab === t ? 'tab-on' : ''}`}
                 href={href({ screen: 'detail', meetingId, tab: t })}
               >
-                {t === 'notes' ? 'Notes' : 'Transcript'}
+                {TAB_LABEL[t]}
               </a>
             ))}
           </div>
           <div className="detail-grid">
-            {tab === 'notes' ? (
+            {tab === 'notes' && (
               <NotesTab
                 summary={summary.data ?? null}
                 loading={summary.loading}
                 selected={selected}
-                onSelect={setSelected}
+                onSelect={(item) => {
+                  setSelected(item);
+                  setAskCite(null);
+                }}
                 status={m.status}
               />
-            ) : (
+            )}
+            {tab === 'transcript' && (
               <TranscriptTab
                 meetingId={meetingId}
                 segments={segments.data ?? []}
                 loading={segments.loading}
                 video={m.video}
-                highlight={selected?.segmentIds ?? []}
+                highlight={askCite?.segmentIds ?? selected?.segmentIds ?? []}
                 startAt={playFrom}
+              />
+            )}
+            {tab === 'ask' && m.status !== 'recording' && (
+              <AskTab
+                meetingId={meetingId}
+                selected={askCite}
+                onSelect={(cite) => {
+                  setAskCite(cite);
+                  setSelected(null);
+                }}
               />
             )}
             <aside className="rail">
               <CitationCard
-                item={selected}
+                item={askCite ?? selected}
                 number={
-                  selected === null || summary.data == null
-                    ? null
-                    : (numberCitations(summary.data).get(selected.id) ?? null)
+                  askCite !== null
+                    ? askCite.number
+                    : selected === null || summary.data == null
+                      ? null
+                      : (numberCitations(summary.data).get(selected.id) ?? null)
                 }
                 segments={segments.data ?? []}
                 canPlay={m.video?.status === 'ready'}
@@ -360,7 +388,8 @@ function CitationCard({
   onPlay,
   onShowInTranscript,
 }: {
-  item: SummaryItem | null;
+  /** A note's item or an answer's citation: only the cited segments matter here. */
+  item: Pick<SummaryItem, 'segmentIds'> | null;
   number: number | null;
   segments: Segment[];
   canPlay: boolean;

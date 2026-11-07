@@ -1,4 +1,5 @@
 import { Db, createPgPool } from '@meetyou/db';
+import { createLlmProvider } from '@meetyou/providers';
 import { startTracing } from '@meetyou/tracing';
 import { buildApp } from './app.ts';
 import { loadConfig } from './config.ts';
@@ -24,9 +25,16 @@ async function main() {
     await db.assertRowSecurityEnforced();
   }
 
+  // LLM_PROVIDER / GEMINI_* from the environment; the free-key guard runs here (ADR-0001 §7).
+  const llm = createLlmProvider({
+    ...process.env,
+    APP_ENV: config.env === 'test' ? 'ci' : config.env,
+  });
+
   const app = await buildApp({
     db,
     config,
+    llm,
   });
 
   const address = await app.listen({

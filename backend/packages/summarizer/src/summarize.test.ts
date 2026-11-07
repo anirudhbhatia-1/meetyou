@@ -12,7 +12,8 @@ import { describe, expect, it } from 'vitest';
 import { chunkSegments } from './chunk.ts';
 import { summarySegments, type SummaryInput } from './input.ts';
 import { asData, clock, inputBlock, PROMPT_VERSION, systemPrompt } from './prompt.ts';
-import { summarize, SummaryFailedError } from './summarize.ts';
+import { GenerationFailedError } from './generate.ts';
+import { summarize } from './summarize.ts';
 import { TEMPLATES } from './templates.ts';
 
 /** The synthetic Hinglish standup (shared/fixtures) as stored segments. */
@@ -179,7 +180,7 @@ describe('summarize (S3-01)', () => {
   it('stops at once on a refusal, and lets HTTP errors through for the queue to retry', async () => {
     await expect(
       summarize(standupInput(), fakeLlm([new LlmRefusedError('SAFETY')])),
-    ).rejects.toEqual(new SummaryFailedError('refused'));
+    ).rejects.toEqual(new GenerationFailedError('refused'));
     await expect(
       summarize(standupInput(), fakeLlm([new LlmHttpError(503)])),
     ).rejects.toBeInstanceOf(LlmHttpError);

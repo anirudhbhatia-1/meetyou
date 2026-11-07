@@ -155,7 +155,7 @@ Steps:
    ```bash
    gcloud run jobs execute meetyou-staging-migrate --region asia-south1 --wait
    ```
-   Expected log line: `migrations applied: 0001, 0002, 0003` the first time, then
+   Expected log line: `migrations applied: 0001, 0002, 0003, 0004` the first time, then
    `migrations: up to date`. The runner takes an advisory lock, so two runs cannot collide, and it
    refuses edited migrations.
 2. Check the role once from a machine inside the VPC (or Cloud SQL Studio) **[Verify]** access path:
@@ -185,6 +185,7 @@ printf '%s' "<value>" | gcloud secrets versions add <secret-id> --data-file=-
 | `meetyou-staging-db-password` | the `db_password` from §5.1 | reference only |
 | `meetyou-staging-database-url` | `postgres://meetyou_app:<password>@<db_private_ip>:5432/meetyou_staging` (URL-encode the password). **[Verify]** TLS: if the instance requires SSL, add `?sslmode=require` and check `pg` accepts it | gateway, API, worker, migrate job |
 | `meetyou-staging-deepgram-api-key` | the **paid** Deepgram key for staging (not the dev key) | gateway |
+| `meetyou-staging-gemini-api-key` | the Gemini API key for summaries and Ask (§9.4); paid tier for real meetings | API (Ask), worker (S3-03) |
 | `meetyou-staging-auth-signing-jwks` | private signing keys, JSON array (below) | API only |
 | `meetyou-staging-google-oauth-client-secret` | from §7.2 | API only |
 
@@ -518,6 +519,37 @@ One-time setup:
    ```
    `smoke.passed` with `segments` > 0 and `acked: true` means the whole path works.
 4. The migrate job and all four services must exist before the first run (§9.1, §9.2).
+
+### 9.4 "Ask this meeting" on staging (2026-11-07)
+The API answers questions about one recording (FEATURES E4, DESIGN §12.7) with Gemini. Migration
+0004 (`meeting_questions`) runs with the next deploy. The API needs the key and three settings;
+without them it answers `503 answers_unavailable` and the website shows "Answers aren't available
+right now".
+1. The key, typed at a hidden prompt so it never lands in shell history or a file:
+   ```bash
+   gcloud secrets create meetyou-staging-gemini-api-key --replication-policy=automatic
+   read -rsp 'Gemini API key: ' K; echo; printf '%s' "$K" | gcloud secrets versions add meetyou-staging-gemini-api-key --data-file=-; unset K
+   gcloud secrets add-iam-policy-binding meetyou-staging-gemini-api-key \
+     --member=serviceAccount:meetyou-staging-api-sa@<project>.iam.gserviceaccount.com \
+     --role=roles/secretmanager.secretAccessor
+   ```
+2. The API service. With the **free** key (temporary staging exception, ADR-0001 §7 amendment:
+   test meetings only, everyone told):
+   ```bash
+   gcloud run services update meetyou-staging-api --region asia-south1 \
+     --update-secrets GEMINI_API_KEY=meetyou-staging-gemini-api-key:latest \
+     --update-env-vars LLM_PROVIDER=gemini,GEMINI_FREE_TIER_ACCEPTED=true,GEMINI_FREE_TIER_ON_STAGING=true
+   ```
+   Once the key is **paid**, add a new secret version with it and drop the exception:
+   `--remove-env-vars GEMINI_FREE_TIER_ACCEPTED,GEMINI_FREE_TIER_ON_STAGING`.
+3. Check: on the website open a meeting with a transcript → **Ask** → "What did we decide?". The
+   answer has numbered sources; "Write me a poem" gets "I can only answer questions about this
+   recording."
+
+Guardrails (all in code, `backend/apps/api/src/routes/ask.ts`): owner only (forced RLS; another
+user's meeting is 404), the model sees only that recording, citations must be its own segments,
+fixed refusal texts, 500 characters, 30 per hour and 150 per 24 hours per user, tokens stored per
+question. The API's request timeout (60 s) covers a Gemini call (about 13 s on a short meeting).
 
 ## 10. Deploy order and checks
 

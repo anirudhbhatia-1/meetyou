@@ -1,7 +1,9 @@
 import {
+  AskQuestionResponse,
   MeResponse,
   Meeting,
   MeetingList,
+  MeetingQuestionsResponse,
   Segment,
   VideoPlaybackResponse,
 } from '@meetyou/contracts';
@@ -68,6 +70,24 @@ export function createHttpApi(auth: WebAuth): LibraryApi {
       const query = options?.download === true ? '?download=1' : '';
       const body = await get(`/v1/meetings/${encodeURIComponent(meetingId)}/video${query}`);
       return body === null ? null : VideoPlaybackResponse.parse(body);
+    },
+
+    async listQuestions(meetingId) {
+      const body = await get(`/v1/meetings/${encodeURIComponent(meetingId)}/questions`);
+      return body === null ? null : MeetingQuestionsResponse.parse(body);
+    },
+
+    async askQuestion(meetingId, question) {
+      const res = await auth.authorized(`/v1/meetings/${encodeURIComponent(meetingId)}/ask`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', accept: 'application/json' },
+        body: JSON.stringify({ question }),
+      });
+      if (res.ok) return { ok: true, ...AskQuestionResponse.parse(await res.json()) };
+      if (res.status === 429) return { ok: false, error: 'rate_limited' };
+      if (res.status === 409) return { ok: false, error: 'no_transcript' };
+      if (res.status === 503) return { ok: false, error: 'unavailable' };
+      return { ok: false, error: 'failed' };
     },
 
     signOut: () => auth.signOut(),

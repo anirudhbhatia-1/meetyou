@@ -685,7 +685,10 @@ E2 and F2 — no new pipeline.
 ---
 
 ### E4. Live AI Q&A and "catch me up"
-**Phase 2**
+**Phase 2** — except **"Ask this meeting" on the website, Phase 1 since 2026-11-07** (Anirudh):
+questions about one finished recording, for its owner only, answered from it with citations,
+off-topic questions refused, 30 per hour / 150 per day (DESIGN §12.7, STAGING_SETUP §9.4). The
+live, in-meeting part stays Phase 2.
 
 **What.** Ask questions during the meeting ("What did they say about pricing?") or get a 3-line
 recap when joining late.

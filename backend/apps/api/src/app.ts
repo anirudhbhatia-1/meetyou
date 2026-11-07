@@ -2,6 +2,7 @@ import Fastify, { type FastifyInstance, type FastifyServerOptions } from 'fastif
 import fastifyCors from '@fastify/cors';
 import { TokenService, generateSigningJwk, loadKeyRing, type AuthService } from '@meetyou/auth';
 import type { Db } from '@meetyou/db';
+import type { LlmProvider } from '@meetyou/providers';
 import { GcsBucket } from '@meetyou/storage';
 
 import { loadConfig, type ApiConfig } from './config.ts';
@@ -10,6 +11,7 @@ import { authPlugin } from './middleware/auth.ts';
 import { idempotencyPlugin, type IdempotencyStore } from './middleware/idempotency.ts';
 import { swaggerPlugin } from './plugins/swagger.ts';
 import { accountRoutes } from './routes/account.ts';
+import { askRoutes } from './routes/ask.ts';
 import { authRoutes } from './routes/auth.ts';
 import { consentLogRoutes } from './routes/consent-log.ts';
 import { healthRoutes } from './routes/health.ts';
@@ -31,6 +33,8 @@ export interface BuildAppOptions {
   bucket?: GcsBucket;
   /** Tests replace the Google exchange; built from the config otherwise. */
   authService?: AuthService;
+  /** "Ask this meeting" model; null or absent answers 503 `answers_unavailable`. */
+  llm?: LlmProvider | null;
 }
 
 /**
@@ -136,6 +140,7 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
   await app.register(notesRoutes);
   await app.register(segmentsRoutes);
   await app.register(consentLogRoutes);
+  await app.register(askRoutes, { llm: options.llm ?? null });
 
   await app.register(sessionsRoutes, {
     tokens,

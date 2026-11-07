@@ -1,6 +1,6 @@
 import { UNASSIGNED_OWNER } from '@meetyou/contracts';
 
-import type { SummaryInput, SummaryLanguage, SummarySegment } from './input.ts';
+import type { MeetingData, SummaryLanguage, SummarySegment } from './input.ts';
 import type { SummaryTemplate } from './templates.ts';
 
 /** Recorded on every summary with the template version (ARCHITECTURE §10.3, O4). */
@@ -75,7 +75,7 @@ export function segmentLine(segment: SummarySegment): string {
  * echo-flagged segments are always left out (they repeat the other lane).
  */
 export function inputBlock(
-  input: SummaryInput,
+  input: MeetingData,
   segments: readonly SummarySegment[] = input.segments,
   part?: { index: number; count: number },
 ): string {

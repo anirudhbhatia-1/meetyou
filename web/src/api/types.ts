@@ -1,12 +1,27 @@
 import type {
+  AskUsage,
   Meeting,
+  MeetingQuestion,
   Note,
   Segment,
   SummaryItem,
   VideoPlaybackResponse,
 } from '@meetyou/contracts';
 
-export type { Meeting, Note, Segment, SummaryItem, VideoPlaybackResponse };
+export type {
+  AskUsage,
+  Meeting,
+  MeetingQuestion,
+  Note,
+  Segment,
+  SummaryItem,
+  VideoPlaybackResponse,
+};
+
+/** "Ask this meeting" (DESIGN §12.7): an answer, or why there is none (shown as fixed text). */
+export type AskResult =
+  | { ok: true; question: MeetingQuestion; usage: AskUsage }
+  | { ok: false; error: 'rate_limited' | 'unavailable' | 'no_transcript' | 'failed' };
 
 export interface Participant {
   id: string;
@@ -56,6 +71,9 @@ export interface LibraryApi {
     meetingId: string,
     options?: { download?: boolean },
   ): Promise<VideoPlaybackResponse | null>;
+  /** Questions about one recording, oldest first, with the caller's limits (DESIGN §12.7). */
+  listQuestions(meetingId: string): Promise<{ items: MeetingQuestion[]; usage: AskUsage } | null>;
+  askQuestion(meetingId: string, question: string): Promise<AskResult>;
   /** Ends the web session (clears the refresh cookie). */
   signOut(): Promise<void>;
   /** FR-SET-02: soft-deletes a meeting; the server removes it after a short grace period. */

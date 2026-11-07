@@ -573,7 +573,7 @@ notes" after Keep. Output language changes in Settings apply on the next regener
   they're ready."
 - **Improved transcript banner** (D2, after batch pass) [SPEC]: `olive-wash` — "We improved this
   transcript after the call. Your notes were updated to match." · **See what changed** · ×.
-- **Tabs:** Notes · Transcript (44 px, 15 px; selected `ink` + 2 px olive underline).
+- **Tabs:** Notes · Transcript · Ask (44 px, 15 px; selected `ink` + 2 px olive underline). Ask: §12.7.
 - Content grid: `1.55fr / 1fr`, gap 28, `align-items: start`.
 
 ### 12.4 Notes tab (left card, padding 32/36, gap 26)
@@ -653,6 +653,34 @@ FR-SUM-03). Due shows the resolved date; if the meeting only gave a vague phrase
 the phrase as said.
 
 ---
+
+### 12.7 Ask tab (E4 for one recording; Phase 1 since 2026-11-07)
+Questions about **this recording only**, answered from its transcript and notes, visible only to
+its owner. Route `#/meetings/{id}/ask`. Left column of the content grid; the right rail keeps the
+citation card (§12.6), which shows the selected answer chip's source.
+- **Intro** (13 `muted`): "Ask about this recording. Answers come only from what was said in it.
+  Only you can see your questions."
+- **History** (oldest first, gap 22): each entry is the question (15/600 `ink`) and below it the
+  answer (15/1.6 `muted`) followed by its citation chips (§6.13, numbered 1…n per answer;
+  clicking one pins it in the citation card, whose **Play from** and **Show in transcript** work as
+  in §12.6). Refusals are fixed texts, never model-written, in `muted` italic with no chip:
+  `off_topic` → "I can only answer questions about this recording." · `not_in_meeting` → "This
+  recording doesn't say."
+- **Empty history**: one `muted` line "For example: What did we decide about pricing?"
+- **Composer** (below the history): textarea (§6.6, radius 10, min-height 72, max 500
+  characters, placeholder "Ask a question about this meeting") · counter "{n} / 500" (12 `muted`,
+  tabular, `danger` above 500) · **Ask** (primary, 40 px; disabled when empty, over 500 or
+  waiting). Enter sends, Shift+Enter adds a line. `aria-label="Question about this meeting"`.
+- **Waiting**: the sent question appears in the history at once with a pulsing olive dot and
+  "Reading the recording…" (static under reduced motion); the composer is disabled.
+- **Limits line** (12 `muted`, under the composer): "{used} of 30 questions this hour". At the
+  limit the composer is disabled and an inline warning banner (§6.15) says "You've reached the
+  question limit. Try again in an hour."
+- **Errors** (inline error banner §6.15 above the composer, the question stays in the field):
+  no model configured or vendor down → "Answers aren't available right now. Try again later." ·
+  no transcript → "This recording has no transcript yet." · anything else → "Couldn't answer
+  that. Try again."
+- Hidden while the meeting is still recording; shown during processing (the transcript exists).
 
 ## 13. Share, export, delete
 
@@ -951,6 +979,7 @@ Sentence case everywhere. All strings in an i18n resource file from day one; Hin
 | Context | Strings |
 |---|---|
 | Meet prompt | "Take notes for this call?" · "Nothing joins the call. To start, press {shortcut} or click the MeetYou (M) icon in Chrome's toolbar, then Start." · Not now |
+| Ask tab | "Ask about this recording. Answers come only from what was said in it. Only you can see your questions." · "Ask a question about this meeting" · Ask · "Reading the recording…" · "I can only answer questions about this recording." · "This recording doesn't say." · "{used} of 30 questions this hour" · "You've reached the question limit. Try again in an hour." · "Answers aren't available right now. Try again later." · "This recording has no transcript yet." · "Couldn't answer that. Try again." · "For example: What did we decide about pricing?" |
 | Meet prompt reminder | "Audio and the Meet tab's video will be recorded." · "Audio will be recorded." |
 | Panel ready | "Ready when you are" · "Your mic and the Meet tab are recorded as two separate lanes, so you're always labelled correctly." · Start taking notes |
 | Recording options | Record video · "Records what the Meet tab shows — the video grid and anything people present." · Video quality · Standard · Data saver · "Data saver uses less upload — good for slow or mobile connections." · What to record · Meet tab · Whole screen (P1) · "Video is off because recordings are deleted as soon as your notes are ready. Video is only kept for replay." · Change in Settings |

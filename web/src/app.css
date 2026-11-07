@@ -705,3 +705,73 @@
   top: auto;
   bottom: calc(100% + 6px);
 }
+
+/* DESIGN §12.7 Ask tab */
+.ask {
+  padding: 32px 36px;
+  display: grid;
+  gap: 22px;
+}
+.ask-history {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 22px;
+}
+.ask-q {
+  margin: 0 0 6px;
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--ink);
+}
+.ask-a {
+  margin: 0;
+  font-size: 15px;
+  line-height: 1.6;
+  color: var(--muted);
+}
+.ask-waiting {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+.ask-composer {
+  display: grid;
+  gap: 8px;
+}
+.ask-composer textarea {
+  min-height: 72px;
+  resize: vertical;
+  border-radius: var(--radius-row);
+  border: 1px solid var(--control-line);
+  background: var(--surface);
+  padding: 12px 14px;
+  font: inherit;
+  font-size: 15px;
+  color: var(--ink);
+}
+.ask-composer textarea::placeholder {
+  color: var(--muted);
+}
+.ask-composer textarea:focus-visible {
+  outline: 2px solid var(--olive-line);
+  outline-offset: 2px;
+}
+.ask-composer textarea:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+.ask-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+.ask-over {
+  color: var(--danger);
+}
+@media (prefers-reduced-motion: reduce) {
+  .ask .proc-dot {
+    animation: none;
+  }
+}
