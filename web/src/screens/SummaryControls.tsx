@@ -128,3 +128,57 @@ export function NotesFeedback({
     </div>
   );
 }
+
+/** Per browser: a dismissed banner stays dismissed for that meeting. */
+const DISMISSED_KEY = 'minutes.improved-banner.dismissed';
+
+function dismissedIds(): string[] {
+  try {
+    const value: unknown = JSON.parse(localStorage.getItem(DISMISSED_KEY) ?? '[]');
+    return Array.isArray(value) ? value.filter((v): v is string => typeof v === 'string') : [];
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * DESIGN §12.3 improved-transcript banner (D2, S3-04): shown once the batch pass rewrote the notes
+ * (meeting status `updated`), until dismissed. "See what changed" opens the improved transcript.
+ * TODO(S4-10): a real before/after view.
+ */
+export function ImprovedBanner({
+  meetingId,
+  onSeeChanges,
+}: {
+  meetingId: string;
+  onSeeChanges: () => void;
+}) {
+  const [hidden, setHidden] = useState(() => dismissedIds().includes(meetingId));
+  if (hidden) return null;
+  return (
+    <div className="improved-banner" role="status">
+      <span>We improved this transcript after the call. Your notes were updated to match.</span>
+      <Button size="sm" variant="ghost" onClick={onSeeChanges}>
+        See what changed
+      </Button>
+      <button
+        type="button"
+        className="improved-close"
+        aria-label="Dismiss"
+        onClick={() => {
+          setHidden(true);
+          try {
+            localStorage.setItem(
+              DISMISSED_KEY,
+              JSON.stringify([...dismissedIds(), meetingId].slice(-200)),
+            );
+          } catch {
+            // Private mode: the banner simply comes back next time.
+          }
+        }}
+      >
+        <Icon name="x" />
+      </button>
+    </div>
+  );
+}

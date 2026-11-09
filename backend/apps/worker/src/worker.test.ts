@@ -34,6 +34,7 @@ describe('lifecycle jobs (S2-10)', () => {
     const names = workerTasks({ db: {} as never, bucket: new MemoryBucket() }).map((t) => t.name);
     expect(names).toEqual([
       'meeting.summarize',
+      'meeting.retranscribe',
       'video.finalize',
       'meeting.delete',
       'account.delete',

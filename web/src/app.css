@@ -881,3 +881,32 @@
   padding-top: 20px;
   border-top: 1px solid var(--hairline);
 }
+
+/* DESIGN §12.3 improved-transcript banner (D2) */
+.improved-banner {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  padding: 10px 12px 10px 16px;
+  margin-bottom: 16px;
+  border-radius: var(--radius-row);
+  background: var(--olive-wash);
+  color: var(--ink);
+  font-size: 14px;
+}
+.improved-banner > span {
+  flex: 1 1 260px;
+}
+.improved-close {
+  all: unset;
+  display: inline-grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  cursor: pointer;
+}
+.improved-close:focus-visible {
+  outline: 2px solid var(--olive-line);
+}

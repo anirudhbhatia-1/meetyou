@@ -22,7 +22,7 @@ import type { ChunkStore } from './chunk-store.ts';
 import { LatencyHistogram } from './latency.ts';
 import { LaneChunker, type PendingChunk } from './lane-chunker.ts';
 import { errorCode, log } from './log.ts';
-import { DEFAULT_PRE_SKIP, oggOpusFile, OggOpusWriter } from './ogg.ts';
+import { DEFAULT_PRE_SKIP, oggOpusFile, OggOpusWriter } from '@meetyou/storage';
 import type { SttProvider, SttResult, SttStream } from '@meetyou/providers';
 import type { SessionPatch } from './registry.ts';
 import { FileSink, type SessionSink, type SessionTarget } from './sinks.ts';
@@ -430,8 +430,8 @@ export class StreamSession {
 
   /**
    * Capture events (§6.1 step 6). Video part timing is stored for `video.finalize`; a resend after
-   * a reconnect writes the same values again. TODO(S3-04): store speaker and participant events
-   * for speaker resolution.
+   * a reconnect writes the same values again. Participants and active-speaker signals are stored
+   * for naming speakers after the call (S3-04).
    */
   #event(event: CaptureEvent): void {
     if (event.sessionId !== this.sessionId) return;
@@ -443,6 +443,21 @@ export class StreamSession {
     } else if (event.type === 'video.part_stopped') {
       const { partId, fragments, at } = event;
       this.#toSink('video', (t) => this.#sink.videoPart(t, { partId, fragments, stoppedAtMs: at }));
+    } else if (event.type === 'participant.joined') {
+      const { participantId, displayName, at } = event;
+      this.#toSink('speakers', async (t) =>
+        this.#sink.speaker?.(t, {
+          kind: 'joined',
+          externalId: participantId,
+          displayName,
+          atMs: at,
+        }),
+      );
+    } else if (event.type === 'speaker.active') {
+      const { participantId, at } = event;
+      this.#toSink('speakers', async (t) =>
+        this.#sink.speaker?.(t, { kind: 'active', externalId: participantId, atMs: at }),
+      );
     }
   }
 
@@ -508,7 +523,7 @@ export class StreamSession {
 
   /** Queues a sink write after the earlier ones; failures are logged by kind, never retried here. */
   #toSink(
-    kind: 'segments' | 'usage' | 'ended' | 'video',
+    kind: 'segments' | 'usage' | 'ended' | 'video' | 'speakers',
     write: (target: SessionTarget) => Promise<void>,
   ): void {
     const target = this.#target;

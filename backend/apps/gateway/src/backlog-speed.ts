@@ -2,7 +2,7 @@ import { execFileSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 import process from 'node:process';
 
-import { OggOpusWriter, readOggOpusPackets } from './ogg.ts';
+import { OggOpusWriter, readOggOpusPackets } from '@meetyou/storage';
 import { deepgramProvider } from '@meetyou/providers';
 import type { SttInput, SttResult } from '@meetyou/providers';
 

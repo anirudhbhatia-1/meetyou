@@ -2,10 +2,12 @@ import { TemplateId } from '@meetyou/contracts';
 import type { Db } from '@meetyou/db';
 import { createLogger, errorCode } from '@meetyou/log';
 import { LlmHttpError, type LlmProvider } from '@meetyou/providers';
-import { DEFAULT_MAX_ATTEMPTS, defineTask, jobKey } from '@meetyou/queue';
+import { DEFAULT_MAX_ATTEMPTS, defineTask, enqueue, jobKey } from '@meetyou/queue';
 import { GenerationFailedError, summarize, validateSummary } from '@meetyou/summarizer';
 import { z } from 'zod';
 
+import { nameLiveClusters } from './batch/naming.ts';
+import { MIN_BATCH_MS, retranscribeJob, retranscribeJobKey } from './batch/task.ts';
 import { ensureSelfParticipant, loadMeeting } from './meeting-data.ts';
 import { storeFailedSummary, storeSummary } from './store.ts';
 
@@ -42,11 +44,18 @@ const log = createLogger('pipeline');
  * model cannot fix by retrying mark the meeting failed visibly; vendor outages throw so the queue
  * retries with backoff. Without a configured model the meeting becomes ready without notes.
  */
-export function summarizeTask(deps: { db: Db; llm: LlmProvider | null }) {
+export function summarizeTask(deps: {
+  db: Db;
+  llm: LlmProvider | null;
+  /** Queue the batch pass after the first notes (S3-04); off unless a batch provider is set. */
+  batch?: boolean;
+}) {
   return defineTask(MEETING_SUMMARIZE, SummarizePayload, async (payload) => {
     const { workspaceId, meetingId, reason } = payload;
     const meeting = await deps.db.inWorkspace(workspaceId, async (tx) => {
       await ensureSelfParticipant(tx, workspaceId, meetingId);
+      // Speaker names from Meet's signal before the first notes, so owners can be named (S3-04).
+      if (reason === 'session_end') await nameLiveClusters(tx, meetingId);
       return loadMeeting(tx, workspaceId, meetingId);
     });
     if (meeting === null) return; // deleted meanwhile
@@ -120,6 +129,23 @@ export function summarizeTask(deps: { db: Db; llm: LlmProvider | null }) {
         summary: validated,
         usage: run.usage,
       });
+      // The batch pass follows the first notes, if audio is kept long enough to re-read it (D-02).
+      if (reason === 'session_end' && deps.batch === true) {
+        const duration = (meeting.endedAt?.getTime() ?? 0) - meeting.startedAt.getTime();
+        const settings = await tx
+          .selectFrom('userSettings')
+          .select('retentionPolicy')
+          .limit(1)
+          .executeTakeFirst();
+        if (duration >= MIN_BATCH_MS && settings?.retentionPolicy !== 'immediate') {
+          await enqueue(
+            tx,
+            retranscribeJob,
+            { workspaceId, meetingId },
+            { jobKey: retranscribeJobKey(meetingId) },
+          );
+        }
+      }
       // An untitled meeting takes the summary's title; a name the user gave is never replaced.
       if (meeting.title === '' && validated.title !== '') {
         await tx

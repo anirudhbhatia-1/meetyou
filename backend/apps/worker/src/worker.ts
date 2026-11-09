@@ -2,8 +2,8 @@ import { createServer, type Server } from 'node:http';
 
 import { Db } from '@meetyou/db';
 import { createLogger, errorCode } from '@meetyou/log';
-import { exportExpireTask, exportTask, summarizeTask } from '@meetyou/pipeline';
-import type { LlmProvider } from '@meetyou/providers';
+import { exportExpireTask, exportTask, retranscribeTask, summarizeTask } from '@meetyou/pipeline';
+import type { LlmProvider, SttBatchProvider } from '@meetyou/providers';
 import {
   accountDeleteTask,
   installQueueSchema,
@@ -50,10 +50,14 @@ export function workerTasks(deps: {
   tools?: FfmpegTools;
   /** The summary model (S3-03); null finishes meetings without notes. */
   llm?: LlmProvider | null;
+  /** Batch STT for the post-meeting pass (S3-04); null keeps the live transcript. */
+  batchStt?: SttBatchProvider | null;
 }): TaskDefinition[] {
   const storage = bucketCleanup(deps.bucket);
+  const batchStt = deps.batchStt ?? null;
   return [
-    summarizeTask({ db: deps.db, llm: deps.llm ?? null }),
+    summarizeTask({ db: deps.db, llm: deps.llm ?? null, batch: batchStt !== null }),
+    retranscribeTask({ db: deps.db, bucket: deps.bucket, stt: batchStt }),
     videoFinalizeTask({
       db: deps.db,
       store: new ObjectVideoStore(deps.bucket),
@@ -105,6 +109,7 @@ export async function runWorker(options: {
   noPreparedStatements?: boolean;
   queueSampleMs?: number;
   llm?: LlmProvider | null;
+  batchStt?: SttBatchProvider | null;
 }): Promise<RunningWorker> {
   const db = new Db(options.pool);
   await db.assertRowSecurityEnforced();
@@ -115,6 +120,7 @@ export async function runWorker(options: {
       db,
       bucket: options.bucket,
       llm: options.llm ?? null,
+      batchStt: options.batchStt ?? null,
       ...(options.tools !== undefined ? { tools: options.tools } : {}),
     }),
     concurrency: options.concurrency ?? 2,

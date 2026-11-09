@@ -87,6 +87,8 @@ export interface ParticipantsTable extends Audit {
   displayName: string;
   isSelf: Generated<boolean>;
   source: 'dom' | 'user_edit';
+  /** Meet's participant ID for this call (`0007`); null for the self row. */
+  externalId: ColumnType<string | null, string | null | undefined, string | null>;
 }
 
 export interface SpeakerClustersTable extends Audit {
@@ -261,6 +263,15 @@ export interface MeetingQuestionsTable extends Audit {
   thinkingTokens: ColumnType<number, number | string | undefined, number | string>;
 }
 
+/** `0007_speaker_signals.sql`: Meet's active-speaker signal, for naming clusters (FR-SPK-03). */
+export interface SpeakerSignalsTable extends Audit {
+  id: string;
+  workspaceId: string;
+  meetingId: string;
+  externalId: string;
+  atMs: BigIntColumn;
+}
+
 /** `0006_exports.sql`: "Download all my data" (S3-11, FR-SET-04). */
 export interface ExportsTable extends Audit {
   id: string;
@@ -313,6 +324,7 @@ export interface Database {
   deletionRequests: DeletionRequestsTable;
   meetingQuestions: MeetingQuestionsTable;
   exports: ExportsTable;
+  speakerSignals: SpeakerSignalsTable;
   refreshTokenFamilies: RefreshTokenFamiliesTable;
   refreshTokens: RefreshTokensTable;
 }

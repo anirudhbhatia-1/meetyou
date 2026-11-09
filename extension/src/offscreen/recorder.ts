@@ -55,6 +55,11 @@ export interface Recorder {
    */
   setMicMuted(muted: boolean): void;
   /**
+   * Meet says this participant is talking now (S3-04): the gateway gets `participant.joined` the
+   * first time (or when the name changes) and `speaker.active` each time, on the session clock.
+   */
+  noteSpeaker(participantId: string, displayName: string): void;
+  /**
    * Stops capture now. `drained` settles once the buffered audio reached the gateway (or the
    * deadline passed); the offscreen document stays open until then.
    */
@@ -225,6 +230,8 @@ export async function startRecorder(options: {
   /** Video part timing for the gateway (finalize follows the session clock, ADR-0011 §3.4). */
   const emit = (event: CaptureEvent): void => client?.event(event);
   let quality: VideoQuality = 'standard';
+  /** Names already sent, by Meet participant ID (per recording; never logged, AGENTS §7). */
+  const speakerNames = new Map<string, string>();
   let switching: Promise<void> = Promise.resolve();
   const mimeType = pickVideoMimeType((t) => MediaRecorder.isTypeSupported(t));
   const startPart = (): void => {
@@ -319,6 +326,14 @@ export async function startRecorder(options: {
       client?.control('pause', capture.nowMs());
       await switching;
       await stopPart('paused');
+    },
+    noteSpeaker(participantId, displayName) {
+      const at = Math.max(0, Math.round(capture.nowMs()));
+      if (speakerNames.get(participantId) !== displayName) {
+        speakerNames.set(participantId, displayName);
+        emit({ type: 'participant.joined', sessionId, participantId, displayName, at });
+      }
+      emit({ type: 'speaker.active', sessionId, participantId, at });
     },
     setMicMuted(muted) {
       if (muted === micMuted) return;

@@ -3,6 +3,7 @@ import {
   parseMeetCallState,
   parseMeetStateReply,
   parseMeetMuteReply,
+  parseSpeakerSignal,
   parseMeetTitle,
   senderTabId,
   type MeetCallState,
@@ -656,7 +657,6 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       });
       return true;
     }
-    // TODO(S3-04): forward speaker events for speaker naming; today they are only observed.
     if (record.type === 'meet.mute-changed' && typeof record.muted === 'boolean') {
       const muted = record.muted;
       // Only the recorded tab's mute counts, and only while it is being recorded.
@@ -666,9 +666,20 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       });
       return false;
     }
-    if (record.type === 'meet.speaker-active' && typeof record.participantId === 'string') {
-      // AGENTS §7: no names or participant IDs in logs.
-      console.log('[MeetYou] Background observed speaker.active');
+    if (record.type === 'meet.speaker-active' && record.isSelf !== true) {
+      // The user's own speech is the `me` lane; others name the `them` clusters (S3-04).
+      const signal = parseSpeakerSignal(record);
+      if (signal === null) return false;
+      enqueueCapture(async () => {
+        const state = await loadCaptureState();
+        if (fromTab === null || state.tabId !== fromTab || !canStop(state)) return;
+        try {
+          await sendToOffscreen(signal);
+        } catch (error: unknown) {
+          // AGENTS §7: no names or participant IDs in logs.
+          logError('forward speaker failed', error);
+        }
+      });
       return false;
     }
   }

@@ -11,3 +11,11 @@ export {
   type SignedUpload,
 } from './signing.ts';
 export { ObjectVideoStore, type VideoPartRecord } from './video-store.ts';
+export {
+  DEFAULT_PRE_SKIP,
+  oggCrc32,
+  oggOpusFile,
+  OggOpusWriter,
+  readOggOpusPackets,
+  type OggOpusOptions,
+} from './ogg.ts';

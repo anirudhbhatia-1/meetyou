@@ -328,6 +328,28 @@ describe('production stream path (JWT + Postgres, S2-04/S2-05/S2-07)', () => {
       await client.until((m) => m.some((x) => x.type === 'ready'));
       client.send('them', 0, 29);
       await client.until((m) => m.filter((x) => x.type === 'transcript.segment').length === 3);
+      // Meet adapter signals for speaker naming (S3-04); a resend after a reconnect is a no-op.
+      const events = [
+        {
+          type: 'participant.joined',
+          sessionId,
+          participantId: 'meet-1',
+          displayName: 'Neha',
+          at: 100,
+        },
+        { type: 'speaker.active', sessionId, participantId: 'meet-1', at: 200 },
+        { type: 'speaker.active', sessionId, participantId: 'meet-1', at: 200 },
+        {
+          type: 'participant.joined',
+          sessionId,
+          participantId: 'meet-1',
+          displayName: 'Neha K',
+          at: 300,
+        },
+      ];
+      for (const [seq, event] of events.entries()) {
+        client.socket.send(JSON.stringify({ type: 'event', seq, event }));
+      }
       const logged = vi.spyOn(console, 'log').mockImplementation(() => undefined);
       client.socket.send(JSON.stringify({ type: 'control', action: 'end', at: 3000 }));
       expect(await client.closed).toBe(1000);
@@ -357,7 +379,14 @@ describe('production stream path (JWT + Postgres, S2-04/S2-05/S2-07)', () => {
           .where('id', '=', meetingId)
           .executeTakeFirstOrThrow(),
         usage: await tx.selectFrom('usageRecords').select(['sttSecondsThem']).execute(),
+        participants: await tx
+          .selectFrom('participants')
+          .select(['displayName', 'externalId'])
+          .execute(),
+        signals: await tx.selectFrom('speakerSignals').select(['externalId', 'atMs']).execute(),
       }));
+      expect(rows.participants).toEqual([{ displayName: 'Neha K', externalId: 'meet-1' }]);
+      expect(rows.signals).toEqual([{ externalId: 'meet-1', atMs: 200 }]);
       expect(rows.segments).toEqual([
         { text: 'line 1', meetingId, lane: 'them' },
         { text: 'line 2', meetingId, lane: 'them' },

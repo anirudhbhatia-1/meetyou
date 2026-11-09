@@ -13,7 +13,7 @@ import {
   type SummaryVersion,
 } from '@meetyou/contracts';
 import type { WorkspaceTx } from '@meetyou/db';
-import { summarizeJob, summarizeJobKey } from '@meetyou/pipeline';
+import { acceptSummary, summarizeJob, summarizeJobKey } from '@meetyou/pipeline';
 import { enqueue } from '@meetyou/queue';
 
 import { BadRequestError, NotFoundError, UnauthorizedError } from '../errors.ts';
@@ -261,16 +261,7 @@ export const summaryRoutes: FastifyPluginAsync<{ pollMs?: number; streamMs?: num
             await tx.deleteFrom('summaries').where('id', '=', target.id).execute();
             return true;
           }
-          await tx
-            .updateTable('summaries')
-            .set({ accepted: false })
-            .where('meetingId', '=', meetingId)
-            .execute();
-          await tx
-            .updateTable('summaries')
-            .set({ accepted: true })
-            .where('id', '=', target.id)
-            .execute();
+          await acceptSummary(tx, meetingId, target.id);
           return true;
         });
         if (!done) throw new NotFoundError('No such candidate version');

@@ -35,7 +35,14 @@ export interface SessionSink {
     target: SessionTarget,
     info: Partial<VideoPartInfo> & { partId: string },
   ): Promise<void>;
+  /** Who is in the call and who is talking (S3-04 speaker naming); sinks may ignore them. */
+  speaker?(target: SessionTarget, signal: SpeakerSignal): Promise<void>;
 }
+
+/** Meet adapter signals, Meet's IDs for this call (ARCHITECTURE §4 capture events). */
+export type SpeakerSignal =
+  | { kind: 'joined'; externalId: string; displayName: string; atMs: number }
+  | { kind: 'active'; externalId: string; atMs: number };
 
 /** Local dev without a database: next to the audio in the chunk store. */
 export class FileSink implements SessionSink {
@@ -151,6 +158,47 @@ export class DbSink implements SessionSink {
           { jobKey: videoFinalizeJobKey(target.meetingId) },
         );
       }
+    });
+  }
+
+  /**
+   * A participant row per Meet participant (updated by later events unless the user renamed it,
+   * FR-SPK-05) and one row per active-speaker signal; the batch pass aligns them with clusters.
+   */
+  async speaker(target: SessionTarget, signal: SpeakerSignal): Promise<void> {
+    await this.#db.inWorkspace(target.workspaceId, async (tx) => {
+      if (signal.kind === 'joined') {
+        await tx
+          .insertInto('participants')
+          .values({
+            id: `prt_${newUlid()}`,
+            workspaceId: target.workspaceId,
+            meetingId: target.meetingId,
+            displayName: signal.displayName,
+            source: 'dom',
+            externalId: signal.externalId,
+          })
+          .onConflict((oc) =>
+            oc
+              .columns(['meetingId', 'externalId'])
+              .where('externalId', 'is not', null)
+              .doUpdateSet({ displayName: signal.displayName })
+              .where('participants.source', '=', 'dom'),
+          )
+          .execute();
+        return;
+      }
+      await tx
+        .insertInto('speakerSignals')
+        .values({
+          id: `sps_${newUlid()}`,
+          workspaceId: target.workspaceId,
+          meetingId: target.meetingId,
+          externalId: signal.externalId,
+          atMs: signal.atMs,
+        })
+        .onConflict((oc) => oc.columns(['meetingId', 'externalId', 'atMs']).doNothing())
+        .execute();
     });
   }
 

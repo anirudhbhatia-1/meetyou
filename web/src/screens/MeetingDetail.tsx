@@ -34,7 +34,12 @@ import { href, navigate, type DetailTab } from '../lib/router.ts';
 import { useAsync } from '../lib/useAsync.ts';
 import { AskTab, type AskCitation } from './AskTab.tsx';
 import { MoreMenu, useDeleteMeeting } from './MeetingMenu.tsx';
-import { CandidateBanner, NotesFeedback, TemplateMenu } from './SummaryControls.tsx';
+import {
+  CandidateBanner,
+  ImprovedBanner,
+  NotesFeedback,
+  TemplateMenu,
+} from './SummaryControls.tsx';
 import { VideoPlayer, type PlayerHandle } from './VideoPlayer.tsx';
 
 const TAB_LABEL: Record<DetailTab, string> = {
@@ -192,6 +197,12 @@ export function MeetingDetail({
               </a>
             ))}
           </div>
+          {m.status === 'updated' && (
+            <ImprovedBanner
+              meetingId={meetingId}
+              onSeeChanges={() => navigate({ screen: 'detail', meetingId, tab: 'transcript' })}
+            />
+          )}
           {candidate !== null && tab === 'notes' && (
             <CandidateBanner
               onKeep={() => {

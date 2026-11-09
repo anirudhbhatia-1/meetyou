@@ -9,6 +9,9 @@ export const WorkerEnv = z.object({
   DATABASE_URL: z.string().min(1),
   GCS_AUDIO_BUCKET: z.string().min(3),
   WORKER_CONCURRENCY: z.coerce.number().int().min(1).max(16).default(2),
+  /** S3-04 batch pass after the first notes: paid STT minutes, so off unless set (with
+   * STT_PROVIDER and its key). */
+  BATCH_TRANSCRIPTION: z.enum(['off', 'on']).default('off'),
 });
 export type WorkerEnv = z.infer<typeof WorkerEnv>;
 

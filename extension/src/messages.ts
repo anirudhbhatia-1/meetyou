@@ -67,7 +67,9 @@ export type OffscreenMessage =
   | { target: 'offscreen'; type: 'capture.resume' }
   | { target: 'offscreen'; type: 'capture.status' }
   /** Meet's mic mute on the recorded tab (FR-CAP-11, D-10). */
-  | { target: 'offscreen'; type: 'capture.mic_muted'; muted: boolean };
+  | { target: 'offscreen'; type: 'capture.mic_muted'; muted: boolean }
+  /** Another participant became the active speaker on the recorded tab (S3-04 speaker naming). */
+  | { target: 'offscreen'; type: 'capture.speaker'; participantId: string; displayName: string };
 
 export type SidePanelMessage =
   /** Per-lane RMS level in dBFS; `me` is null when the microphone lane is not captured. */
@@ -225,6 +227,9 @@ export function parseOffscreenMessage(message: unknown): OffscreenMessage | null
   if (message.type === 'capture.mic_muted' && typeof message.muted === 'boolean') {
     return { target: 'offscreen', type: 'capture.mic_muted', muted: message.muted };
   }
+  if (message.type === 'capture.speaker') {
+    return parseSpeakerSignal(message);
+  }
   if (
     message.type === 'capture.start' &&
     typeof message.streamId === 'string' &&
@@ -347,4 +352,22 @@ export function parseAccessTokenReply(value: unknown): AccessTokenReply {
   return isRecord(value) && typeof value.token === 'string'
     ? { token: value.token }
     : { token: null };
+}
+
+/**
+ * Meet's active-speaker signal for the recorder: Meet's participant ID for this call and the
+ * display name as shown, both bounded like the capture-event contract (`UntrustedName`).
+ */
+export function parseSpeakerSignal(
+  message: Record<string, unknown>,
+): Extract<OffscreenMessage, { type: 'capture.speaker' }> | null {
+  const id = typeof message.participantId === 'string' ? message.participantId.trim() : '';
+  const name = typeof message.displayName === 'string' ? message.displayName.trim() : '';
+  if (id === '' || id.length > 200 || name === '') return null;
+  return {
+    target: 'offscreen',
+    type: 'capture.speaker',
+    participantId: id,
+    displayName: name.slice(0, 200),
+  };
 }

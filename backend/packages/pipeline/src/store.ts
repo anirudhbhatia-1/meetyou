@@ -3,6 +3,8 @@ import type { WorkspaceTx } from '@meetyou/db';
 import type { LlmUsage } from '@meetyou/providers';
 import type { TemplateId, ValidatedSummary } from '@meetyou/summarizer';
 
+import { textSimilarity } from './batch/align.ts';
+
 /**
  * Summary versions (ARCHITECTURE §10.2 step 7, FR-SUM-07): every run adds a version; a regenerated
  * version waits as a candidate until the user keeps it, so the notes they were reading never change
@@ -35,13 +37,7 @@ export async function storeSummary(
 ): Promise<{ summaryId: string; version: number }> {
   const summaryId = `sum_${newUlid()}`;
   const version = await nextVersion(tx, input.meetingId);
-  if (input.accepted) {
-    await tx
-      .updateTable('summaries')
-      .set({ accepted: false })
-      .where('meetingId', '=', input.meetingId)
-      .execute();
-  }
+  // Inserted unaccepted; `acceptSummary` below switches over once its items exist.
   await tx
     .insertInto('summaries')
     .values({
@@ -54,7 +50,7 @@ export async function storeSummary(
       model: input.model,
       status: 'ready',
       overview: input.summary.overview,
-      accepted: input.accepted,
+      accepted: false,
     })
     .execute();
   for (const item of input.summary.items) {
@@ -90,6 +86,7 @@ export async function storeSummary(
         .execute();
     }
   }
+  if (input.accepted) await acceptSummary(tx, input.meetingId, summaryId);
   // Cost per meeting (AGENTS §3 rule 10): one row per summary version; thinking is billed as output.
   await tx
     .insertInto('usageRecords')
@@ -126,4 +123,68 @@ export async function storeFailedSummary(
       accepted: false,
     })
     .execute();
+}
+
+/** Reworded action items still count as the same task at this similarity (and a compatible owner). */
+const SAME_TASK = 0.6;
+
+/**
+ * Makes `summaryId` the notes the user reads (first run, batch pass, or Keep after a rewrite) and
+ * carries done/open over from the version it replaces (ARCHITECTURE §9.3): each new action item
+ * takes the status of the most similar old one with a compatible owner, so ticking an item off
+ * survives regeneration.
+ */
+export async function acceptSummary(
+  tx: WorkspaceTx,
+  meetingId: string,
+  summaryId: string,
+): Promise<void> {
+  const previous = await tx
+    .selectFrom('summaries')
+    .select('id')
+    .where('meetingId', '=', meetingId)
+    .where('accepted', '=', true)
+    .where('id', '<>', summaryId)
+    .executeTakeFirst();
+  await tx
+    .updateTable('summaries')
+    .set({ accepted: false })
+    .where('meetingId', '=', meetingId)
+    .execute();
+  await tx.updateTable('summaries').set({ accepted: true }).where('id', '=', summaryId).execute();
+  if (previous === undefined) return;
+
+  const actions = (id: string) =>
+    tx
+      .selectFrom('summaryItems')
+      .select(['id', 'text', 'ownerParticipantId', 'status', 'completedAt'])
+      .where('summaryId', '=', id)
+      .where('kind', '=', 'action_item')
+      .orderBy('order')
+      .execute();
+  const before = (await actions(previous.id)).filter((a) => a.status === 'done');
+  const used = new Set<string>();
+  for (const item of await actions(summaryId)) {
+    let best: (typeof before)[number] | undefined;
+    let bestScore = SAME_TASK;
+    for (const old of before) {
+      if (used.has(old.id)) continue;
+      const owners =
+        old.ownerParticipantId === null ||
+        item.ownerParticipantId === null ||
+        old.ownerParticipantId === item.ownerParticipantId;
+      const score = textSimilarity(old.text, item.text);
+      if (owners && score >= bestScore) {
+        best = old;
+        bestScore = score;
+      }
+    }
+    if (best === undefined) continue;
+    used.add(best.id);
+    await tx
+      .updateTable('summaryItems')
+      .set({ status: 'done', completedAt: best.completedAt ?? new Date() })
+      .where('id', '=', item.id)
+      .execute();
+  }
 }

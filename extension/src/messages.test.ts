@@ -154,3 +154,31 @@ describe('Meet mute (FR-CAP-11, D-10)', () => {
     expect(parseMeetMuteReply(undefined)).toBeNull();
   });
 });
+
+describe('Meet speaker signal (S3-04)', () => {
+  it('parses a bounded speaker message and nothing malformed', () => {
+    expect(
+      parseOffscreenMessage({
+        target: 'offscreen',
+        type: 'capture.speaker',
+        participantId: ' spaces/abc/devices/7 ',
+        displayName: `  ${'N'.repeat(250)}`,
+      }),
+    ).toEqual({
+      target: 'offscreen',
+      type: 'capture.speaker',
+      participantId: 'spaces/abc/devices/7',
+      displayName: 'N'.repeat(200),
+    });
+    for (const bad of [
+      { participantId: '', displayName: 'Neha' },
+      { participantId: 'x'.repeat(201), displayName: 'Neha' },
+      { participantId: 'p1', displayName: '   ' },
+      { participantId: 7, displayName: 'Neha' },
+    ]) {
+      expect(
+        parseOffscreenMessage({ target: 'offscreen', type: 'capture.speaker', ...bad }),
+      ).toBeNull();
+    }
+  });
+});

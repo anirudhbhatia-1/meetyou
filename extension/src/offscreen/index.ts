@@ -282,6 +282,10 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
       recorder?.setMicMuted(parsed.muted);
       sendResponse({ ok: true });
       return false;
+    case 'capture.speaker':
+      recorder?.noteSpeaker(parsed.participantId, parsed.displayName);
+      sendResponse({ ok: true });
+      return false;
     case 'capture.resume':
       recorder?.resume();
       sendResponse({ ok: true });

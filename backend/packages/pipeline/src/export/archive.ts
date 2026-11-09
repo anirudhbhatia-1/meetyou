@@ -315,20 +315,25 @@ export async function buildArchive(
       tx.selectFrom('userSettings').selectAll().where('userId', '=', userId).executeTakeFirst(),
       tx.selectFrom('glossaryTerms').select('term').orderBy('createdAt').orderBy('id').execute(),
     ]);
-    const {
-      id: _id,
-      workspaceId: _ws,
-      userId: _user,
-      createdAt: _c,
-      updatedAt: _u,
-      ...rest
-    } = settings ?? ({} as Record<string, unknown>);
     return {
       meetingIds: meetings.map((m) => m.id),
       account: {
         exportedAt: exportedAt.toISOString(),
         meetingCount: meetings.length,
-        settings: settings === undefined ? null : rest,
+        // The user's choices only; internal IDs stay out.
+        settings:
+          settings === undefined
+            ? null
+            : {
+                transcriptLanguageMode: settings.transcriptLanguageMode,
+                summaryLanguage: settings.summaryLanguage,
+                hindiScript: settings.hindiScript,
+                retentionPolicy: settings.retentionPolicy,
+                recordVideo: settings.recordVideo,
+                videoQuality: settings.videoQuality,
+                consentMode: settings.consentMode,
+                consentMessage: settings.consentMessage,
+              },
         vocabulary: glossary.map((g) => g.term),
       },
     };
