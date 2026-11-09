@@ -1,10 +1,10 @@
-import { Banner, Button, Icon, useToast } from '@meetyou/ui';
+import { Banner, Button, Icon, Menu, useToast, type MenuEntry } from '@meetyou/ui';
 import { useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent } from 'react';
 import type { Note } from '@meetyou/contracts';
 
 import type { CaptureState } from '../background/capture-state.ts';
-import { CONSENT_RESULT_KEY, parseConsentResult } from '../messages.ts';
-import { useStoredValue, type LiveFeed } from './hooks.ts';
+import { CONSENT_RESULT_KEY, parseConsentResult, type MicReply } from '../messages.ts';
+import { useLocalSetting, useStoredValue, type LiveFeed } from './hooks.ts';
 import { composeNote, MARKER_LABEL, NOTE_CHIPS, type NoteMarker } from './notes.ts';
 import {
   connectionFor,
@@ -22,6 +22,10 @@ import type { NotesStore } from './useNotes.ts';
 export type LiveTab = 'transcript' | 'notes';
 
 const METER_MIN_DBFS = -60;
+/** DESIGN §20: screen readers hear final lines only, at most one every few seconds. */
+const ANNOUNCE_EVERY_MS = 5_000;
+/** Set once the first-recording tip (§8.6) was dismissed or a note was added. */
+const COMPOSER_TIP_KEY = 'tip.composer.seen';
 /** Within this many px of the bottom the list follows new lines (FR-LIV-04). */
 const FOLLOW_SLACK_PX = 48;
 
@@ -59,6 +63,7 @@ export function LiveView({
       ) : (
         <NotesList notes={notes} />
       )}
+      <ComposerTip noteCount={notes.notes.length} />
       <Composer
         startedAt={state.startedAt}
         disabled={state.sessionId === null}
@@ -84,13 +89,12 @@ function LiveBanners({ state, feed }: { state: CaptureState; feed: LiveFeed }) {
         </Banner>
       )}
       {mic === 'lost' && (
-        // TODO(S4-08): "Choose microphone" once the panel can switch the mic device.
-        <Banner tone="warning">
+        <Banner tone="warning" action={<MicPicker />}>
           We can't hear your microphone. The rest of the call is still being recorded.
         </Banner>
       )}
       {mic === 'denied' && (
-        <Banner tone="info">
+        <Banner tone="info" action={<MicPicker />}>
           Recording the Meet tab only. Turn on your mic to include your voice.
         </Banner>
       )}
@@ -105,6 +109,52 @@ function LiveBanners({ state, feed }: { state: CaptureState; feed: LiveFeed }) {
       {silent && <Banner tone="info">No sound from the Meet tab. Is the call muted?</Banner>}
     </>
   );
+}
+
+/**
+ * §9 "Choose microphone" (FR-CAP-10): the computer's microphones; the chosen one becomes the `me`
+ * lane on the same recording. Names are only listed once the extension has mic permission.
+ */
+function MicPicker() {
+  const toast = useToast();
+  const [mics, setMics] = useState<MediaDeviceInfo[]>([]);
+  useEffect(() => {
+    const read = () => {
+      navigator.mediaDevices
+        .enumerateDevices()
+        .then((all) => setMics(all.filter((d) => d.kind === 'audioinput' && d.deviceId !== '')))
+        .catch((error: unknown) => console.error('sidepanel: list microphones failed', error));
+    };
+    read();
+    navigator.mediaDevices.addEventListener('devicechange', read);
+    return () => navigator.mediaDevices.removeEventListener('devicechange', read);
+  }, []);
+  const choose = (deviceId: string | null) => {
+    chrome.runtime
+      .sendMessage({ target: 'background', type: 'recording.mic', deviceId })
+      .then((value: unknown) => {
+        const reply = value as MicReply | undefined;
+        if (reply?.ok === true) toast({ message: 'Microphone is back' });
+        else
+          toast({
+            message:
+              reply?.error === 'NotAllowedError'
+                ? 'Chrome blocked the microphone. Allow it for MeetYou in Chrome’s settings.'
+                : 'Couldn’t use that microphone. Try another one.',
+          });
+      })
+      .catch(() => toast({ message: 'Couldn’t use that microphone. Try another one.' }));
+  };
+  const items: MenuEntry[] = [
+    { label: 'System default', onSelect: () => choose(null) },
+    ...mics
+      .filter((d) => d.deviceId !== 'default' && d.deviceId !== 'communications')
+      .map((d, i) => ({
+        label: d.label !== '' ? d.label : `Microphone ${i + 1}`,
+        onSelect: () => choose(d.deviceId),
+      })),
+  ];
+  return <Menu trigger="Choose microphone" label="Choose microphone" items={items} inline />;
 }
 
 /** §9: the Meet tab has been silent for 15 s while the mic has signal. */
@@ -177,6 +227,68 @@ function VideoLine({ state }: { state: CaptureState }) {
   );
 }
 
+function seenFrom(items: Record<string, unknown>): boolean {
+  return items[COMPOSER_TIP_KEY] === true;
+}
+
+/** §8.6 tutorial tip, first recording only: gone once dismissed or once a note exists. */
+function ComposerTip({ noteCount }: { noteCount: number }) {
+  const [seen, setSeen] = useLocalSetting(COMPOSER_TIP_KEY, seenFrom);
+  useEffect(() => {
+    if (seen === false && noteCount > 0) setSeen(true);
+    // `setSeen` writes storage; only a new note or the loaded value should trigger it.
+  }, [seen, noteCount]);
+  if (seen !== false || noteCount > 0) return null;
+  return (
+    <div className="composer-tip" role="note">
+      <span>Pick a tag, type a few words, press Enter. When you&rsquo;re done, press Stop.</span>
+      <button
+        type="button"
+        className="banner-dismiss"
+        aria-label="Dismiss tip"
+        onClick={() => setSeen(true)}
+      >
+        <Icon name="x" size={14} />
+      </button>
+    </div>
+  );
+}
+
+/**
+ * The latest final line for screen readers (§20): interim text is never announced, and a burst
+ * of lines collapses into the newest one after the rate limit.
+ */
+function useFinalLineAnnouncement(
+  lines: ReturnType<typeof visibleLines>,
+  participants: readonly ParticipantName[],
+): string {
+  const [text, setText] = useState('');
+  const last = useRef<{ key: number | null; at: number }>({ key: null, at: 0 });
+  const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const latest = lines.findLast((line) => line.final);
+  const spoken =
+    latest === undefined
+      ? ''
+      : `${latest.lane === 'me' ? 'You' : speakerLabel('them', latest.speaker, participants)}: ${latest.text}`;
+  useEffect(() => {
+    if (latest === undefined || latest.key === last.current.key) return;
+    const key = latest.key;
+    if (timer.current !== null) clearTimeout(timer.current);
+    const wait = Math.max(0, last.current.at + ANNOUNCE_EVERY_MS - Date.now());
+    timer.current = setTimeout(() => {
+      last.current = { key, at: Date.now() };
+      setText(spoken);
+    }, wait);
+  }, [latest?.key, spoken]);
+  useEffect(
+    () => () => {
+      if (timer.current !== null) clearTimeout(timer.current);
+    },
+    [],
+  );
+  return text;
+}
+
 function TranscriptList({
   feed,
   participants,
@@ -189,6 +301,7 @@ function TranscriptList({
   const list = useRef<HTMLDivElement>(null);
   const [following, setFollowing] = useState(true);
   const lines = visibleLines(feed.transcript);
+  const announcement = useFinalLineAnnouncement(lines, participants);
 
   useLayoutEffect(() => {
     const el = list.current;
@@ -203,6 +316,9 @@ function TranscriptList({
 
   return (
     <div className="live-scroll" ref={list} onScroll={onScroll}>
+      <p className="visually-hidden" aria-live="polite">
+        {announcement}
+      </p>
       <div className="transcript" aria-live="off">
         {lines.length === 0 && !paused && (
           <p className="empty-live">Listening… the transcript appears as people speak.</p>

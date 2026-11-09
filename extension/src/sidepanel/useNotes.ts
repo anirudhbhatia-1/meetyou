@@ -1,7 +1,9 @@
 import type { Note } from '@meetyou/contracts';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { notesKey, parseStoredNotes } from './notes.ts';
+
+const SYNC_DELAY_MS = 2_000;
 
 export interface NotesStore {
   notes: Note[];
@@ -27,6 +29,15 @@ export function useNotes(sessionId: string | null): NotesStore {
     };
   }, [sessionId]);
 
+  // Saved here at once (survives a closed panel or a lost connection), sent to the meeting 2 s after
+  // the last change (S4-06); the service worker sends them again when the recording stops.
+  const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(
+    () => () => {
+      if (timer.current !== null) clearTimeout(timer.current);
+    },
+    [],
+  );
   const save = useCallback(
     (next: Note[]) => {
       setNotes(next);
@@ -34,6 +45,12 @@ export function useNotes(sessionId: string | null): NotesStore {
       chrome.storage.local
         .set({ [notesKey(sessionId)]: next })
         .catch((error: unknown) => console.error('sidepanel: save notes failed', error));
+      if (timer.current !== null) clearTimeout(timer.current);
+      timer.current = setTimeout(() => {
+        chrome.runtime
+          .sendMessage({ target: 'background', type: 'notes.sync', sessionId })
+          .catch((error: unknown) => console.error('sidepanel: notes sync failed', error));
+      }, SYNC_DELAY_MS);
     },
     [sessionId],
   );

@@ -26,14 +26,28 @@ export interface ConsentChoice {
 
 export type BackgroundMessage =
   | { target: 'background'; type: 'recording.start'; consent?: ConsentChoice }
+  /** Processing → Ready (S4-05): the panel saw the meeting's notes settle. */
+  | { target: 'background'; type: 'recording.processed' }
+  /** Where the last recording's notes are; replies `MeetingProgressReply`. */
+  | { target: 'background'; type: 'meeting.progress'; sessionId: string }
+  /** The panel changed this recording's notes: send them to the meeting (S4-06). */
+  | { target: 'background'; type: 'notes.sync'; sessionId: string }
   /** Onboarding preferences and the consent acknowledgement (DESIGN §7.3–§7.4); replies `AuthReply`. */
   | { target: 'background'; type: 'settings.patch'; patch: Record<string, unknown> }
   | { target: 'background'; type: 'recording.stop' }
+  /** DESIGN §9 second Meet tab (FR-REC-07): stop the other tab's recording and start in this one. */
+  | { target: 'background'; type: 'recording.switch' }
+  /** §9 "Choose microphone" (FR-CAP-10); replies `MicReply`. */
+  | { target: 'background'; type: 'recording.mic'; deviceId: string | null }
+  /** DESIGN §9 Stop and delete (FR-CON-04): nothing from this call is kept. */
+  | { target: 'background'; type: 'recording.stop_delete' }
   | { target: 'background'; type: 'recording.pause' }
   | { target: 'background'; type: 'recording.resume' }
   /** Side panel "Done": back to Ready after processing, notes ready, or an error. */
   | { target: 'background'; type: 'recording.dismiss' }
   | { target: 'background'; type: 'capture.tab_ended' }
+  /** The session reached its length limit (FR-REC-08); stops like the Stop button. */
+  | { target: 'background'; type: 'capture.limit_reached' }
   | { target: 'background'; type: 'capture.mic_lost' }
   | { target: 'background'; type: 'capture.link'; link: StreamLink }
   | { target: 'background'; type: 'capture.video'; video: VideoStatus }
@@ -50,6 +64,17 @@ export type BackgroundMessage =
 
 export interface AuthReply {
   ok: boolean;
+}
+
+/** Reply to a microphone switch: `error` is the DOMException name when it could not be opened. */
+export interface MicReply {
+  ok: boolean;
+  error?: string;
+}
+
+/** `enumerateDevices` IDs are opaque strings; bounded so a message cannot carry a huge one. */
+function isDeviceId(value: unknown): value is string | null {
+  return value === null || (typeof value === 'string' && value.length > 0 && value.length <= 256);
 }
 
 export interface AccessTokenReply {
@@ -79,6 +104,8 @@ export type OffscreenMessage =
   | { target: 'offscreen'; type: 'capture.status' }
   /** Meet's mic mute on the recorded tab (FR-CAP-11, D-10). */
   | { target: 'offscreen'; type: 'capture.mic_muted'; muted: boolean }
+  /** Use this microphone (`null` = system default) for the `me` lane; replies `MicReply`. */
+  | { target: 'offscreen'; type: 'capture.mic'; deviceId: string | null }
   /** Another participant became the active speaker on the recorded tab (S3-04 speaker naming). */
   | {
       target: 'offscreen';
@@ -103,7 +130,9 @@ export type SidePanelMessage =
       speaker: string | null;
     }
   /** Video fragment upload (ADR-0011 §3.3): fragments left, and uploaded since the uploader started. */
-  | { target: 'sidepanel'; type: 'video.upload'; pending: number; uploaded: number };
+  | { target: 'sidepanel'; type: 'video.upload'; pending: number; uploaded: number }
+  /** 15 minutes before the session limit (FR-REC-08, DESIGN §9). */
+  | { target: 'sidepanel'; type: 'capture.limit_warning' };
 
 /** Offscreen reply to `capture.start`. `micError` is the DOMException name when the mic failed. */
 export type CaptureStartResult =
@@ -197,11 +226,15 @@ function isVideo(value: unknown): value is VideoStatus {
 }
 
 const SIMPLE_BACKGROUND = new Set<string>([
+  'recording.stop_delete',
+  'recording.processed',
   'recording.stop',
+  'recording.switch',
   'recording.pause',
   'recording.resume',
   'recording.dismiss',
   'capture.tab_ended',
+  'capture.limit_reached',
   'capture.mic_lost',
   'capture.upload_idle',
   'pill.open-sidepanel',
@@ -215,6 +248,9 @@ export function parseBackgroundMessage(message: unknown): BackgroundMessage | nu
   if (typeof message.type !== 'string') return null;
   if (SIMPLE_BACKGROUND.has(message.type)) {
     return { target: 'background', type: message.type } as BackgroundMessage;
+  }
+  if (message.type === 'recording.mic' && isDeviceId(message.deviceId)) {
+    return { target: 'background', type: 'recording.mic', deviceId: message.deviceId };
   }
   if (message.type === 'recording.start') {
     const consent = message.consent;
@@ -231,6 +267,12 @@ export function parseBackgroundMessage(message: unknown): BackgroundMessage | nu
       };
     }
     return { target: 'background', type: 'recording.start' };
+  }
+  if (message.type === 'meeting.progress' && typeof message.sessionId === 'string') {
+    return { target: 'background', type: 'meeting.progress', sessionId: message.sessionId };
+  }
+  if (message.type === 'notes.sync' && typeof message.sessionId === 'string') {
+    return { target: 'background', type: 'notes.sync', sessionId: message.sessionId };
   }
   if (message.type === 'settings.patch' && isRecord(message.patch)) {
     return { target: 'background', type: 'settings.patch', patch: message.patch };
@@ -259,6 +301,9 @@ export function parseOffscreenMessage(message: unknown): OffscreenMessage | null
   if (typeof message.type !== 'string') return null;
   if (SIMPLE_OFFSCREEN.has(message.type)) {
     return { target: 'offscreen', type: message.type } as OffscreenMessage;
+  }
+  if (message.type === 'capture.mic' && isDeviceId(message.deviceId)) {
+    return { target: 'offscreen', type: 'capture.mic', deviceId: message.deviceId };
   }
   if (message.type === 'capture.mic_muted' && typeof message.muted === 'boolean') {
     return { target: 'offscreen', type: 'capture.mic_muted', muted: message.muted };
@@ -312,6 +357,9 @@ export function parseSidePanelMessage(message: unknown): SidePanelMessage | null
       startMs: message.startMs,
       speaker: message.speaker,
     };
+  }
+  if (message.type === 'capture.limit_warning') {
+    return { target: 'sidepanel', type: 'capture.limit_warning' };
   }
   if (message.type === 'video.upload' && isCount(message.pending) && isCount(message.uploaded)) {
     return {

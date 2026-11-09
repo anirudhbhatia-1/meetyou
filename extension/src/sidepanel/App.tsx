@@ -1,12 +1,36 @@
-import { Button, Icon, Segmented, useTheme, useToast } from '@meetyou/ui';
+import {
+  AlertDialog,
+  Button,
+  Icon,
+  Menu,
+  Segmented,
+  useTheme,
+  useToast,
+  type MenuEntry,
+} from '@meetyou/ui';
 import { useEffect, useRef, useState } from 'react';
 
-import type { CaptureState } from '../background/capture-state.ts';
+import { elapsedMs, type CaptureState } from '../background/capture-state.ts';
 import { DevView } from './DevView.tsx';
-import { send, useCaptureState, useLiveFeed, useMeetInfo, useNow, usePanelTabId } from './hooks.ts';
+import {
+  send,
+  useCaptureState,
+  useLimitWarningToast,
+  useLiveFeed,
+  useMeetingProgress,
+  useMeetInfo,
+  useNow,
+  usePanelTabId,
+} from './hooks.ts';
 import { LiveView, type LiveTab } from './LiveView.tsx';
 import { formatClock, headerFor, viewFor } from './panel-model.ts';
-import { ErrorView, NotesReadyView, ProcessingView, ReadyView } from './StateViews.tsx';
+import {
+  ErrorView,
+  NotesReadyView,
+  ProcessingView,
+  ReadyView,
+  SecondTabView,
+} from './StateViews.tsx';
 import { useNotes } from './useNotes.ts';
 
 const LIVE_STATUSES = new Set(['recording', 'paused', 'reconnecting']);
@@ -18,16 +42,24 @@ export function App() {
   const meet = useMeetInfo(tabId);
   const feed = useLiveFeed(state.startedAt);
   const notes = useNotes(state.sessionId);
+  const progress = useMeetingProgress(
+    state.sessionId,
+    state.status === 'processing' || state.status === 'ready',
+  );
   const [tab, setTab] = useState<LiveTab>('transcript');
   const [showDev, setShowDev] = useState(false);
   const view = viewFor(state);
+  // Side panels are per tab: this one may belong to a Meet tab other than the recorded one.
+  const elsewhere =
+    view === 'live' && tabId !== null && state.tabId !== null && state.tabId !== tabId;
   useBackOnlineToast(state);
+  useLimitWarningToast();
 
   return (
     <div className="panel">
       <PanelHeader
         state={state}
-        tab={view === 'live' && !showDev ? tab : null}
+        tab={view === 'live' && !showDev && !elsewhere ? tab : null}
         noteCount={notes.notes.length}
         onTab={setTab}
         onDeveloper={() => setShowDev((on) => !on)}
@@ -38,7 +70,8 @@ export function App() {
       ) : (
         <>
           {view === 'ready' && <ReadyView />}
-          {view === 'live' && (
+          {elsewhere && <SecondTabView />}
+          {view === 'live' && !elsewhere && (
             <LiveView
               state={state}
               feed={feed}
@@ -49,13 +82,14 @@ export function App() {
             />
           )}
           {view === 'processing' && (
-            <ProcessingView upload={feed.upload} sessionId={state.sessionId} />
+            <ProcessingView upload={feed.upload} sessionId={state.sessionId} progress={progress} />
           )}
           {view === 'ready_notes' && (
             <NotesReadyView
               noteCount={notes.notes.length}
               upload={feed.upload}
               sessionId={state.sessionId}
+              progress={progress}
             />
           )}
           {view === 'error' && <ErrorView state={state} />}
@@ -101,11 +135,11 @@ function PanelHeader({
       <div className="panel-status">
         <span className="status-text">
           <span className={`status-dot dot-${header.tone}`} aria-hidden />
-          <span className="status-label">{header.label}</span>
-          {timing && state.startedAt !== null && (
-            // TODO(S4-05): wall-clock since start; paused time is not subtracted yet.
-            <span className="status-timer num">{formatClock(now - state.startedAt)}</span>
-          )}
+          {/* §20: recording state changes are announced once. */}
+          <span className="status-label" aria-live="polite">
+            {header.label}
+          </span>
+          {timing && <span className="status-timer num">{formatClock(elapsedMs(state, now))}</span>}
         </span>
         <span className="status-actions">
           {canPause && (
@@ -123,7 +157,7 @@ function PanelHeader({
               </Button>
             </>
           )}
-          <OverflowMenu devOpen={devOpen} onDeveloper={onDeveloper} />
+          <OverflowMenu devOpen={devOpen} onDeveloper={onDeveloper} live={canPause} />
         </span>
       </div>
       {tab !== null && (
@@ -142,68 +176,56 @@ function PanelHeader({
 }
 
 /**
- * Header overflow (§8.5). TODO(S4-08): "Stop and delete this recording…" and, after the call,
- * "Consent log" (§13.4) join this menu once delete and the consent log exist.
+ * Header overflow (§8.5): theme, "Stop and delete this recording…" while recording (§9, FR-CON-04,
+ * behind a confirmation), developer details.
  */
-function OverflowMenu({ devOpen, onDeveloper }: { devOpen: boolean; onDeveloper: () => void }) {
-  const [open, setOpen] = useState(false);
+function OverflowMenu({
+  devOpen,
+  onDeveloper,
+  live,
+}: {
+  devOpen: boolean;
+  onDeveloper: () => void;
+  live: boolean;
+}) {
   const [theme, setTheme] = useTheme();
-  const root = useRef<HTMLDivElement>(null);
-  useEffect(() => {
-    if (!open) return;
-    const close = (event: Event): void => {
-      if (event instanceof KeyboardEvent && event.key !== 'Escape') return;
-      if (event instanceof MouseEvent && root.current?.contains(event.target as Node) === true) {
-        return;
-      }
-      setOpen(false);
-    };
-    document.addEventListener('mousedown', close);
-    document.addEventListener('keydown', close);
-    return () => {
-      document.removeEventListener('mousedown', close);
-      document.removeEventListener('keydown', close);
-    };
-  }, [open]);
+  const [confirm, setConfirm] = useState(false);
+  const items: MenuEntry[] = [
+    {
+      label: theme === 'dark' ? 'Light theme' : 'Dark theme',
+      onSelect: () => setTheme(theme === 'dark' ? 'light' : 'dark'),
+    },
+    {
+      label: devOpen ? 'Hide developer details' : 'Developer details',
+      onSelect: onDeveloper,
+    },
+    ...(live
+      ? [
+          {
+            label: 'Stop and delete this recording…',
+            danger: true,
+            separated: true,
+            onSelect: () => setConfirm(true),
+          },
+        ]
+      : []),
+  ];
   return (
-    <div className="menu-root" ref={root}>
-      <button
-        type="button"
-        className="icon-btn"
-        aria-label="More options"
-        aria-haspopup="menu"
-        aria-expanded={open}
-        onClick={() => setOpen((on) => !on)}
-      >
-        <Icon name="more-horizontal" />
-      </button>
-      {open && (
-        <div className="menu glass" role="menu">
-          <button
-            type="button"
-            role="menuitem"
-            className="menu-item"
-            autoFocus
-            onClick={() => {
-              setOpen(false);
-              setTheme(theme === 'dark' ? 'light' : 'dark');
-            }}
-          >
-            {theme === 'dark' ? 'Light theme' : 'Dark theme'}
-          </button>
-          <button
-            type="button"
-            role="menuitem"
-            className="menu-item"
-            onClick={() => {
-              setOpen(false);
-              onDeveloper();
-            }}
-          >
-            {devOpen ? 'Hide developer details' : 'Developer details'}
-          </button>
-        </div>
+    <>
+      <Menu round label="More options" trigger={<Icon name="more-horizontal" />} items={items} />
+      {confirm && (
+        <AlertDialog
+          title="Stop and delete?"
+          body="Recording stops and everything from this call is deleted, including video. Use this if someone doesn't want to be recorded."
+          confirmLabel="Stop and delete"
+          failedText="That didn't work. Try again."
+          onCancel={() => setConfirm(false)}
+          onConfirm={async () => {
+            send('recording.stop_delete');
+            setConfirm(false);
+          }}
+        />
       )}
-    </div>
+    </>
   );
 }

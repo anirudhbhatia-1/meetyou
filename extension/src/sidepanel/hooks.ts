@@ -1,4 +1,7 @@
+import { useToast } from '@meetyou/ui';
 import { useEffect, useReducer, useRef, useState } from 'react';
+
+import type { MeetingProgressView } from '../api-client.ts';
 
 import {
   CAPTURE_STATE_KEY,
@@ -226,6 +229,21 @@ export function useLiveFeed(startedAt: number | null): LiveFeed {
   return feed;
 }
 
+/** DESIGN §9 session limit (FR-REC-08): one toast when the offscreen document warns. */
+export function useLimitWarningToast(): void {
+  const toast = useToast();
+  useEffect(() => {
+    const onMessage = (message: unknown): boolean => {
+      if (parseSidePanelMessage(message)?.type === 'capture.limit_warning') {
+        toast({ message: 'Recording will stop in 15 minutes (4-hour limit).' });
+      }
+      return false;
+    };
+    chrome.runtime.onMessage.addListener(onMessage);
+    return () => chrome.runtime.onMessage.removeListener(onMessage);
+  }, [toast]);
+}
+
 /** Re-renders every `intervalMs` while `active`, for the header timer. */
 export function useNow(active: boolean, intervalMs = 1000): number {
   const [now, setNow] = useState(() => Date.now());
@@ -283,4 +301,35 @@ export function useStoredValue<T>(key: string, parse: (value: unknown) => T): T 
     // `parse` is a module-level function, so only `key` decides when to re-read.
   }, [key]);
   return value;
+}
+
+const PROGRESS_POLL_MS = 3_000;
+
+/**
+ * The last recording's notes on the server (S4-05): asked through the service worker (it holds the
+ * token) every few seconds while the panel shows Processing or Ready.
+ */
+export function useMeetingProgress(
+  sessionId: string | null,
+  active: boolean,
+): MeetingProgressView | null {
+  const [progress, setProgress] = useState<MeetingProgressView | null>(null);
+  useEffect(() => {
+    setProgress(null);
+    if (!active || sessionId === null) return undefined;
+    let live = true;
+    const tick = async () => {
+      const reply = (await chrome.runtime
+        .sendMessage({ target: 'background', type: 'meeting.progress', sessionId })
+        .catch(() => null)) as { progress?: MeetingProgressView | null } | null;
+      if (live && reply?.progress != null) setProgress(reply.progress);
+    };
+    void tick();
+    const timer = setInterval(() => void tick(), PROGRESS_POLL_MS);
+    return () => {
+      live = false;
+      clearInterval(timer);
+    };
+  }, [sessionId, active]);
+  return progress;
 }

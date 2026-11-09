@@ -5,6 +5,7 @@ import {
   hasLeftCall,
   canStart,
   IDLE_CAPTURE,
+  elapsedMs,
   nextCaptureState,
   parseCaptureState,
   type CaptureEvent,
@@ -116,11 +117,31 @@ describe('nextCaptureState', () => {
   });
 
   it('pauses and resumes, keeping the link state', () => {
-    const paused = nextCaptureState(recording(), { type: 'paused' });
+    const paused = nextCaptureState(recording(), { type: 'paused', at: 0 });
     expect(paused.status).toBe('paused');
     const stillPaused = nextCaptureState(paused, { type: 'link_changed', link: 'reconnecting' });
     expect(stillPaused).toMatchObject({ status: 'paused', link: 'reconnecting' });
-    expect(nextCaptureState(stillPaused, { type: 'resumed' }).status).toBe('reconnecting');
+    expect(nextCaptureState(stillPaused, { type: 'resumed', at: 0 }).status).toBe('reconnecting');
+  });
+
+  it('leaves paused time out of the elapsed time', () => {
+    const paused = nextCaptureState(recording(), { type: 'paused', at: 61_000 });
+    expect(elapsedMs(paused, 999_000)).toBe(60_000);
+    const resumed = nextCaptureState(paused, { type: 'resumed', at: 121_000 });
+    expect(resumed).toMatchObject({ pausedAt: null, pausedMs: 60_000 });
+    expect(elapsedMs(resumed, 131_000)).toBe(70_000);
+    expect(parseCaptureState(JSON.parse(JSON.stringify(resumed)))).toEqual(resumed);
+  });
+
+  it('keeps the recorded time when a running recording is lost', () => {
+    const lost = nextCaptureState(recording(), {
+      type: 'failed',
+      error: 'capture_lost',
+      at: 91_000,
+    });
+    expect(lost).toMatchObject({ status: 'error', stoppedAfterMs: 90_000, startedAt: null });
+    const refused = nextCaptureState(IDLE_CAPTURE, { type: 'failed', error: 'not_meet_tab' });
+    expect(refused.stoppedAfterMs).toBeNull();
   });
 
   it('moves between recording and reconnecting with the gateway link', () => {
@@ -137,9 +158,18 @@ describe('nextCaptureState', () => {
     expect(lost.lanes).toEqual({ me: false, them: true });
   });
 
+  it('restores the mic lane after another microphone is chosen', () => {
+    const lost = nextCaptureState(recording(), { type: 'mic_lost' });
+    expect(nextCaptureState(lost, { type: 'mic_restored' })).toMatchObject({
+      lanes: { me: true, them: true },
+      micError: null,
+    });
+    expect(nextCaptureState(IDLE_CAPTURE, { type: 'mic_restored' })).toBe(IDLE_CAPTURE);
+  });
+
   it('stops from paused and reconnecting', () => {
     for (const s of [
-      nextCaptureState(recording(), { type: 'paused' }),
+      nextCaptureState(recording(), { type: 'paused', at: 0 }),
       nextCaptureState(recording(), { type: 'link_changed', link: 'reconnecting' }),
     ]) {
       expect(nextCaptureState(s, { type: 'stop_requested' }).status).toBe('stopping');
@@ -205,7 +235,7 @@ describe('parseCaptureState', () => {
 describe('badgeFor', () => {
   it('shows REC only while recording and clears when idle', () => {
     expect(badgeFor(recording()).text).toBe('REC');
-    expect(badgeFor(nextCaptureState(recording(), { type: 'paused' })).text).toBe('❚❚');
+    expect(badgeFor(nextCaptureState(recording(), { type: 'paused', at: 0 })).text).toBe('❚❚');
     expect(badgeFor(IDLE_CAPTURE).text).toBe('');
   });
 });

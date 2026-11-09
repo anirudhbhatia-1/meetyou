@@ -98,33 +98,6 @@ body {
   cursor: pointer;
   padding: 0;
 }
-.menu-root {
-  position: relative;
-}
-.menu {
-  position: absolute;
-  right: 0;
-  top: calc(100% + 6px);
-  width: 220px;
-  padding: 6px;
-  border-radius: var(--radius-menu);
-  border: 1px solid var(--glass-edge);
-  box-shadow: var(--glass-shadow);
-  z-index: 10;
-}
-.menu-item {
-  width: 100%;
-  min-height: 40px;
-  padding: 0 10px;
-  border: 0;
-  border-radius: var(--radius-menu-item);
-  background: none;
-  text-align: left;
-  cursor: pointer;
-}
-.menu-item:hover {
-  background: var(--hairline-2);
-}
 
 /* Ready, processing, done, error */
 .state-view {
@@ -547,4 +520,56 @@ body {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 8px;
+}
+
+/* §8.7 steps fill in turn */
+.step-dot {
+  display: inline-grid;
+  place-items: center;
+  transition: background 200ms;
+}
+.step-done {
+  color: var(--ink);
+}
+.step-done .step-dot {
+  background: var(--olive);
+  border-color: var(--olive);
+  color: var(--on-olive);
+}
+.step-current {
+  color: var(--ink);
+}
+.step-current .step-dot {
+  border-color: var(--olive);
+  animation: step-pulse 1200ms ease-in-out infinite;
+}
+@keyframes step-pulse {
+  50% {
+    box-shadow: 0 0 0 4px var(--olive-tint);
+  }
+}
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+/* §8.6 first-recording tip, just above the composer. */
+.composer-tip {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 16px 8px;
+  padding: 8px 10px;
+  border-radius: 10px;
+  background: var(--olive-wash);
+  color: var(--ink-2);
+  font-size: 13px;
+  line-height: 1.4;
+}
+.composer-tip span {
+  flex: 1;
 }

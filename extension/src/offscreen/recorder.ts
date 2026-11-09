@@ -54,6 +54,8 @@ export interface Recorder {
    * stored or sent, and the mic leaves the video mix. The `them` lane is never affected.
    */
   setMicMuted(muted: boolean): void;
+  /** Opens another microphone as the `me` lane (§9 "Choose microphone"); see `CaptureSession`. */
+  attachMic(deviceId: string | null): Promise<string | null>;
   /**
    * Meet says this participant is talking now (S3-04): the gateway gets `participant.joined` the
    * first time (or when the name changes) and `speaker.active` each time, on the session clock.
@@ -303,8 +305,13 @@ export async function startRecorder(options: {
 
   return {
     sessionId,
-    lanes: capture.lanes,
-    micError: capture.micError,
+    get lanes() {
+      return capture.lanes;
+    },
+    get micError() {
+      return capture.micError;
+    },
+    attachMic: (deviceId) => capture.attachMic(deviceId),
     get link() {
       return link;
     },

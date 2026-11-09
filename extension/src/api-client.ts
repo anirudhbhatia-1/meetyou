@@ -1,4 +1,7 @@
 import {
+  Meeting,
+  MeetingSummaryResponse,
+  type Note,
   RecoverSessionResponse,
   UserSettings,
   SignVideoFragmentsResponse,
@@ -185,4 +188,68 @@ export async function postApiConsentLog(
   },
 ): Promise<void> {
   await postJson(apiUrl, '/v1/consent-log', accessToken, entry);
+}
+
+/**
+ * The meeting's notes, all of them (PUT replaces the list; FR-NOTE). Sent while recording and once
+ * more just before it ends, so the summary always anchors to them (S4-06).
+ */
+export async function putApiNotes(
+  apiUrl: string,
+  accessToken: string,
+  meetingId: string,
+  notes: readonly Note[],
+): Promise<void> {
+  const response = await fetch(
+    new URL(`/v1/meetings/${encodeURIComponent(meetingId)}/notes`, apiUrl).href,
+    {
+      method: 'PUT',
+      headers: { authorization: `Bearer ${accessToken}`, 'content-type': 'application/json' },
+      body: JSON.stringify({ notes }),
+      signal: AbortSignal.timeout(API_TIMEOUT_MS),
+    },
+  );
+  if (!response.ok) throw new ApiError('/v1/meetings/{id}/notes', response.status);
+}
+
+/** Where the meeting's notes are (S4-05 Processing → Ready): status, step and the action items. */
+export async function fetchApiMeetingProgress(
+  apiUrl: string,
+  accessToken: string,
+  meetingId: string,
+): Promise<MeetingProgressView> {
+  const get = async (path: string) => {
+    const response = await fetch(new URL(path, apiUrl).href, {
+      headers: { authorization: `Bearer ${accessToken}`, accept: 'application/json' },
+      signal: AbortSignal.timeout(API_TIMEOUT_MS),
+    });
+    if (!response.ok) throw new ApiError(path, response.status);
+    return response.json() as Promise<unknown>;
+  };
+  const meeting = Meeting.parse(await get(`/v1/meetings/${encodeURIComponent(meetingId)}`));
+  let actionItems = 0;
+  if (meeting.status === 'ready' || meeting.status === 'updated') {
+    const summary = MeetingSummaryResponse.parse(
+      await get(`/v1/meetings/${encodeURIComponent(meetingId)}/summary`),
+    );
+    actionItems = summary.current?.items.filter((i) => i.kind === 'action_item').length ?? 0;
+  }
+  return {
+    meetingId,
+    title: meeting.title,
+    status: meeting.status,
+    processingStep: meeting.processingStep,
+    durationMs:
+      meeting.endedAt === null ? null : Date.parse(meeting.endedAt) - Date.parse(meeting.startedAt),
+    actionItems,
+  };
+}
+
+export interface MeetingProgressView {
+  meetingId: string;
+  title: string;
+  status: Meeting['status'];
+  processingStep: Meeting['processingStep'];
+  durationMs: number | null;
+  actionItems: number;
 }

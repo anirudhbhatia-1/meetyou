@@ -54,6 +54,12 @@ export interface CaptureCallbacks {
 export interface CaptureSession {
   readonly lanes: LaneFlags;
   readonly micError: string | null;
+  /**
+   * Opens a microphone (`null` = the system default) as the `me` lane on the same session clock,
+   * replacing the current one (§9 "Choose microphone", FR-CAP-10). Resolves to the DOMException
+   * name when it could not be opened, else null.
+   */
+  attachMic(deviceId: string | null): Promise<string | null>;
   /** Tab video track when requested, else null. */
   readonly video: MediaStreamTrack | null;
   /** Playback mix of both lanes for the video file only; STT always uses the separate lanes. */
@@ -120,6 +126,7 @@ export async function startCapture(options: {
   const stopTracks = (): void => {
     for (const track of [...tab.getTracks(), ...(mic?.getTracks() ?? [])]) track.stop();
   };
+  let micMixSource: MediaStreamAudioSourceNode | null = null;
 
   let playback: AudioContext | null = null;
   let capture: AudioContext | null = null;
@@ -131,7 +138,10 @@ export async function startCapture(options: {
     tabPlayback.connect(mix);
     const micInMix = playback.createGain();
     micInMix.connect(mix);
-    if (mic !== null) playback.createMediaStreamSource(mic).connect(micInMix);
+    if (mic !== null) {
+      micMixSource = playback.createMediaStreamSource(mic);
+      micMixSource.connect(micInMix);
+    }
     if (playback.state === 'suspended') await playback.resume();
 
     capture = new AudioContext({ sampleRate: SAMPLE_RATE });
@@ -174,40 +184,81 @@ export async function startCapture(options: {
       nodes[lane] = node;
       sources[lane] = source;
     };
+    // Detaches the whole lane, so no silent `me` frames are stored or sent to STT afterwards.
+    const detachMic = (): void => {
+      sources.me?.disconnect();
+      if (nodes.me !== undefined) {
+        nodes.me.port.onmessage = null;
+        nodes.me.disconnect();
+      }
+      nodes.me = undefined;
+      sources.me = undefined;
+      levels.me = null;
+      micMixSource?.disconnect();
+      micMixSource = null;
+    };
+    const watchMic = (stream: MediaStream): void => {
+      stream.getAudioTracks()[0]?.addEventListener(
+        'ended',
+        () => {
+          if (mic !== stream) return;
+          detachMic();
+          mic = null;
+          callbacks.onMicLost();
+        },
+        { once: true },
+      );
+    };
+
     addLane('them', tab);
-    if (mic !== null) addLane('me', mic);
+    if (mic !== null) {
+      addLane('me', mic);
+      watchMic(mic);
+    }
 
     tab.getAudioTracks()[0]?.addEventListener('ended', () => callbacks.onTabEnded(), {
       once: true,
     });
-    mic?.getAudioTracks()[0]?.addEventListener(
-      'ended',
-      () => {
-        // Detach the whole lane, so no silent `me` frames are stored or sent to STT afterwards.
-        sources.me?.disconnect();
-        if (nodes.me !== undefined) {
-          nodes.me.port.onmessage = null;
-          nodes.me.disconnect();
-        }
-        nodes.me = undefined;
-        sources.me = undefined;
-        levels.me = null;
-        callbacks.onMicLost();
-      },
-      { once: true },
-    );
 
     const levelTimer = setInterval(() => {
       callbacks.onLevels(levels.me, levels.them ?? SILENCE_DBFS);
     }, LEVEL_INTERVAL_MS);
 
-    const playbackCtx = playback;
     const mixedAudio = mix.stream.getAudioTracks()[0];
     if (mixedAudio === undefined) throw new Error('playback mix has no audio track');
 
+    const playbackCtx = playback;
     return {
-      lanes: { me: mic !== null, them: true },
-      micError,
+      get lanes() {
+        return { me: mic !== null, them: true };
+      },
+      get micError() {
+        return micError;
+      },
+      async attachMic(deviceId) {
+        let next: MediaStream;
+        try {
+          next = await navigator.mediaDevices.getUserMedia({
+            audio: {
+              echoCancellation: true,
+              ...(deviceId !== null ? { deviceId: { exact: deviceId } } : {}),
+            },
+            video: false,
+          });
+        } catch (error: unknown) {
+          return errorName(error);
+        }
+        const previous = mic;
+        detachMic();
+        mic = next;
+        micError = null;
+        for (const track of previous?.getTracks() ?? []) track.stop();
+        addLane('me', next);
+        micMixSource = playbackCtx.createMediaStreamSource(next);
+        micMixSource.connect(micInMix);
+        watchMic(next);
+        return null;
+      },
       video: tab.getVideoTracks()[0] ?? null,
       mixedAudio,
       nowMs: () => captureMsFor(Math.round(ctx.currentTime * SAMPLE_RATE), sessionStartFrame),

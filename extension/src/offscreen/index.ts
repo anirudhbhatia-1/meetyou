@@ -9,6 +9,7 @@ import {
   type CaptureStartResult,
   type CaptureStatusReply,
   type CaptureStopReply,
+  type MicReply,
   type SidePanelMessage,
   type StartedSession,
 } from '../messages.ts';
@@ -190,6 +191,31 @@ async function onVideoFragment(): Promise<void> {
   reportUpload({ pending: await current.pending(), uploaded: current.uploaded });
 }
 
+/** FR-REC-08: a session closes cleanly at 4 hours, with a warning 15 minutes before. */
+const SESSION_LIMIT_MS = 4 * 60 * 60 * 1000;
+const LIMIT_WARNING_MS = SESSION_LIMIT_MS - 15 * 60 * 1000;
+let limitTimers: ReturnType<typeof setTimeout>[] = [];
+
+function clearLimitTimers(): void {
+  for (const timer of limitTimers) clearTimeout(timer);
+  limitTimers = [];
+}
+
+/** Counts wall-clock session length, pauses included: the limit bounds the gateway session. */
+function armLimitTimers(): void {
+  clearLimitTimers();
+  limitTimers = [
+    setTimeout(
+      () => notifySidePanel({ target: 'sidepanel', type: 'capture.limit_warning' }),
+      LIMIT_WARNING_MS,
+    ),
+    setTimeout(
+      () => notifyBackground({ target: 'background', type: 'capture.limit_reached' }),
+      SESSION_LIMIT_MS,
+    ),
+  ];
+}
+
 async function start(
   streamId: string,
   recordVideo: boolean,
@@ -222,6 +248,7 @@ async function start(
         onError: logError,
       },
     });
+    armLimitTimers();
     (await videoUploader())?.kick();
     return {
       ok: true,
@@ -244,6 +271,7 @@ async function start(
  * which case the document must stay open until `capture.upload_idle`.
  */
 async function stop(): Promise<CaptureStopReply> {
+  clearLimitTimers();
   const current = recorder;
   recorder = null;
   idleReported = false;
@@ -282,6 +310,18 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
       recorder?.setMicMuted(parsed.muted);
       sendResponse({ ok: true });
       return false;
+    case 'capture.mic': {
+      const current = recorder;
+      if (current === null) {
+        sendResponse({ ok: false } satisfies MicReply);
+        return false;
+      }
+      return reply(
+        current
+          .attachMic(parsed.deviceId)
+          .then((error): MicReply => (error === null ? { ok: true } : { ok: false, error })),
+      );
+    }
     case 'capture.speaker':
       recorder?.noteSpeaker(parsed.participantId, parsed.displayName, parsed.at);
       sendResponse({ ok: true });

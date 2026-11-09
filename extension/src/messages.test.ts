@@ -223,3 +223,32 @@ describe('consent messages (S4-07)', () => {
     expect(parseConsentResult({ sessionId: 's1', outcome: 'maybe', text: 'Hi' })).toBeNull();
   });
 });
+
+describe('side panel failure states (S4-08)', () => {
+  it('parses a microphone choice, default or a bounded device ID', () => {
+    expect(
+      parseBackgroundMessage({ target: 'background', type: 'recording.mic', deviceId: null }),
+    ).toEqual({ target: 'background', type: 'recording.mic', deviceId: null });
+    expect(
+      parseOffscreenMessage({ target: 'offscreen', type: 'capture.mic', deviceId: 'abc' }),
+    ).toEqual({ target: 'offscreen', type: 'capture.mic', deviceId: 'abc' });
+    for (const deviceId of ['', 'x'.repeat(257), 3, undefined]) {
+      expect(
+        parseBackgroundMessage({ target: 'background', type: 'recording.mic', deviceId }),
+      ).toBeNull();
+    }
+  });
+
+  it('parses the switch, the session limit and its warning', () => {
+    for (const type of ['recording.switch', 'capture.limit_reached']) {
+      expect(parseBackgroundMessage({ target: 'background', type })).toEqual({
+        target: 'background',
+        type,
+      });
+    }
+    expect(parseSidePanelMessage({ target: 'sidepanel', type: 'capture.limit_warning' })).toEqual({
+      target: 'sidepanel',
+      type: 'capture.limit_warning',
+    });
+  });
+});

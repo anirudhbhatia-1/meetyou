@@ -116,7 +116,6 @@ export class RecordingPill {
     if (this.timer === null) return;
     const show = this.view?.showTimer === true && this.startedAt !== null;
     this.timer.hidden = !show;
-    // TODO(S4-05): wall-clock since start, same clock as the side panel header.
     if (show && this.startedAt !== null) {
       this.timer.textContent = formatClock(Date.now() - this.startedAt);
     }

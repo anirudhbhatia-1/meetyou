@@ -1,8 +1,9 @@
 import { Banner, Button, Icon, Switch, TextArea } from '@meetyou/ui';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 
 import type { CaptureState } from '../background/capture-state.ts';
-import { API_URL, GATEWAY_URL } from '../build-config.ts';
+import type { MeetingProgressView } from '../api-client.ts';
+import { API_URL, GATEWAY_URL, WEB_URL } from '../build-config.ts';
 import { LAST_RECORDING_KEY, parseLastRecording } from '../last-recording.ts';
 import {
   ACCOUNT_SETTINGS_KEY,
@@ -14,7 +15,7 @@ import {
 } from '../settings.ts';
 import { AccountLine, SignInCard, useAccount } from './Account.tsx';
 import { send, sendStart, useLocalSetting } from './hooks.ts';
-import { ERROR_TEXT, uploadPercent } from './panel-model.ts';
+import { ERROR_TEXT, formatClock, uploadPercent } from './panel-model.ts';
 import { RecordingVideo } from './RecordingVideo.tsx';
 
 /**
@@ -59,6 +60,27 @@ function ConsentStep({ onBack }: { onBack: () => void }) {
       <Button variant="ghost" size="sm" onClick={onBack}>
         Back
       </Button>
+    </section>
+  );
+}
+
+/**
+ * DESIGN §9 second Meet tab (FR-REC-07): one recording at a time. Cancel closes this tab's panel;
+ * the other call keeps recording.
+ */
+export function SecondTabView() {
+  return (
+    <section className="state-view state-center" role="alert">
+      <h3 className="state-title">You&rsquo;re already recording another call</h3>
+      <p className="state-text">Only one call can be recorded at a time.</p>
+      <div className="consent-actions">
+        <Button variant="primary" size="lg" onClick={() => send('recording.switch')}>
+          Stop that one and start here
+        </Button>
+        <Button size="lg" onClick={() => window.close()}>
+          Cancel
+        </Button>
+      </div>
     </section>
   );
 }
@@ -175,30 +197,67 @@ const STEPS = [
   'Linking every point to what was said',
 ];
 
+/** Pipeline step → how many of the three §8.7 steps are complete. */
+function stepsDone(progress: MeetingProgressView | null): number {
+  switch (progress?.processingStep) {
+    case 'summarizing':
+      return 1;
+    case 'validating':
+      return 2;
+    case 'done':
+      return 3;
+    default:
+      return 0;
+  }
+}
+
+const SETTLED = new Set(['ready', 'updated', 'too_short', 'failed']);
+
+function openInLibrary(meetingId: string, tab: 'notes' | 'transcript' = 'notes'): void {
+  if (WEB_URL === '') return;
+  const path = `#/meetings/${encodeURIComponent(meetingId)}${tab === 'notes' ? '' : '/transcript'}`;
+  chrome.tabs.create({ url: new URL(path, WEB_URL).href }).catch((error: unknown) => {
+    console.error('sidepanel: open library failed', error);
+  });
+}
+
 /**
- * Processing (§8.7). TODO(S3-03): the steps fill from the meeting's processing step (SSE); no
- * pipeline runs yet, so all three stay open and the text says so.
+ * Processing (§8.7): the three steps fill from the meeting's processing step; once the notes settle
+ * the state machine moves to Ready.
  */
 export function ProcessingView({
   upload,
   sessionId,
+  progress,
 }: {
   upload: UploadProgress;
   sessionId: string | null;
+  progress: MeetingProgressView | null;
 }) {
+  const done = stepsDone(progress);
+  const settled = progress !== null && SETTLED.has(progress.status);
+  useEffect(() => {
+    if (settled) send('recording.processed');
+  }, [settled]);
   return (
     <section className="state-view">
       <h3 className="state-title">Writing your notes…</h3>
       <ol className="steps">
-        {STEPS.map((step) => (
-          <li key={step} className="step">
-            <span className="step-dot" aria-hidden />
+        {STEPS.map((step, i) => (
+          <li
+            key={step}
+            className={`step ${i < done ? 'step-done' : i === done ? 'step-current' : ''}`}
+          >
+            <span className="step-dot" aria-hidden>
+              {i < done && <Icon name="check" size={12} />}
+            </span>
             {step}
+            {i < done && <span className="visually-hidden"> (done)</span>}
           </li>
         ))}
       </ol>
       <p className="state-text">
-        Notes aren't switched on yet. Your recording and transcript are saved.
+        This usually takes under a minute. You can close this panel — your notes keep being written.
       </p>
       <UploadRow upload={upload} />
       <CallVideo sessionId={sessionId} />
@@ -207,28 +266,66 @@ export function ProcessingView({
   );
 }
 
-/**
- * Ready (§8.7). TODO(S4-14): "Open notes" opens the meeting in the library web app, and the line
- * shows the recorded length and action items, once the meeting API exists.
- */
+/** Ready (§8.7): length, notes and action items, Open notes; too short and failed have their own. */
 export function NotesReadyView({
   noteCount,
   upload,
   sessionId,
+  progress,
 }: {
   noteCount: number;
   upload: UploadProgress;
   sessionId: string | null;
+  progress: MeetingProgressView | null;
 }) {
+  const status = progress?.status;
+  const meetingId = progress?.meetingId;
+  if (status === 'too_short' || status === 'failed') {
+    return (
+      <section className="state-view state-center">
+        <h3 className="state-title">
+          {status === 'too_short' ? 'Too short for a summary' : 'We couldn’t write notes'}
+        </h3>
+        <p className="state-text">
+          {status === 'too_short'
+            ? 'Here’s the transcript instead.'
+            : 'The transcript is saved. You can try again from the meeting page.'}
+        </p>
+        {meetingId !== undefined && WEB_URL !== '' && (
+          <Button
+            variant="primary"
+            size="lg"
+            onClick={() =>
+              openInLibrary(meetingId, status === 'too_short' ? 'transcript' : 'notes')
+            }
+          >
+            {status === 'too_short' ? 'Open transcript' : 'Try again'}
+          </Button>
+        )}
+        <UploadRow upload={upload} />
+        <Button onClick={() => send('recording.dismiss')}>Done</Button>
+      </section>
+    );
+  }
+  const parts = [
+    ...(progress?.durationMs != null ? [`${formatClock(progress.durationMs)} recorded`] : []),
+    `${noteCount} ${noteCount === 1 ? 'note' : 'notes'}`,
+    ...(progress !== null
+      ? [`${progress.actionItems} action ${progress.actionItems === 1 ? 'item' : 'items'}`]
+      : []),
+  ];
   return (
     <section className="state-view state-center">
       <span className="ready-check" aria-hidden>
         <Icon name="check" size={20} />
       </span>
       <h3 className="state-title">Your notes are ready</h3>
-      <p className="state-text">
-        {noteCount} {noteCount === 1 ? 'note' : 'notes'}
-      </p>
+      <p className="state-text num">{parts.join(' · ')}</p>
+      {meetingId !== undefined && WEB_URL !== '' && (
+        <Button variant="primary" size="lg" onClick={() => openInLibrary(meetingId)}>
+          Open notes
+        </Button>
+      )}
       <UploadRow upload={upload} />
       <CallVideo sessionId={sessionId} />
       <Button onClick={() => send('recording.dismiss')}>Done</Button>
@@ -236,7 +333,7 @@ export function NotesReadyView({
   );
 }
 
-/** Error (§9). TODO(S4-08): "Get help" once a help page exists. */
+/** Error (§9). TODO(help-page): "Get help" once a help page exists (none is specified yet). */
 export function ErrorView({ state }: { state: CaptureState }) {
   if (state.error === 'signed_out') {
     // §9 "Signed out / token expired".
@@ -250,12 +347,16 @@ export function ErrorView({ state }: { state: CaptureState }) {
       </section>
     );
   }
+  const text =
+    state.stoppedAfterMs !== null
+      ? `Something went wrong and recording stopped at ${formatClock(state.stoppedAfterMs)}. Your audio so far is safe.`
+      : state.error === null
+        ? ERROR_TEXT.offscreen_failed
+        : ERROR_TEXT[state.error];
   return (
-    <section className="state-view state-center">
+    <section className="state-view state-center" role="alert">
       <h3 className="state-title">Recording stopped</h3>
-      <p className="state-text">
-        {state.error === null ? ERROR_TEXT.offscreen_failed : ERROR_TEXT[state.error]}
-      </p>
+      <p className="state-text">{text}</p>
       {/* Chrome refuses a start from the panel here; the toolbar click restarts on its own. */}
       {state.error !== 'capture_not_allowed' && (
         <Button variant="primary" size="lg" onClick={() => send('recording.start')}>

@@ -21,7 +21,8 @@ import {
  *                error              stopping ─stopped─► processing (streamed) ─processed─► ready
  *                                                    └► idle (nothing streamed)
  *
- * TODO(S3-03): `processing → ready` is driven by the summary pipeline; nothing sends `processed` yet.
+ * `processing → ready`: the side panel follows the meeting on the API and sends `processed` once its
+ * notes settle (ready, updated, too short or failed; S4-05).
  */
 export type CaptureStatus =
   | 'idle'
@@ -56,6 +57,10 @@ export interface CaptureState {
   sessionId: string | null;
   /** Wall-clock start (epoch ms) for the UI timer; the session clock itself lives offscreen. */
   startedAt: number | null;
+  /** When the current pause began (epoch ms), or null while not paused. */
+  pausedAt: number | null;
+  /** Total length of earlier pauses; timers show recorded time only (DESIGN §8.6). */
+  pausedMs: number;
   lanes: LaneFlags | null;
   micError: string | null;
   link: StreamLink;
@@ -63,6 +68,8 @@ export interface CaptureState {
   /** Live transcript health; `degraded`/`down` = transcript delayed (DESIGN §9). */
   stt: SttHealth;
   error: CaptureError | null;
+  /** Recorded time when a running recording failed: "stopped at {mm:ss}" (DESIGN §9). */
+  stoppedAfterMs: number | null;
 }
 
 export type CaptureEvent =
@@ -75,18 +82,21 @@ export type CaptureEvent =
       link: StreamLink;
       video: VideoStatus;
     }
-  | { type: 'paused' }
-  | { type: 'resumed' }
+  | { type: 'paused'; at: number }
+  | { type: 'resumed'; at: number }
   | { type: 'link_changed'; link: StreamLink }
   | { type: 'video_changed'; video: VideoStatus }
   | { type: 'stt_changed'; stt: SttHealth }
   | { type: 'mic_lost' }
+  /** Another microphone was opened for the `me` lane (§9 "Choose microphone"). */
+  | { type: 'mic_restored' }
   | { type: 'call_joined' }
   | { type: 'stop_requested' }
   | { type: 'stopped' }
   | { type: 'processed' }
   | { type: 'dismissed' }
-  | { type: 'failed'; error: CaptureError };
+  /** `at` is given when a running recording was lost, for the time it stopped at. */
+  | { type: 'failed'; error: CaptureError; at?: number };
 
 export const CAPTURE_STATE_KEY = 'capture';
 
@@ -97,12 +107,15 @@ export const IDLE_CAPTURE: CaptureState = {
   callJoined: false,
   sessionId: null,
   startedAt: null,
+  pausedAt: null,
+  pausedMs: 0,
   lanes: null,
   micError: null,
   link: 'off',
   video: 'off',
   stt: 'ok',
   error: null,
+  stoppedAfterMs: null,
 };
 
 /** Statuses during which the offscreen document holds live capture. */
@@ -163,10 +176,15 @@ export function nextCaptureState(state: CaptureState, event: CaptureEvent): Capt
       };
     case 'paused':
       if (state.status !== 'recording' && state.status !== 'reconnecting') return state;
-      return { ...state, status: 'paused' };
+      return { ...state, status: 'paused', pausedAt: event.at };
     case 'resumed':
       if (state.status !== 'paused') return state;
-      return { ...state, status: linkStatus(state.link) };
+      return {
+        ...state,
+        status: linkStatus(state.link),
+        pausedAt: null,
+        pausedMs: state.pausedMs + Math.max(0, event.at - (state.pausedAt ?? event.at)),
+      };
     case 'link_changed':
       if (state.status === 'recording' || state.status === 'reconnecting') {
         return { ...state, link: event.link, status: linkStatus(event.link) };
@@ -187,6 +205,9 @@ export function nextCaptureState(state: CaptureState, event: CaptureEvent): Capt
     case 'mic_lost':
       if (!CAPTURING.has(state.status) || state.lanes === null) return state;
       return { ...state, lanes: { ...state.lanes, me: false }, micError: 'TrackEnded' };
+    case 'mic_restored':
+      if (!CAPTURING.has(state.status) || state.lanes === null) return state;
+      return { ...state, lanes: { ...state.lanes, me: true }, micError: null };
     case 'stop_requested':
       if (!canStop(state)) return state;
       return { ...state, status: 'stopping' };
@@ -214,7 +235,13 @@ export function nextCaptureState(state: CaptureState, event: CaptureEvent): Capt
       }
       return IDLE_CAPTURE;
     case 'failed':
-      return { ...IDLE_CAPTURE, status: 'error', error: event.error };
+      return {
+        ...IDLE_CAPTURE,
+        status: 'error',
+        error: event.error,
+        stoppedAfterMs:
+          event.at !== undefined && CAPTURING.has(state.status) ? elapsedMs(state, event.at) : null,
+      };
   }
 }
 
@@ -256,13 +283,24 @@ export function parseCaptureState(raw: unknown): CaptureState {
     callJoined: r.callJoined === true,
     sessionId: typeof r.sessionId === 'string' ? r.sessionId : null,
     startedAt: typeof r.startedAt === 'number' ? r.startedAt : null,
+    pausedAt: typeof r.pausedAt === 'number' ? r.pausedAt : null,
+    pausedMs: typeof r.pausedMs === 'number' && r.pausedMs >= 0 ? r.pausedMs : 0,
     lanes: isLaneFlags(r.lanes) ? { me: r.lanes.me, them: r.lanes.them } : null,
     micError: typeof r.micError === 'string' ? r.micError : null,
     link: typeof r.link === 'string' && LINKS.has(r.link) ? (r.link as StreamLink) : 'off',
     video: typeof r.video === 'string' && VIDEO.has(r.video) ? (r.video as VideoStatus) : 'off',
     stt: typeof r.stt === 'string' && STT.has(r.stt) ? (r.stt as SttHealth) : 'ok',
     error: typeof r.error === 'string' && ERRORS.has(r.error) ? (r.error as CaptureError) : null,
+    stoppedAfterMs:
+      typeof r.stoppedAfterMs === 'number' && r.stoppedAfterMs >= 0 ? r.stoppedAfterMs : null,
   };
+}
+
+/** Recorded time at `now`, without pauses (the header and Meet pill timers). */
+export function elapsedMs(state: CaptureState, now: number): number {
+  if (state.startedAt === null) return 0;
+  const until = state.pausedAt ?? now;
+  return Math.max(0, until - state.startedAt - state.pausedMs);
 }
 
 export interface Badge {

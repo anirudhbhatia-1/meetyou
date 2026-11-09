@@ -15,6 +15,7 @@ import {
   type ConsentChoice,
   CONSENT_RESULT_KEY,
   type ConsentResult,
+  type MicReply,
   type OffscreenMessage,
   type StartedSession,
 } from '../messages.ts';
@@ -31,7 +32,7 @@ import {
   type CaptureState,
 } from './capture-state.ts';
 import { isMeetUrl, meetingCodeOf } from './meet-tab.ts';
-import { LAST_RECORDING_KEY, type LastRecording } from '../last-recording.ts';
+import { LAST_RECORDING_KEY, parseLastRecording, type LastRecording } from '../last-recording.ts';
 import {
   ACCOUNT_SETTINGS_KEY,
   accountSettingsFrom,
@@ -41,15 +42,18 @@ import {
   toAccountSettings,
   videoAllowed,
 } from '../settings.ts';
+import { notesKey, parseStoredNotes } from '../sidepanel/notes.ts';
 import {
   discardApiMeeting,
+  fetchApiMeetingProgress,
   fetchApiSettings,
   patchApiSettings,
   postApiConsentLog,
+  putApiNotes,
   startApiSession,
 } from '../api-client.ts';
 import { API_URL, GATEWAY_URL, GOOGLE_CLIENT_ID } from '../build-config.ts';
-import { openMinutesDb } from '../offscreen/idb.ts';
+import { deleteSessionData, openMinutesDb } from '../offscreen/idb.ts';
 import { IdbFragmentQueue, uploadableSession } from '../offscreen/video-uploader.ts';
 import { ExtensionAuth } from './auth.ts';
 import { resumeVideoUploads } from './video-resume.ts';
@@ -171,7 +175,9 @@ function contentStateMessage(state: CaptureState): Record<string, unknown> {
     target: 'content',
     type: 'recording.state',
     status: state.status,
-    startedAt: state.startedAt,
+    // The pill counts recorded time only: moving the start by the paused total does that (the
+    // pill hides its timer while paused).
+    startedAt: state.startedAt === null ? null : state.startedAt + state.pausedMs,
     video: state.video,
   };
 }
@@ -442,10 +448,30 @@ async function forwardMute(muted: boolean): Promise<void> {
   }
 }
 
+/**
+ * Sends a recording's notes to its meeting (S4-06, FR-NOTE). Only while the recording runs: the
+ * list replaces the stored one, and after the call the notes are the summary's anchors.
+ */
+async function syncNotes(sessionId: string): Promise<void> {
+  if (auth === null) return;
+  const items = await chrome.storage.local.get([LAST_RECORDING_KEY, notesKey(sessionId)]);
+  const last = parseLastRecording(items[LAST_RECORDING_KEY]);
+  if (last?.sessionId !== sessionId || last.meetingId === undefined) return;
+  const token = await auth.accessToken();
+  if (token === null) return;
+  await putApiNotes(API_URL, token, last.meetingId, parseStoredNotes(items[notesKey(sessionId)]));
+}
+
 async function stopRecording(): Promise<void> {
   const state = await loadCaptureState();
   if (!canStop(state)) {
     return;
+  }
+  // Before the end reaches the gateway: the summary job starts there and reads the notes.
+  if (state.sessionId !== null) {
+    await syncNotes(state.sessionId).catch((error: unknown) =>
+      logError('notes sync failed', error),
+    );
   }
   await applyCaptureEvent({ type: 'stop_requested' });
   let uploading = false;
@@ -459,6 +485,50 @@ async function stopRecording(): Promise<void> {
   // Video keeps uploading after the meeting (ADR-0011 §3.3); `capture.upload_idle` closes it later.
   if (!uploading) await closeOffscreenQuietly();
   await applyCaptureEvent({ type: 'stopped' });
+}
+
+/**
+ * DESIGN §9 "Stop and delete" (FR-CON-04), for when someone does not want to be recorded: capture
+ * stops, the recorder closes at once (no further uploads), this computer's audio and video for the
+ * call are removed, the meeting is deleted on the server (its recordings with it), and the local
+ * notes go too. A failure on the server side still leaves nothing here and is logged.
+ */
+async function stopAndDelete(): Promise<void> {
+  const state = await loadCaptureState();
+  if (!canStop(state) || state.sessionId === null) return;
+  const sessionId = state.sessionId;
+  await applyCaptureEvent({ type: 'stop_requested' });
+  try {
+    await sendToOffscreen({ target: 'offscreen', type: 'capture.stop' });
+  } catch (error: unknown) {
+    logError('offscreen stop failed', error);
+  }
+  await closeOffscreenQuietly();
+  try {
+    const db = await openMinutesDb();
+    try {
+      await deleteSessionData(db, sessionId);
+    } finally {
+      db.close();
+    }
+  } catch (error: unknown) {
+    logError('local delete failed', error);
+  }
+  const items = await chrome.storage.local.get(LAST_RECORDING_KEY);
+  const last = parseLastRecording(items[LAST_RECORDING_KEY]);
+  if (auth !== null && last?.sessionId === sessionId && last.meetingId !== undefined) {
+    try {
+      const token = await auth.accessToken();
+      if (token !== null) await discardApiMeeting(API_URL, token, last.meetingId);
+    } catch (error: unknown) {
+      logError('meeting delete failed', error);
+    }
+  }
+  await chrome.storage.local
+    .remove([notesKey(sessionId), CONSENT_RESULT_KEY, LAST_RECORDING_KEY])
+    .catch((error: unknown) => logError('local cleanup failed', error));
+  await applyCaptureEvent({ type: 'stopped' });
+  await applyCaptureEvent({ type: 'dismissed' });
 }
 
 async function closeOffscreenQuietly(): Promise<void> {
@@ -508,7 +578,7 @@ async function pauseRecording(): Promise<void> {
     return;
   }
   await sendToOffscreen({ target: 'offscreen', type: 'capture.pause' });
-  await applyCaptureEvent({ type: 'paused' });
+  await applyCaptureEvent({ type: 'paused', at: Date.now() });
 }
 
 async function resumeRecording(): Promise<void> {
@@ -517,7 +587,7 @@ async function resumeRecording(): Promise<void> {
     return;
   }
   await sendToOffscreen({ target: 'offscreen', type: 'capture.resume' });
-  await applyCaptureEvent({ type: 'resumed' });
+  await applyCaptureEvent({ type: 'resumed', at: Date.now() });
 }
 
 /**
@@ -541,7 +611,7 @@ async function reconcileAfterRestart(): Promise<void> {
     }
   }
   if (!active) {
-    await failCapture({ type: 'failed', error: 'capture_lost' });
+    await failCapture({ type: 'failed', error: 'capture_lost', at: Date.now() });
   }
 }
 
@@ -743,11 +813,16 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       void refreshAccountSettings();
       // The content script asks once so its prompt chip never shows over a running recording.
       void loadCaptureState().then((state) => {
-        // Another tab's recording shows nothing here: its pill belongs to the recorded tab.
+        // Another tab's recording shows no pill here (it belongs to the recorded tab), and no
+        // prompt either: only one recording runs at a time (FR-REC-07).
         sendResponse(
           fromTab !== null && state.tabId === fromTab
             ? contentStateMessage(state)
-            : { status: 'idle', startedAt: null, video: 'off' },
+            : {
+                status: canStop(state) ? 'elsewhere' : 'idle',
+                startedAt: null,
+                video: 'off',
+              },
         );
       });
       return true;
@@ -830,6 +905,73 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       enqueueCapture(async () => startRecording(await activeTabId(), consent));
       break;
     }
+    case 'recording.stop_delete':
+      enqueueCapture(stopAndDelete);
+      break;
+    case 'recording.mic': {
+      const deviceId = parsed.deviceId;
+      enqueueCapture(async () => {
+        const state = await loadCaptureState();
+        if (!CAPTURING.has(state.status)) {
+          sendResponse({ ok: false } satisfies MicReply);
+          return;
+        }
+        const reply = (await sendToOffscreen({
+          target: 'offscreen',
+          type: 'capture.mic',
+          deviceId,
+        }).catch(() => null)) as MicReply | null;
+        if (reply?.ok === true) await applyCaptureEvent({ type: 'mic_restored' });
+        sendResponse(reply ?? { ok: false });
+      });
+      return true;
+    }
+    case 'recording.switch':
+      enqueueCapture(async () => {
+        const tabId = await activeTabId();
+        const state = await loadCaptureState();
+        if (tabId === undefined || state.tabId === tabId) return;
+        await stopRecording();
+        // The account's consent mode decides the notice, as for a start from the Meet prompt.
+        await startRecording(tabId);
+      });
+      break;
+    case 'recording.processed':
+      enqueueCapture(async () => {
+        await applyCaptureEvent({ type: 'processed' });
+      });
+      break;
+    case 'meeting.progress': {
+      const sessionId = parsed.sessionId;
+      void (async () => {
+        try {
+          const last = parseLastRecording(
+            (await chrome.storage.local.get(LAST_RECORDING_KEY))[LAST_RECORDING_KEY],
+          );
+          const token = auth === null ? null : await auth.accessToken();
+          if (last?.sessionId !== sessionId || last.meetingId === undefined || token === null) {
+            sendResponse({ progress: null });
+            return;
+          }
+          sendResponse({
+            progress: await fetchApiMeetingProgress(API_URL, token, last.meetingId),
+          });
+        } catch (error: unknown) {
+          logError('meeting progress failed', error);
+          sendResponse({ progress: null });
+        }
+      })();
+      return true;
+    }
+    case 'notes.sync': {
+      const sessionId = parsed.sessionId;
+      enqueueCapture(async () => {
+        const state = await loadCaptureState();
+        if (state.sessionId !== sessionId || !canStop(state)) return;
+        await syncNotes(sessionId).catch((error: unknown) => logError('notes sync failed', error));
+      });
+      break;
+    }
     case 'settings.patch': {
       const patch = parsed.patch;
       void (async () => {
@@ -859,6 +1001,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       break;
     case 'recording.stop':
     case 'capture.tab_ended':
+    case 'capture.limit_reached':
       enqueueCapture(stopRecording);
       break;
     case 'recording.pause':

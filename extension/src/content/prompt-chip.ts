@@ -17,7 +17,15 @@ export interface PromptChipCallbacks {
 }
 
 /** Recording statuses during which the chip must stay hidden (capture-state.ts CAPTURING). */
-const ACTIVE_STATUSES = new Set(['starting', 'recording', 'paused', 'reconnecting', 'stopping']);
+/** `elsewhere`: another Meet tab is being recorded (FR-REC-07). */
+const ACTIVE_STATUSES = new Set([
+  'starting',
+  'recording',
+  'paused',
+  'reconnecting',
+  'stopping',
+  'elsewhere',
+]);
 
 /** Pre-recording reminder (§8.2, FR-CAP-14): says whether the screen is recorded too. */
 export function reminderText(recordVideo: boolean, postsNotice = false): string {
