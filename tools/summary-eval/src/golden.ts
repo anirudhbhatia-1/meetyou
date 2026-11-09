@@ -1,7 +1,7 @@
 import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
-import { Note, SummaryOutput } from '@meetyou/contracts';
+import { Note, SummaryOutput, TemplateId } from '@meetyou/contracts';
 import type { SummaryInput } from '@meetyou/summarizer';
 import { z } from 'zod';
 
@@ -13,7 +13,7 @@ const Expectation = z.object({ keywords: z.array(z.string().min(1)).min(1) });
 
 export const GoldenMeeting = z.object({
   id: z.string().regex(/^g\d{2}-[a-z0-9-]+$/),
-  template: z.enum(['general', 'standup', 'client_call', 'interview', 'one_on_one']),
+  template: TemplateId,
   language: z.enum(['english', 'hindi', 'hinglish']),
   tags: z.array(z.string()),
   meeting: z.object({ title: z.string(), date: z.string(), durationMs: z.number().int() }),

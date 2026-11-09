@@ -100,6 +100,9 @@ describe('prompt (ARCHITECTURE §10.1)', () => {
     expect(system).toMatch(/Roman \(Latin\) script\. Never use Devanagari/);
     expect(system).toContain('Meeting type: Standup.');
     expect(systemPrompt(TEMPLATES.general, 'hindi')).toMatch(/Devanagari script/);
+    const minutes = systemPrompt(TEMPLATES.minutes, 'english');
+    expect(minutes).toContain('Meeting type: Minutes of meeting (MoM).');
+    expect(minutes).toMatch(/third person/);
   });
 
   it('wraps meeting content as data: tagged blocks, [seg_id] (mm:ss) Speaker: text', () => {

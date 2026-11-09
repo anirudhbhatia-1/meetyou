@@ -540,7 +540,7 @@ Layout: column, gap 36, max width 1080.
 
 1. Header: H1 "Meetings" + search (340 × 44, radius 999, `control-line`, icon left 14, placeholder
    "Search words, people, or decisions", `aria-label="Search meetings"`, clear button when non-empty).
-2. Filter chips (single-select): All · General · Client call · Standup · Interview · 1:1.
+2. Filter chips (single-select): All · General · Client call · Standup · Interview · 1:1 · MoM.
 3. Table card: header row (12 uppercase `muted`, .04em) Meeting · When · Length · Status; columns
    `minmax(0,1fr) 130px 90px 120px`, gap 16, padding 12/20. Row: title 15/500 + "{people} ·
    {template}" 13 `muted`, with a 14 px `video` icon (`aria-label` "Has video") when the meeting has
@@ -563,7 +563,7 @@ title (14/500, ellipsis) · **Template** button (secondary, refresh icon + curre
 · — · Delete meeting… (danger).
 
 ### 12.2 Regenerate menu (F5, F6, FR-SUM-07)
-Helper "Rewrite these notes as…" · General · Standup · Client call · Interview · 1:1 (✓ current).
+Helper "Rewrite these notes as…" · General · Standup · Client call · Interview · 1:1 · MoM (✓ current).
 On pick: summary card fades to 35 % while the job runs; when the new version returns, show an inline
 banner **"New version ready · Keep · Go back"** — the previous version stays until the user chooses
 (FR-SUM-07). User-edited items are preserved where possible (FR-SUM-08). Toast "Rewritten as {T}
@@ -915,14 +915,15 @@ interface LibraryUIState {
   toast: null | { message: string; undo?: () => void };
   reduceTransparency: boolean; reduceMotion: boolean;
 }
-type TemplateId = 'general' | 'standup' | 'client_call' | 'interview' | 'one_on_one';
+type TemplateId = 'general' | 'standup' | 'client_call' | 'interview' | 'one_on_one' | 'minutes';
 ```
 - Server data (meetings, segments, summaries…) lives in a query cache keyed by workspace and ID; UI
   state above holds only view state.
 - Live transcript and session state arrive over the session WebSocket via the offscreen document
   (ARCHITECTURE §4.2); the side panel never opens its own socket.
-- Template labels in the UI: General · Standup · Client call · Interview · 1:1 (`client_call`
-  = PRD "Client/Sales call").
+- Template labels in the UI: General · Standup · Client call · Interview · 1:1 · MoM (`client_call`
+  = PRD "Client/Sales call"; `minutes` = "Minutes of meeting", added 2026-11-09, shown as "MoM" so
+  it is not confused with the app's name).
 
 ---
 

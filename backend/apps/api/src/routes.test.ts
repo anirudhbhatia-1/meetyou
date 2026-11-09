@@ -190,6 +190,17 @@ describe('Core REST API Endpoints (S2-09)', () => {
       // A client-chosen time is not accepted.
       expect((await patch({ consentAcknowledgedAt: '2020-01-01T00:00:00Z' })).statusCode).toBe(400);
     });
+
+    it('accepts the Minutes of meeting template as the default (migration 0009)', async () => {
+      const res = await app.inject({
+        method: 'PATCH',
+        url: '/v1/settings',
+        headers: { authorization: `Bearer ${tokenA}` },
+        payload: { defaultTemplate: 'minutes' },
+      });
+      expect(res.statusCode).toBe(200);
+      expect(JSON.parse(res.body).defaultTemplate).toBe('minutes');
+    });
   });
 
   // 4. Sessions (/v1/sessions)

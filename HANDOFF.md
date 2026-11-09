@@ -202,7 +202,16 @@ Gaurav's S3-07..S3-11 — Gaurav should not start them).** **Stage 4 is complete
 
 Newest first. One entry per working session (either person).
 
-### 2026-11-09 (latest) — Anirudh (Claude Code): staging test fixes
+### 2026-11-09 (latest) — Anirudh (Claude Code): Minutes of meeting (MoM) template
+
+Anirudh asked for a simple MoM feature and chose an AI template over a fixed export. New template
+`minutes` (label "MoM") in `backend/packages/summarizer/src/templates.ts`: formal third-person
+minutes, topics as agenda items, discussion points, owned action items. Added to `TemplateId`,
+the web labels (template menu, Meetings filter, Settings default) and DESIGN; **migration 0009**
+widens the three template CHECK constraints (the staging deploy applies it). No golden meeting uses
+it yet, so the summary eval does not cover it; existing recorded outputs are unchanged.
+
+### 2026-11-09 — Anirudh (Claude Code): staging test fixes
 
 From Anirudh's first staging test: a recording could start on Meet's home page (no call), and a
 solo meeting showed "2 people". Now the service worker refuses a start without a meeting code in

@@ -19,7 +19,7 @@ type NullableBigInt = ColumnType<
 >;
 
 type Lane = 'me' | 'them';
-type Template = 'general' | 'standup' | 'client_call' | 'interview' | 'one_on_one';
+type Template = 'general' | 'standup' | 'client_call' | 'interview' | 'one_on_one' | 'minutes';
 
 interface Audit {
   createdAt: CreatedAt;

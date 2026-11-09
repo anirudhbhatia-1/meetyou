@@ -26,7 +26,14 @@ export const MeetingStatus = z.enum([
   'too_short',
 ]);
 export const ProcessingStep = z.enum(['finalizing', 'summarizing', 'validating', 'done']);
-export const TemplateId = z.enum(['general', 'standup', 'client_call', 'interview', 'one_on_one']);
+export const TemplateId = z.enum([
+  'general',
+  'standup',
+  'client_call',
+  'interview',
+  'one_on_one',
+  'minutes',
+]);
 
 export const VideoStatus = z.enum(['uploading', 'processing', 'ready', 'failed', 'expired']);
 

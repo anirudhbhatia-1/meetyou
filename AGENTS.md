@@ -306,6 +306,11 @@ Work like a careful senior engineer pairing with the developer.
   log are hidden. The code stays behind `MEET_CHAT_NOTICE_ENABLED` in `shared/contracts`; Anirudh
   will say when to bring it back. Users remain responsible for consent (onboarding acknowledgement).
 
+- **2026-11-09 — Minutes of meeting template (Anirudh):** a sixth summary template, `minutes`
+  ("Minutes of meeting (MoM)", shown as **MoM**): the AI writes formal, third-person minutes with
+  agenda-order topics, discussion points, decisions and owned action items. Same output schema and
+  grounding rules as the others; migration 0009 widens the template CHECK constraints.
+
 ### Open (do not assume an answer)
 - LLM for summaries (D-04): [ADR-0007](docs/adr/0007-llm-provider-and-prompt-versions.md)
   **Proposed** 2026-11-09 — Gemini 3.6 Flash on the Gemini API (evaluation baseline in

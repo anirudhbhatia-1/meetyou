@@ -70,4 +70,19 @@ export const TEMPLATES: Readonly<Record<TemplateId, SummaryTemplate>> = {
       'Personal matters mentioned in passing stay out unless a note anchors them.',
     ],
   },
+  minutes: {
+    id: 'minutes',
+    version: 1,
+    label: 'Minutes of meeting (MoM)',
+    purpose:
+      'Formal minutes of meeting (MoM): an official record of the agenda, the points discussed, ' +
+      'decisions and action items, written to be circulated to everyone after the meeting.',
+    emphasis: [
+      'Write in formal, neutral minutes style in the third person ("The team agreed…", "Neha will…"); never "I" or "we".',
+      'Topics are the agenda items, in the order they were discussed.',
+      'The overview states the purpose of the meeting and its outcomes in two to four sentences.',
+      'Each anchor detail is a concise discussion point: what was raised and what was concluded, not who said what word for word.',
+      'Every action item names one owner and, when one was said, its deadline.',
+    ],
+  },
 };

@@ -64,6 +64,7 @@ export const TEMPLATE_LABEL = {
   client_call: 'Client call',
   interview: 'Interview',
   one_on_one: '1:1',
+  minutes: 'MoM',
 } as const;
 export type TemplateId = keyof typeof TEMPLATE_LABEL;
 
