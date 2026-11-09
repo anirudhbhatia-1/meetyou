@@ -2,6 +2,7 @@ import process from 'node:process';
 
 import { createPgPool } from '@meetyou/db';
 import { createLogger } from '@meetyou/log';
+import { createLlmProvider } from '@meetyou/providers';
 import { GcsBucket } from '@meetyou/storage';
 import { startTracing } from '@meetyou/tracing';
 
@@ -27,6 +28,8 @@ const worker = await runWorker({
   bucket: new GcsBucket(env.GCS_AUDIO_BUCKET),
   port: env.PORT,
   concurrency: env.WORKER_CONCURRENCY,
+  // LLM_PROVIDER / GEMINI_* (STAGING_SETUP §9.4); the free-key guard runs here (ADR-0001 §7).
+  llm: createLlmProvider(process.env),
 });
 createLogger('worker').log('worker.started', { appEnv: env.APP_ENV, port: env.PORT });
 await worker.runner.promise;

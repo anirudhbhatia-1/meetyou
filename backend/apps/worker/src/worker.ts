@@ -2,6 +2,8 @@ import { createServer, type Server } from 'node:http';
 
 import { Db } from '@meetyou/db';
 import { createLogger, errorCode } from '@meetyou/log';
+import { summarizeTask } from '@meetyou/pipeline';
+import type { LlmProvider } from '@meetyou/providers';
 import {
   accountDeleteTask,
   installQueueSchema,
@@ -40,14 +42,17 @@ export function bucketCleanup(bucket: ObjectBucket): StorageCleanup {
   };
 }
 
-/** Every task the worker runs. TODO(S3-03): the processing pipeline joins here. */
+/** Every task the worker runs. */
 export function workerTasks(deps: {
   db: Db;
   bucket: ObjectBucket;
   tools?: FfmpegTools;
+  /** The summary model (S3-03); null finishes meetings without notes. */
+  llm?: LlmProvider | null;
 }): TaskDefinition[] {
   const storage = bucketCleanup(deps.bucket);
   return [
+    summarizeTask({ db: deps.db, llm: deps.llm ?? null }),
     videoFinalizeTask({
       db: deps.db,
       store: new ObjectVideoStore(deps.bucket),
@@ -96,6 +101,7 @@ export async function runWorker(options: {
   /** Tests on PGlite only (see `@meetyou/queue` WorkerOptions). */
   noPreparedStatements?: boolean;
   queueSampleMs?: number;
+  llm?: LlmProvider | null;
 }): Promise<RunningWorker> {
   const db = new Db(options.pool);
   await db.assertRowSecurityEnforced();
@@ -105,6 +111,7 @@ export async function runWorker(options: {
     tasks: workerTasks({
       db,
       bucket: options.bucket,
+      llm: options.llm ?? null,
       ...(options.tools !== undefined ? { tools: options.tools } : {}),
     }),
     concurrency: options.concurrency ?? 2,

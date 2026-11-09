@@ -7,6 +7,7 @@ import {
   type Db,
 } from '@meetyou/db';
 
+import { summarizeJob, summarizeJobKey } from '@meetyou/pipeline';
 import { enqueue } from '@meetyou/queue';
 import { traced } from '@meetyou/tracing';
 import { videoFinalizeJob, videoFinalizeJobKey } from '@meetyou/video';
@@ -67,21 +68,28 @@ export class FileSink implements SessionSink {
 /**
  * Postgres (S2-05, S2-07): segments in `transcript_segments`, usage in `usage_records`, and the
  * meeting moves to processing when the recording ends. The usage file is still written for
- * `check-session`. TODO(S3-03): enqueue the processing pipeline in the same transaction (outbox).
+ * `check-session`. The end of a recording enqueues its jobs in the same transaction (outbox).
  */
 export class DbSink implements SessionSink {
   readonly #db: Db;
   readonly #store: ChunkStore;
   readonly #enqueueVideoFinalize: boolean;
+  readonly #enqueueSummary: boolean;
 
   /**
-   * `enqueueVideoFinalize`: the meeting's end also creates the `video.finalize` job in the same
-   * transaction (the queue is the outbox, ADR-0005); needs the worker's queue schema.
+   * `enqueueVideoFinalize` / `enqueueSummary`: the meeting's end also creates the `video.finalize`
+   * and `meeting.summarize` (S3-03) jobs in the same transaction (the queue is the outbox,
+   * ADR-0005); both need the worker's queue schema.
    */
-  constructor(db: Db, store: ChunkStore, options: { enqueueVideoFinalize?: boolean } = {}) {
+  constructor(
+    db: Db,
+    store: ChunkStore,
+    options: { enqueueVideoFinalize?: boolean; enqueueSummary?: boolean } = {},
+  ) {
     this.#db = db;
     this.#store = store;
     this.#enqueueVideoFinalize = options.enqueueVideoFinalize ?? false;
+    this.#enqueueSummary = options.enqueueSummary ?? false;
   }
 
   segments(target: SessionTarget, segments: readonly Segment[]): Promise<void> {
@@ -126,6 +134,14 @@ export class DbSink implements SessionSink {
   #ended(target: SessionTarget, endedAt: Date): Promise<void> {
     return this.#db.inWorkspace(target.workspaceId, async (tx) => {
       await endMeeting(tx, target.meetingId, endedAt);
+      if (this.#enqueueSummary) {
+        await enqueue(
+          tx,
+          summarizeJob,
+          { workspaceId: target.workspaceId, meetingId: target.meetingId, reason: 'session_end' },
+          { jobKey: summarizeJobKey(target.meetingId, 'session_end') },
+        );
+      }
       if (this.#enqueueVideoFinalize) {
         // The task waits for late uploads itself (re-checks, 24 h cap, ADR-0011 §3.4).
         await enqueue(

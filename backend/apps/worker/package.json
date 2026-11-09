@@ -12,6 +12,8 @@
   "dependencies": {
     "@meetyou/db": "workspace:*",
     "@meetyou/log": "workspace:*",
+    "@meetyou/pipeline": "workspace:*",
+    "@meetyou/providers": "workspace:*",
     "@meetyou/queue": "workspace:*",
     "@meetyou/storage": "workspace:*",
     "@meetyou/tracing": "workspace:*",

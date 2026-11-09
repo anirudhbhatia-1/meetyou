@@ -192,7 +192,10 @@ export function createGateway(options: GatewayOptions): Gateway {
     options.sink ??
     (options.db === undefined
       ? new FileSink(options.store)
-      : new DbSink(options.db, options.store, { enqueueVideoFinalize: finalizeMode === 'queue' }));
+      : new DbSink(options.db, options.store, {
+          enqueueVideoFinalize: finalizeMode === 'queue',
+          enqueueSummary: finalizeMode === 'queue',
+        }));
   /** Takeovers in progress, so two connections for one session build it once. */
   const loading = new Map<string, Promise<StreamSession | null>>();
   const wss = new WebSocketServer({

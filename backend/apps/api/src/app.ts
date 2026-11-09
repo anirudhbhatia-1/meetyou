@@ -12,6 +12,7 @@ import { idempotencyPlugin, type IdempotencyStore } from './middleware/idempoten
 import { swaggerPlugin } from './plugins/swagger.ts';
 import { accountRoutes } from './routes/account.ts';
 import { askRoutes } from './routes/ask.ts';
+import { summaryRoutes } from './routes/summary.ts';
 import { authRoutes } from './routes/auth.ts';
 import { consentLogRoutes } from './routes/consent-log.ts';
 import { healthRoutes } from './routes/health.ts';
@@ -141,6 +142,7 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
   await app.register(segmentsRoutes);
   await app.register(consentLogRoutes);
   await app.register(askRoutes, { llm: options.llm ?? null });
+  await app.register(summaryRoutes);
 
   await app.register(sessionsRoutes, {
     tokens,

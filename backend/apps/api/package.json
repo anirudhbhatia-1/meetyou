@@ -19,6 +19,7 @@
     "@meetyou/auth": "workspace:*",
     "@meetyou/contracts": "workspace:*",
     "@meetyou/db": "workspace:*",
+    "@meetyou/pipeline": "workspace:*",
     "@meetyou/providers": "workspace:*",
     "@meetyou/queue": "workspace:*",
     "@meetyou/storage": "workspace:*",
@@ -33,6 +34,7 @@
     "@electric-sql/pglite": "0.5.11",
     "@google-cloud/storage": "8.4.0",
     "@meetyou/db": "workspace:*",
-    "@types/node": "^24.0.0"
+    "@types/node": "^24.0.0",
+    "graphile-worker": "0.18.0"
   }
 }

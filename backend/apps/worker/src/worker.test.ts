@@ -30,9 +30,10 @@ describe('worker configuration', () => {
 });
 
 describe('lifecycle jobs (S2-10)', () => {
-  it('runs finalize, deletion and retention tasks', () => {
+  it('runs the summary, finalize, deletion and retention tasks', () => {
     const names = workerTasks({ db: {} as never, bucket: new MemoryBucket() }).map((t) => t.name);
     expect(names).toEqual([
+      'meeting.summarize',
       'video.finalize',
       'meeting.delete',
       'account.delete',

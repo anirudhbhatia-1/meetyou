@@ -1,0 +1,28 @@
+{
+  "name": "@meetyou/pipeline",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Post-meeting processing (S3-03, ARCHITECTURE \u00a79): the meeting.summarize job \u2014 load the meeting, summarize, validate, store a summary version with citations and usage, update processing state.",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json",
+    "test": "vitest run --testTimeout=30000 --hookTimeout=60000"
+  },
+  "dependencies": {
+    "@meetyou/contracts": "workspace:*",
+    "@meetyou/db": "workspace:*",
+    "@meetyou/log": "workspace:*",
+    "@meetyou/providers": "workspace:*",
+    "@meetyou/queue": "workspace:*",
+    "@meetyou/summarizer": "workspace:*",
+    "@meetyou/tracing": "workspace:*",
+    "zod": "^4.6.7"
+  },
+  "devDependencies": {
+    "graphile-worker": "0.18.0",
+    "@electric-sql/pglite": "0.5.11"
+  }
+}
