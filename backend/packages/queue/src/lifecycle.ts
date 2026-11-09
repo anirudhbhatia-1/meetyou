@@ -53,6 +53,8 @@ export interface StorageCleanup {
   deleteMeetingFiles?(workspaceId: string, meetingId: string): Promise<void>;
   deleteAudioFile?(storageKey: string): Promise<void>;
   deleteVideoFile?(storageKey: string): Promise<void>;
+  /** Data exports of a workspace (S3-11), on account deletion. */
+  deleteExportFiles?(workspaceId: string): Promise<void>;
 }
 
 /**
@@ -290,6 +292,7 @@ export function accountDeleteTask(deps: {
     for (const mtg of meetings) {
       await deps.storage?.deleteMeetingFiles?.(workspaceId, mtg.id);
     }
+    await deps.storage?.deleteExportFiles?.(workspaceId);
 
     // 2. Mark request completed in audit log before deleting workspace
     // (since deleting workspace sets deletion_requests.workspace_id to NULL via ON DELETE SET NULL,

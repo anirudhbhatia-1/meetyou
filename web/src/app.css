@@ -876,3 +876,8 @@
   outline: 2px solid var(--olive-line);
   outline-offset: 2px;
 }
+.setting-row + .setting-row {
+  margin-top: 20px;
+  padding-top: 20px;
+  border-top: 1px solid var(--hairline);
+}

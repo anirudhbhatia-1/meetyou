@@ -261,6 +261,19 @@ export interface MeetingQuestionsTable extends Audit {
   thinkingTokens: ColumnType<number, number | string | undefined, number | string>;
 }
 
+/** `0006_exports.sql`: "Download all my data" (S3-11, FR-SET-04). */
+export interface ExportsTable extends Audit {
+  id: string;
+  workspaceId: string;
+  userId: string;
+  status: Generated<'preparing' | 'ready' | 'failed' | 'expired'>;
+  storageKey: string | null;
+  sizeBytes: NullableBigInt;
+  meetingCount: number | null;
+  readyAt: NullableTimestamp;
+  expiresAt: NullableTimestamp;
+}
+
 export interface RefreshTokenFamiliesTable extends Audit {
   id: string;
   userId: string;
@@ -299,6 +312,7 @@ export interface Database {
   usageRecords: UsageRecordsTable;
   deletionRequests: DeletionRequestsTable;
   meetingQuestions: MeetingQuestionsTable;
+  exports: ExportsTable;
   refreshTokenFamilies: RefreshTokenFamiliesTable;
   refreshTokens: RefreshTokensTable;
 }

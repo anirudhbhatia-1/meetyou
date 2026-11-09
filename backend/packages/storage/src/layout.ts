@@ -5,6 +5,7 @@
  *   ws/{workspaceId}/meetings/{meetingId}/video/{partId}/{index}.frag  (+ part.json; temporary)
  *   ws/{workspaceId}/meetings/{meetingId}/video/playback.mp4 · video/poster.jpg
  *   ws/{workspaceId}/meetings/{meetingId}/usage.json · segments/{batchId}.jsonl
+ *   ws/{workspaceId}/exports/{exportId}.zip
  */
 const ID = /^[A-Za-z0-9_-]{1,80}$/;
 
@@ -62,4 +63,13 @@ export function usageKey(workspaceId: string, meetingId: string): string {
 
 export function segmentsKey(workspaceId: string, meetingId: string, batchId: string): string {
   return `${meetingPrefix(workspaceId, meetingId)}segments/${id(batchId)}.jsonl`;
+}
+
+/** "Download all my data" archive (S3-11); deleted 24 hours after it is ready. */
+export function exportPrefix(workspaceId: string): string {
+  return `ws/${id(workspaceId)}/exports/`;
+}
+
+export function exportKey(workspaceId: string, exportId: string): string {
+  return `${exportPrefix(workspaceId)}${id(exportId)}.zip`;
 }

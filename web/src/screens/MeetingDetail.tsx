@@ -1,4 +1,10 @@
-import type { Meeting, Segment, SummaryItem } from '@meetyou/contracts';
+import {
+  notesFileName,
+  notesText,
+  type Meeting,
+  type Segment,
+  type SummaryItem,
+} from '@meetyou/contracts';
 import { useEffect, useMemo, useRef, useState } from 'react';
 
 import type { MeetingSummary, Participant } from '../api/types.ts';
@@ -14,6 +20,7 @@ import {
 } from '@meetyou/ui';
 import { useApi } from '../lib/api-context.ts';
 import { numberCitations } from '../lib/citations.ts';
+import { saveTextFile, toNotesDoc } from '../lib/notes-doc.ts';
 import {
   formatClock,
   formatDue,
@@ -141,7 +148,22 @@ export function MeetingDetail({
           <Button variant="primary" disabled title="Share sheet comes with S4-10">
             Share
           </Button>
-          <MoreMenu onDelete={() => remove.request(meetingId)} />
+          <MoreMenu
+            onDelete={() => remove.request(meetingId)}
+            {...(summary.data != null
+              ? {
+                  onDownload: () => {
+                    const notes = summary.data;
+                    if (notes == null) return;
+                    const doc = toNotesDoc(m, notes, segments.data ?? [], people.data ?? []);
+                    saveTextFile(
+                      notesFileName(meetingTitle(m), m.startedAt, 'md'),
+                      notesText(doc, { format: 'markdown', includeTimes: true }),
+                    );
+                  },
+                }
+              : {})}
+          />
         </div>
       </div>
       <div className="page detail-page">

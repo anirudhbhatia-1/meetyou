@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { useApi } from '../lib/api-context.ts';
 import { useAsync } from '../lib/useAsync.ts';
 import { ConfirmAlert } from './ConfirmAlert.tsx';
+import { DataExport } from './DataExport.tsx';
 import { Vocabulary } from './Vocabulary.tsx';
 
 /** DESIGN §15. TODO(S4-12): recording, language, the rest of privacy & data, templates. */
@@ -58,6 +59,7 @@ export function Settings({ onSignOut }: { onSignOut: () => void }) {
             Delete my account and all data…
           </Button>
         </div>
+        <DataExport />
       </Card>
       {confirming && (
         // DESIGN §15.3.

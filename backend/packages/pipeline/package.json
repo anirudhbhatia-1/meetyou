@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "Post-meeting processing (S3-03, ARCHITECTURE \u00a79): the meeting.summarize job \u2014 load the meeting, summarize, validate, store a summary version with citations and usage, update processing state.",
+  "description": "Post-meeting processing (S3-03, ARCHITECTURE §9): the meeting.summarize job — load the meeting, summarize, validate, store a summary version with citations and usage, update processing state; the account.export job (S3-11).",
   "exports": {
     ".": "./src/index.ts"
   },
@@ -17,6 +17,7 @@
     "@meetyou/log": "workspace:*",
     "@meetyou/providers": "workspace:*",
     "@meetyou/queue": "workspace:*",
+    "@meetyou/storage": "workspace:*",
     "@meetyou/summarizer": "workspace:*",
     "@meetyou/tracing": "workspace:*",
     "zod": "^4.6.7"

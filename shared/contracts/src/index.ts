@@ -8,3 +8,5 @@ export * from './ulid.ts';
 export * from './api.ts';
 export * from './ask.ts';
 export * from './summary-api.ts';
+export * from './notes-text.ts';
+export * from './exports.ts';

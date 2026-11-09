@@ -3,6 +3,7 @@ import { ASK_LIMITS, type Meeting } from '@meetyou/contracts';
 import { ME, meetings, participants, segments, summaries } from './fixtures.ts';
 import type {
   ActionItemRow,
+  ExportView,
   LibraryApi,
   MeetingFilter,
   MeetingQuestion,
@@ -21,6 +22,18 @@ export function createMockApi(options: { latencyMs?: number } = {}): LibraryApi 
   /** Soft-deleted in this session (undo brings them back). */
   const deleted = new Set<string>();
   const glossary: string[] = ['Razorpay', 'Sameer'];
+  let exportRun: ExportView | null = null;
+  const mockExport = (createdAt: string, ready: boolean): ExportView => ({
+    id: 'exp_mock',
+    status: ready ? 'ready' : 'preparing',
+    createdAt,
+    readyAt: ready ? new Date().toISOString() : null,
+    expiresAt: ready ? new Date(Date.now() + 24 * 3600_000).toISOString() : null,
+    sizeBytes: ready ? 48_213 : null,
+    meetingCount: ready ? meetings.length : null,
+    // An empty zip.
+    downloadUrl: ready ? 'data:application/zip;base64,UEsFBgAAAAAAAAAAAAAAAAAAAAAAAA==' : null,
+  });
   /** Regenerated versions waiting for Keep / Go back (DESIGN §12.2). */
   const candidates = new Map<string, MeetingSummary>();
   /** Asked in this session, per meeting (DESIGN §12.7). */
@@ -162,6 +175,20 @@ export function createMockApi(options: { latencyMs?: number } = {}): LibraryApi 
     },
     // Fixtures have no video file to play; the player shows only against the real API.
     getVideo: () => wait(null),
+    startExport: () => {
+      // The mock "finishes" an export a few seconds after it starts.
+      if (exportRun === null || exportRun.status !== 'preparing') {
+        const createdAt = new Date().toISOString();
+        exportRun = mockExport(createdAt, false);
+        const started = exportRun;
+        setTimeout(() => {
+          if (exportRun === started) exportRun = mockExport(createdAt, true);
+        }, 4_000);
+      }
+      return wait({ ...exportRun });
+    },
+    latestExport: () => wait(exportRun === null ? null : { ...exportRun }),
+    getExport: (id) => wait(exportRun?.id === id ? { ...exportRun } : null),
     signOut: () => wait(undefined),
     deleteAccount: () => wait(undefined),
     deleteMeeting: (id) => {

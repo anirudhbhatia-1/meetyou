@@ -44,12 +44,15 @@ export function useDeleteMeeting(after: {
   return { request: setPending, alert };
 }
 
-/** DESIGN §12.1 More menu. TODO(S4-10): Rename, Download as .md, Consent log. */
+/** DESIGN §12.1 More menu. TODO(S4-10): Rename, Consent log. */
 export function MoreMenu({
   onDelete,
+  onDownload,
   label = 'More actions',
 }: {
   onDelete: () => void;
+  /** DESIGN §13.2 "Download as .md"; absent while there are no notes to download. */
+  onDownload?: () => void;
   label?: string;
 }) {
   const [open, setOpen] = useState(false);
@@ -72,11 +75,25 @@ export function MoreMenu({
             if (e.key === 'Escape') setOpen(false);
           }}
         >
+          {onDownload !== undefined && (
+            <button
+              type="button"
+              role="menuitem"
+              className="menu-item"
+              autoFocus
+              onClick={() => {
+                setOpen(false);
+                onDownload();
+              }}
+            >
+              Download as .md
+            </button>
+          )}
           <button
             type="button"
             role="menuitem"
             className="menu-item menu-danger"
-            autoFocus
+            autoFocus={onDownload === undefined}
             onClick={() => {
               setOpen(false);
               onDelete();

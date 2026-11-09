@@ -59,7 +59,7 @@ describe('migrations', () => {
     const { rows } = await env.pg.query<{ version: string }>(
       'SELECT version FROM schema_migrations',
     );
-    expect(rows.map((r) => r.version)).toEqual(['0001', '0002', '0003', '0004', '0005']);
+    expect(rows.map((r) => r.version)).toEqual(['0001', '0002', '0003', '0004', '0005', '0006']);
   });
 });
 

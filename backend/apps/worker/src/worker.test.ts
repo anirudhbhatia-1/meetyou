@@ -30,7 +30,7 @@ describe('worker configuration', () => {
 });
 
 describe('lifecycle jobs (S2-10)', () => {
-  it('runs the summary, finalize, deletion and retention tasks', () => {
+  it('runs the summary, finalize, deletion, retention and export tasks', () => {
     const names = workerTasks({ db: {} as never, bucket: new MemoryBucket() }).map((t) => t.name);
     expect(names).toEqual([
       'meeting.summarize',
@@ -38,6 +38,8 @@ describe('lifecycle jobs (S2-10)', () => {
       'meeting.delete',
       'account.delete',
       'retention.sweep',
+      'account.export',
+      'export.expire',
     ]);
   });
 
@@ -60,6 +62,10 @@ describe('lifecycle jobs (S2-10)', () => {
     expect([...bucket.objects.keys()]).toEqual([keep]);
     // Idempotent: a retry finds nothing left and does not fail.
     await cleanup.deleteMeetingFiles?.('w', 'm1');
+
+    await bucket.save('ws/w/exports/exp_1.zip', new Uint8Array([1]), 'application/zip');
+    await cleanup.deleteExportFiles?.('w');
+    expect([...bucket.objects.keys()]).toEqual([keep]);
   });
 });
 

@@ -2,7 +2,7 @@ import { createServer, type Server } from 'node:http';
 
 import { Db } from '@meetyou/db';
 import { createLogger, errorCode } from '@meetyou/log';
-import { summarizeTask } from '@meetyou/pipeline';
+import { exportExpireTask, exportTask, summarizeTask } from '@meetyou/pipeline';
 import type { LlmProvider } from '@meetyou/providers';
 import {
   accountDeleteTask,
@@ -13,7 +13,7 @@ import {
   type StorageCleanup,
   type TaskDefinition,
 } from '@meetyou/queue';
-import { meetingPrefix, ObjectVideoStore, type ObjectBucket } from '@meetyou/storage';
+import { exportPrefix, meetingPrefix, ObjectVideoStore, type ObjectBucket } from '@meetyou/storage';
 import { videoFinalizeTask, type FfmpegTools } from '@meetyou/video';
 import type { Runner } from 'graphile-worker';
 import type pg from 'pg';
@@ -31,6 +31,7 @@ export function bucketCleanup(bucket: ObjectBucket): StorageCleanup {
   return {
     deleteMeetingFiles: (workspaceId, meetingId) =>
       deletePrefix(meetingPrefix(workspaceId, meetingId)),
+    deleteExportFiles: (workspaceId) => deletePrefix(exportPrefix(workspaceId)),
     // An audio asset may name a lane prefix (chunks) or one object.
     deleteAudioFile: (key) => (key.endsWith('/') ? deletePrefix(key) : bucket.delete(key)),
     async deleteVideoFile(key) {
@@ -61,6 +62,8 @@ export function workerTasks(deps: {
     meetingDeleteTask({ db: deps.db, storage }),
     accountDeleteTask({ db: deps.db, storage }),
     retentionSweepTask({ db: deps.db, storage }),
+    exportTask({ db: deps.db, bucket: deps.bucket }),
+    exportExpireTask({ db: deps.db, bucket: deps.bucket }),
   ];
 }
 

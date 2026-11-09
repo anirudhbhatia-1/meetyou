@@ -282,6 +282,9 @@ importers:
       '@meetyou/queue':
         specifier: workspace:*
         version: link:../queue
+      '@meetyou/storage':
+        specifier: workspace:*
+        version: link:../storage
       '@meetyou/summarizer':
         specifier: workspace:*
         version: link:../summarizer

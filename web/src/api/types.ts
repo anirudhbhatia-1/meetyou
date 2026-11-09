@@ -1,5 +1,6 @@
 import type {
   AskUsage,
+  ExportView,
   Meeting,
   MeetingProgress,
   MeetingQuestion,
@@ -11,6 +12,7 @@ import type {
 
 export type {
   AskUsage,
+  ExportView,
   Meeting,
   MeetingProgress,
   MeetingQuestion,
@@ -95,6 +97,11 @@ export interface LibraryApi {
   saveGlossary(
     terms: string[],
   ): Promise<{ ok: true; terms: string[] } | { ok: false; error: 'too_long' | 'invalid' }>;
+  /** DESIGN §13.2 "Download all my data" (S3-11): starts or returns the export in progress. */
+  startExport(): Promise<ExportView>;
+  /** The latest export (for the Settings row), or one by ID with a fresh download link. */
+  latestExport(): Promise<ExportView | null>;
+  getExport(id: string): Promise<ExportView | null>;
   /** Ends the web session (clears the refresh cookie). */
   signOut(): Promise<void>;
   /** FR-SET-02: soft-deletes a meeting; the server removes it after a short grace period. */

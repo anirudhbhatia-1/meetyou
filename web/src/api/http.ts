@@ -1,6 +1,8 @@
 import {
   ActionItemList,
   AskQuestionResponse,
+  ExportListResponse,
+  ExportResponse,
   GlossaryResponse,
   MeResponse,
   Meeting,
@@ -279,6 +281,21 @@ export function createHttpApi(auth: WebAuth): LibraryApi {
       });
       if (res.ok) return { ok: true, terms: GlossaryResponse.parse(await res.json()).terms };
       return { ok: false, error: res.status === 422 ? 'too_long' : 'invalid' };
+    },
+
+    async startExport() {
+      const res = await auth.authorized('/v1/exports', { method: 'POST' });
+      if (res.status !== 202) throw new Error(`export failed (${res.status})`);
+      return ExportResponse.parse(await res.json()).export;
+    },
+
+    async latestExport() {
+      return ExportListResponse.parse(await get('/v1/exports')).latest;
+    },
+
+    async getExport(id) {
+      const body = await get(`/v1/exports/${encodeURIComponent(id)}`);
+      return body === null ? null : ExportResponse.parse(body).export;
     },
 
     signOut: () => auth.signOut(),
