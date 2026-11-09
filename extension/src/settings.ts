@@ -1,4 +1,8 @@
-import { DEFAULT_USER_SETTINGS, type UserSettings } from '@meetyou/contracts';
+import {
+  CONSENT_MESSAGE_AUDIO_ONLY,
+  DEFAULT_USER_SETTINGS,
+  type UserSettings,
+} from '@meetyou/contracts';
 
 /**
  * Recording settings shared by the service worker, the side panel and the Meet content script.
@@ -59,4 +63,15 @@ export function accountSettingsFrom(items: Record<string, unknown>): AccountSett
 /** "Delete after notes" keeps no recordings to replay, so video is off (DESIGN §15.1, ADR-0011). */
 export function videoAllowed(account: AccountSettings): boolean {
   return account.retentionPolicy !== 'immediate';
+}
+
+/**
+ * The consent notice for a meeting (DESIGN §8.5, §19 item 20): the user's message, or — when it is
+ * still the default and video is off — the audio-only wording.
+ */
+export function noticeTextFor(account: AccountSettings, recordVideo: boolean): string {
+  if (!recordVideo && account.consentMessage === DEFAULT_USER_SETTINGS.consentMessage) {
+    return CONSENT_MESSAGE_AUDIO_ONLY;
+  }
+  return account.consentMessage;
 }

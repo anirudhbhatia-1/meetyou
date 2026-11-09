@@ -15,8 +15,19 @@ export type VideoStatus = 'off' | 'recording' | 'unsupported' | 'failed';
 /** Live transcription health from the gateway (ws-protocol `health`, ARCHITECTURE §6.3). */
 export type SttHealth = 'ok' | 'degraded' | 'down';
 
+/**
+ * The consent step's answer (DESIGN §8.5, FR-CON-01): post this text in Meet chat, or skip. Absent
+ * when recording starts from the Meet prompt or a shortcut; the account's consent mode decides.
+ */
+export interface ConsentChoice {
+  post: boolean;
+  text: string;
+}
+
 export type BackgroundMessage =
-  | { target: 'background'; type: 'recording.start' }
+  | { target: 'background'; type: 'recording.start'; consent?: ConsentChoice }
+  /** Onboarding preferences and the consent acknowledgement (DESIGN §7.3–§7.4); replies `AuthReply`. */
+  | { target: 'background'; type: 'settings.patch'; patch: Record<string, unknown> }
   | { target: 'background'; type: 'recording.stop' }
   | { target: 'background'; type: 'recording.pause' }
   | { target: 'background'; type: 'recording.resume' }
@@ -186,7 +197,6 @@ function isVideo(value: unknown): value is VideoStatus {
 }
 
 const SIMPLE_BACKGROUND = new Set<string>([
-  'recording.start',
   'recording.stop',
   'recording.pause',
   'recording.resume',
@@ -205,6 +215,25 @@ export function parseBackgroundMessage(message: unknown): BackgroundMessage | nu
   if (typeof message.type !== 'string') return null;
   if (SIMPLE_BACKGROUND.has(message.type)) {
     return { target: 'background', type: message.type } as BackgroundMessage;
+  }
+  if (message.type === 'recording.start') {
+    const consent = message.consent;
+    if (
+      isRecord(consent) &&
+      typeof consent.post === 'boolean' &&
+      typeof consent.text === 'string' &&
+      consent.text.length <= 1000
+    ) {
+      return {
+        target: 'background',
+        type: 'recording.start',
+        consent: { post: consent.post, text: consent.text },
+      };
+    }
+    return { target: 'background', type: 'recording.start' };
+  }
+  if (message.type === 'settings.patch' && isRecord(message.patch)) {
+    return { target: 'background', type: 'settings.patch', patch: message.patch };
   }
   if (message.type === 'capture.link' && isLink(message.link)) {
     return { target: 'background', type: 'capture.link', link: message.link };
@@ -379,4 +408,21 @@ export function parseSpeakerSignal(
     displayName: name.slice(0, 200),
     at,
   };
+}
+
+/** The last recording's consent notice, for the side panel (DESIGN §8.5 toast or copy banner). */
+export const CONSENT_RESULT_KEY = 'consent.last';
+
+export interface ConsentResult {
+  sessionId: string;
+  outcome: 'posted' | 'skipped' | 'failed';
+  text: string;
+}
+
+export function parseConsentResult(value: unknown): ConsentResult | null {
+  if (!isRecord(value)) return null;
+  const { sessionId, outcome, text } = value;
+  if (typeof sessionId !== 'string' || typeof text !== 'string') return null;
+  if (outcome !== 'posted' && outcome !== 'skipped' && outcome !== 'failed') return null;
+  return { sessionId, outcome, text };
 }

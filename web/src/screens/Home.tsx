@@ -1,4 +1,4 @@
-import { Banner, Card, Checkbox, SkeletonRows, StatusPill, useToast } from '@meetyou/ui';
+import { Banner, Card, Checkbox, Icon, SkeletonRows, StatusPill, useToast } from '@meetyou/ui';
 import { useApi } from '../lib/api-context.ts';
 import {
   formatDue,
@@ -12,7 +12,78 @@ import {
 import { href, navigate } from '../lib/router.ts';
 import { useAsync } from '../lib/useAsync.ts';
 
-/** DESIGN §10. TODO(S4-03): setup card driven by sign-in, mic and first-recording state. */
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+/**
+ * DESIGN §10 item 3 (A3) setup card. Signed in is true here; the microphone step counts as done
+ * once onboarding was finished (its acknowledgement is stored with the account) or a meeting
+ * exists — the web app cannot see the extension's permission. Hidden 7 days after completion.
+ */
+function SetupCard({
+  acknowledged,
+  meetings,
+  now,
+}: {
+  acknowledged: boolean;
+  meetings: readonly { status: string; startedAt: string }[];
+  now: Date;
+}) {
+  const first = meetings
+    .filter((m) => m.status === 'ready' || m.status === 'updated')
+    .map((m) => Date.parse(m.startedAt))
+    .sort((a, b) => a - b)[0];
+  const steps = [
+    {
+      title: 'Sign in with Google',
+      line: "Only your name and email. We don't read your calendar or Gmail.",
+      done: true,
+    },
+    {
+      title: 'Allow your microphone',
+      line: 'So your own voice is in the notes, labelled as you.',
+      done: acknowledged || meetings.length > 0,
+    },
+    {
+      title: 'Record your first meeting',
+      line: 'Join any Google Meet call and press Start in the small prompt at the top right.',
+      done: first !== undefined,
+    },
+  ];
+  const doneCount = steps.filter((s) => s.done).length;
+  if (doneCount === steps.length && first !== undefined && now.getTime() - first > 7 * DAY_MS) {
+    return null;
+  }
+  const current = steps.findIndex((s) => !s.done);
+  return (
+    <Card className="setup">
+      <div className="card-head">
+        <h2>{doneCount === steps.length ? 'You’re all set' : 'Get set up in three steps'}</h2>
+        <span className="meta num">{doneCount} of 3 done</span>
+      </div>
+      <div className="setup-bar" aria-hidden="true">
+        <span style={{ width: `${(doneCount / 3) * 100}%` }} />
+      </div>
+      <ol className="setup-steps">
+        {steps.map((s, i) => (
+          <li key={s.title} className={`setup-step ${i === current ? 'setup-current' : ''}`}>
+            <span className={`setup-marker ${s.done ? 'setup-done' : ''}`} aria-hidden="true">
+              {s.done ? <Icon name="check" size={14} /> : i + 1}
+            </span>
+            <span className="setup-text">
+              <strong>
+                {s.title}
+                {s.done && <span className="visually-hidden"> (done)</span>}
+              </strong>
+              <span className="meta">{s.line}</span>
+            </span>
+          </li>
+        ))}
+      </ol>
+    </Card>
+  );
+}
+
+/** DESIGN §10 */
 export function Home({ onActionsChanged }: { onActionsChanged: () => void }) {
   const api = useApi();
   const toast = useToast();
@@ -20,6 +91,7 @@ export function Home({ onActionsChanged }: { onActionsChanged: () => void }) {
   const me = useAsync(() => api.me(), []);
   const recent = useAsync(() => api.listMeetings({ query: '', template: 'all' }, 4), []);
   const todos = useAsync(() => api.listActionItems('open'), []);
+  const settings = useAsync(() => api.getSettings(), []);
 
   const mine = (todos.data ?? []).filter((row) => row.ownedBySelf).slice(0, 4);
 
@@ -66,6 +138,13 @@ export function Home({ onActionsChanged }: { onActionsChanged: () => void }) {
         >
           Something went wrong. Try again.
         </Banner>
+      )}
+      {recent.data !== undefined && settings.data !== undefined && (
+        <SetupCard
+          acknowledged={settings.data.consentAcknowledgedAt !== null}
+          meetings={recent.data.meetings}
+          now={now}
+        />
       )}
       <div className="home-columns">
         <Card>

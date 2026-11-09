@@ -1,4 +1,5 @@
-import { Banner, Button, Icon, Switch } from '@meetyou/ui';
+import { Banner, Button, Icon, Switch, TextArea } from '@meetyou/ui';
+import { useState } from 'react';
 
 import type { CaptureState } from '../background/capture-state.ts';
 import { API_URL, GATEWAY_URL } from '../build-config.ts';
@@ -6,22 +7,71 @@ import { LAST_RECORDING_KEY, parseLastRecording } from '../last-recording.ts';
 import {
   ACCOUNT_SETTINGS_KEY,
   accountSettingsFrom,
+  noticeTextFor,
   RECORD_VIDEO_KEY,
   recordVideoFrom,
   videoAllowed,
 } from '../settings.ts';
 import { AccountLine, SignInCard, useAccount } from './Account.tsx';
-import { send, useLocalSetting } from './hooks.ts';
+import { send, sendStart, useLocalSetting } from './hooks.ts';
 import { ERROR_TEXT, uploadPercent } from './panel-model.ts';
 import { RecordingVideo } from './RecordingVideo.tsx';
 
 /**
- * Ready (DESIGN §8.5). TODO(S4-07): the Consent step ("Let everyone know?", Post and start / Skip)
- * goes between Start and recording once posting into Meet chat exists; until then Start records
- * straight away, as with consent mode Off.
+ * DESIGN §8.5 consent step (One click): the message to post (editable; the audio-only wording while
+ * video is off and the text is unedited), the recording options, Post and start or Skip.
+ */
+function ConsentStep({ onBack }: { onBack: () => void }) {
+  const [account] = useLocalSetting(ACCOUNT_SETTINGS_KEY, accountSettingsFrom);
+  const [recordVideo] = useLocalSetting(RECORD_VIDEO_KEY, recordVideoFrom);
+  const [text, setText] = useState<string | null>(null);
+  if (account === null) return null;
+  const video = videoAllowed(account) && (recordVideo ?? true);
+  const message = text ?? noticeTextFor(account, video);
+  return (
+    <section className="state-view">
+      <h3 className="state-title">Let everyone know?</h3>
+      <p className="state-text">We&rsquo;ll post this in Meet chat. You can edit it first.</p>
+      <TextArea
+        className="consent-text"
+        aria-label="Message to post in Meet chat"
+        value={message}
+        maxLength={1000}
+        onChange={(e) => setText(e.target.value)}
+      />
+      <RecordingOptions />
+      <div className="consent-actions">
+        <Button
+          variant="primary"
+          size="lg"
+          disabled={message.trim() === ''}
+          onClick={() => sendStart({ post: true, text: message.trim() })}
+        >
+          Post and start
+        </Button>
+        <Button size="lg" onClick={() => sendStart({ post: false, text: message.trim() })}>
+          Skip
+        </Button>
+      </div>
+      <p className="option-help">
+        You&rsquo;re responsible for getting consent where the law requires it.
+      </p>
+      <Button variant="ghost" size="sm" onClick={onBack}>
+        Back
+      </Button>
+    </section>
+  );
+}
+
+/**
+ * Ready (DESIGN §8.5): Start goes through the consent step when the account's chat notice is One
+ * click; Automatic posts and Off skips after recording starts (the service worker decides).
  */
 export function ReadyView() {
   const account = useAccount();
+  const [settings] = useLocalSetting(ACCOUNT_SETTINGS_KEY, accountSettingsFrom);
+  const [asking, setAsking] = useState(false);
+  if (asking) return <ConsentStep onBack={() => setAsking(false)} />;
   if (API_URL !== '' && account === null) {
     return (
       <section className="state-view state-center">
@@ -43,7 +93,10 @@ export function ReadyView() {
         variant="primary"
         size="lg"
         disabled={API_URL !== '' && account === undefined}
-        onClick={() => send('recording.start')}
+        onClick={() => {
+          if (settings?.consentMode === 'one_click') setAsking(true);
+          else sendStart();
+        }}
       >
         Start taking notes
       </Button>

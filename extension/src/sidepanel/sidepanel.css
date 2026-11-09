@@ -536,3 +536,15 @@ body {
   box-shadow: 0 0 0 3px var(--focus-ring);
   border-radius: 4px;
 }
+
+/* DESIGN §8.5 consent step */
+.consent-text {
+  min-height: 110px;
+  border-radius: 12px;
+  background: var(--paper-2);
+}
+.consent-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}

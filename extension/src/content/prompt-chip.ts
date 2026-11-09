@@ -20,10 +20,12 @@ export interface PromptChipCallbacks {
 const ACTIVE_STATUSES = new Set(['starting', 'recording', 'paused', 'reconnecting', 'stopping']);
 
 /** Pre-recording reminder (§8.2, FR-CAP-14): says whether the screen is recorded too. */
-export function reminderText(recordVideo: boolean): string {
-  return recordVideo
+export function reminderText(recordVideo: boolean, postsNotice = false): string {
+  const what = recordVideo
     ? "Audio and the Meet tab's video will be recorded."
     : 'Audio will be recorded.';
+  // Starting here posts the consent notice (FR-CON-01); the user is told before they click.
+  return postsNotice ? `${what} A note is posted in Meet chat.` : what;
 }
 
 /** The manifest's `toggle-recording` shortcut (MacCtrl is the Control key on a Mac). */
@@ -56,6 +58,7 @@ export class PromptChip {
   /** Settings → "Offer to take notes when I join a call" (DESIGN §15.1). */
   private offered = true;
   private lastCallState: string | null = null;
+  private postsNotice = true;
   private readonly boundOnKeyDown: (e: KeyboardEvent) => void;
 
   constructor(doc: Document = document, callbacks: PromptChipCallbacks) {
@@ -182,7 +185,17 @@ export class PromptChip {
   /** The "Record video" setting, so the reminder says what will be recorded. */
   public setRecordVideo(recordVideo: boolean): void {
     this.recordVideo = recordVideo;
-    if (this.reminderEl !== null) this.reminderEl.textContent = reminderText(recordVideo);
+    if (this.reminderEl !== null) {
+      this.reminderEl.textContent = reminderText(recordVideo, this.postsNotice);
+    }
+  }
+
+  /** Whether starting from the prompt posts the consent notice (One click or Automatic). */
+  public setPostsNotice(posts: boolean): void {
+    this.postsNotice = posts;
+    if (this.reminderEl !== null) {
+      this.reminderEl.textContent = reminderText(this.recordVideo, posts);
+    }
   }
 
   public isMounted(): boolean {
@@ -230,7 +243,7 @@ export class PromptChip {
     const body = el('p', 'prompt-body', hint.before);
     body.appendChild(el('kbd', 'prompt-kbd', hint.shortcut));
     body.appendChild(this.doc.createTextNode(hint.after));
-    const reminder = el('p', 'prompt-reminder', reminderText(this.recordVideo));
+    const reminder = el('p', 'prompt-reminder', reminderText(this.recordVideo, this.postsNotice));
     this.reminderEl = reminder;
 
     const actions = el('div', 'prompt-actions');

@@ -155,3 +155,34 @@ export async function fetchApiSettings(apiUrl: string, accessToken: string): Pro
   if (!response.ok) throw new ApiError('/v1/settings', response.status);
   return UserSettings.parse(await response.json());
 }
+
+/** Onboarding preferences and the consent acknowledgement (DESIGN §7.3–§7.4). */
+export async function patchApiSettings(
+  apiUrl: string,
+  accessToken: string,
+  patch: Record<string, unknown>,
+): Promise<UserSettings> {
+  const response = await fetch(new URL('/v1/settings', apiUrl).href, {
+    method: 'PATCH',
+    headers: { authorization: `Bearer ${accessToken}`, 'content-type': 'application/json' },
+    body: JSON.stringify(patch),
+    signal: AbortSignal.timeout(API_TIMEOUT_MS),
+  });
+  if (!response.ok) throw new ApiError('/v1/settings', response.status);
+  return UserSettings.parse(await response.json());
+}
+
+/** One consent-log entry per recording (FR-CON-03): what was posted, skipped or failed. */
+export async function postApiConsentLog(
+  apiUrl: string,
+  accessToken: string,
+  entry: {
+    meetingId: string;
+    mode: 'one_click' | 'automatic' | 'off';
+    outcome: 'posted' | 'skipped' | 'failed';
+    noticeText?: string;
+    sentAt: string;
+  },
+): Promise<void> {
+  await postJson(apiUrl, '/v1/consent-log', accessToken, entry);
+}

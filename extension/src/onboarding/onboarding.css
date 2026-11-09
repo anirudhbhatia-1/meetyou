@@ -1,0 +1,138 @@
+/* DESIGN §7: centred column, max width 560, progress dots on top. */
+.ob {
+  min-height: 100vh;
+  display: grid;
+  align-content: start;
+  justify-items: center;
+  gap: 28px;
+  padding: clamp(32px, 8vh, 72px) 16px 48px;
+}
+.ob-body {
+  width: min(560px, 100%);
+  display: grid;
+  gap: 18px;
+  justify-items: start;
+}
+.ob-body > .btn-lg {
+  min-width: 220px;
+}
+.dots {
+  list-style: none;
+  display: flex;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+}
+.dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--stroke-off);
+}
+.dot-on {
+  background: var(--olive);
+}
+.ob-title {
+  font: 400 clamp(32px, 6vw, 44px) / 1.1 var(--font-serif);
+  letter-spacing: -0.01em;
+}
+.ob-lede {
+  margin: 0;
+  font-size: 16px;
+  line-height: 1.6;
+  color: var(--ink-3);
+}
+.ob-rows {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 12px;
+  width: 100%;
+}
+.ob-row {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+}
+.ob-row > span:last-child {
+  display: grid;
+  gap: 2px;
+}
+.ob-row-icon {
+  display: inline-grid;
+  place-items: center;
+  flex: none;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: var(--olive-tint);
+  color: var(--olive-ink);
+}
+.ob-card {
+  width: 100%;
+  display: flex;
+  gap: 14px;
+  align-items: center;
+  padding: 18px;
+  border-radius: var(--radius-card);
+  border: 1px solid var(--hairline);
+  background: var(--surface);
+}
+.ob-card-title {
+  font-size: 21px;
+}
+.ob-card .meta {
+  margin: 2px 0 0;
+}
+.ob-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+.ob-prefs {
+  width: 100%;
+  display: grid;
+  gap: 16px;
+}
+.ob-pref {
+  display: grid;
+  gap: 8px;
+  font-size: 14px;
+  font-weight: 500;
+}
+.ob-consent {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  font-size: 15px;
+  line-height: 1.5;
+  cursor: pointer;
+}
+.ob-consent .meta {
+  display: block;
+  margin-top: 4px;
+  font-weight: 400;
+}
+.ob-steps {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 10px;
+}
+.ob-steps li {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.ob-step-n {
+  display: inline-grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  background: var(--moonrise);
+  color: var(--ink);
+  font-size: 13px;
+}

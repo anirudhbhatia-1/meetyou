@@ -1,9 +1,10 @@
-import { Banner, Icon } from '@meetyou/ui';
+import { Banner, Button, Icon, useToast } from '@meetyou/ui';
 import { useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent } from 'react';
 import type { Note } from '@meetyou/contracts';
 
 import type { CaptureState } from '../background/capture-state.ts';
-import type { LiveFeed } from './hooks.ts';
+import { CONSENT_RESULT_KEY, parseConsentResult } from '../messages.ts';
+import { useStoredValue, type LiveFeed } from './hooks.ts';
 import { composeNote, MARKER_LABEL, NOTE_CHIPS, type NoteMarker } from './notes.ts';
 import {
   connectionFor,
@@ -44,6 +45,7 @@ export function LiveView({
   return (
     <>
       <div className="live-status">
+        <ConsentNotice sessionId={state.sessionId} />
         <LiveBanners state={state} feed={feed} />
         <LaneHealth state={state} feed={feed} recording={recording} />
         <VideoLine state={state} />
@@ -329,5 +331,49 @@ function Composer({
         </button>
       </div>
     </div>
+  );
+}
+
+function consentFrom(value: unknown) {
+  return parseConsentResult(value);
+}
+
+/**
+ * DESIGN §8.5 after Post and start: a toast once the note is in Meet chat, or — when Meet did not
+ * take it — a banner with the message to copy. Recording continues either way.
+ */
+function ConsentNotice({ sessionId }: { sessionId: string | null }) {
+  const toast = useToast();
+  const result = useStoredValue(CONSENT_RESULT_KEY, consentFrom);
+  const shown = useRef<string | null>(null);
+  const [dismissed, setDismissed] = useState(false);
+  const mine = result !== null && result.sessionId === sessionId ? result : null;
+  useEffect(() => {
+    if (mine?.outcome === 'posted' && shown.current !== mine.sessionId) {
+      shown.current = mine.sessionId;
+      toast({ message: 'Posted in Meet chat' });
+    }
+  }, [mine, toast]);
+  if (mine?.outcome !== 'failed' || dismissed) return null;
+  return (
+    <Banner
+      tone="warning"
+      onDismiss={() => setDismissed(true)}
+      action={
+        <Button
+          size="sm"
+          onClick={() => {
+            navigator.clipboard.writeText(mine.text).then(
+              () => toast({ message: 'Copied — paste it in Meet chat' }),
+              () => toast({ message: 'Couldn’t copy. Select the text in Settings instead.' }),
+            );
+          }}
+        >
+          Copy
+        </Button>
+      }
+    >
+      Couldn&rsquo;t post — copy this message.
+    </Banner>
   );
 }

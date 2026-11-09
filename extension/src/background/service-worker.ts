@@ -12,6 +12,9 @@ import {
   parseCaptureStopReply,
   type AccessTokenReply,
   type AuthReply,
+  type ConsentChoice,
+  CONSENT_RESULT_KEY,
+  type ConsentResult,
   type OffscreenMessage,
   type StartedSession,
 } from '../messages.ts';
@@ -32,12 +35,19 @@ import { LAST_RECORDING_KEY, type LastRecording } from '../last-recording.ts';
 import {
   ACCOUNT_SETTINGS_KEY,
   accountSettingsFrom,
+  noticeTextFor,
   RECORD_VIDEO_KEY,
   recordVideoFrom,
   toAccountSettings,
   videoAllowed,
 } from '../settings.ts';
-import { discardApiMeeting, fetchApiSettings, startApiSession } from '../api-client.ts';
+import {
+  discardApiMeeting,
+  fetchApiSettings,
+  patchApiSettings,
+  postApiConsentLog,
+  startApiSession,
+} from '../api-client.ts';
 import { API_URL, GATEWAY_URL, GOOGLE_CLIENT_ID } from '../build-config.ts';
 import { openMinutesDb } from '../offscreen/idb.ts';
 import { IdbFragmentQueue, uploadableSession } from '../offscreen/video-uploader.ts';
@@ -275,7 +285,50 @@ async function discardCloudSession(session: StartedSession | undefined): Promise
   }
 }
 
-async function startRecording(tabId: number | undefined): Promise<void> {
+/**
+ * The consent notice once recording runs (S4-07, DESIGN §8.5, FR-CON-01..03): One click follows the
+ * panel's choice (from the Meet prompt, whose reminder says a note is posted, it posts); Automatic
+ * posts; Off skips. Every outcome goes to the consent log; the panel shows "Posted in Meet chat"
+ * or the copy banner. Runs beside the capture queue so a slow Meet never delays Stop.
+ */
+async function runConsentNotice(
+  tabId: number,
+  sessionId: string,
+  meetingId: string | undefined,
+  recordVideo: boolean,
+  choice: ConsentChoice | undefined,
+): Promise<void> {
+  const account = accountSettingsFrom(await chrome.storage.local.get(ACCOUNT_SETTINGS_KEY));
+  const mode = account.consentMode;
+  const text = (choice?.text ?? noticeTextFor(account, recordVideo)).trim();
+  let outcome: 'posted' | 'skipped' | 'failed' = 'skipped';
+  if (mode !== 'off' && (choice?.post ?? true) && text !== '') {
+    const reply = (await chrome.tabs
+      .sendMessage(tabId, { target: 'content', type: 'meet.post-chat', text })
+      .catch(() => null)) as { ok?: unknown } | null;
+    outcome = reply?.ok === true ? 'posted' : 'failed';
+  }
+  const result: ConsentResult = { sessionId, outcome, text };
+  await chrome.storage.local
+    .set({ [CONSENT_RESULT_KEY]: result })
+    .catch((error: unknown) => logError('save consent result failed', error));
+  if (auth === null || meetingId === undefined) return;
+  try {
+    const token = await auth.accessToken();
+    if (token === null) return;
+    await postApiConsentLog(API_URL, token, {
+      meetingId,
+      mode,
+      outcome,
+      ...(outcome !== 'skipped' ? { noticeText: text } : {}),
+      sentAt: new Date().toISOString(),
+    });
+  } catch (error: unknown) {
+    logError('consent log failed', error);
+  }
+}
+
+async function startRecording(tabId: number | undefined, consent?: ConsentChoice): Promise<void> {
   const state = await loadCaptureState();
   if (!canStart(state)) {
     return;
@@ -361,6 +414,7 @@ async function startRecording(tabId: number | undefined): Promise<void> {
       .set({ [LAST_RECORDING_KEY]: last })
       .catch((error: unknown) => logError('save last recording failed', error));
   }
+  void runConsentNotice(tabId, result.sessionId, session?.meetingId, recordVideo, consent);
   // Usually recording starts inside the call; the adapter only reports state changes, so ask.
   if ((await readCallState(tabId)) === 'in_call') await applyCaptureEvent({ type: 'call_joined' });
   // Already muted in Meet when recording starts: the adapter reports only changes (FR-CAP-11).
@@ -771,9 +825,30 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   }
 
   switch (parsed.type) {
-    case 'recording.start':
-      enqueueCapture(async () => startRecording(await activeTabId()));
+    case 'recording.start': {
+      const consent = parsed.consent;
+      enqueueCapture(async () => startRecording(await activeTabId(), consent));
       break;
+    }
+    case 'settings.patch': {
+      const patch = parsed.patch;
+      void (async () => {
+        try {
+          const token = auth === null ? null : await auth.accessToken();
+          if (token === null) {
+            sendResponse({ ok: false } satisfies AuthReply);
+            return;
+          }
+          await patchApiSettings(API_URL, token, patch);
+          await refreshAccountSettings(true);
+          sendResponse({ ok: true } satisfies AuthReply);
+        } catch (error: unknown) {
+          logError('settings patch failed', error);
+          sendResponse({ ok: false } satisfies AuthReply);
+        }
+      })();
+      return true;
+    }
     case 'pill.open-sidepanel':
       // From a trusted click on the recording pill; a refusal leaves the toolbar icon as the way in.
       if (fromTab !== null) {

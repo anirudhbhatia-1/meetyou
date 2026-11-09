@@ -307,8 +307,10 @@ describe('PromptChip', () => {
         .getElementById('meetyou-prompt-root')
         ?.shadow?.children.flatMap((c) => c.children)
         .find((c) => c.className === 'prompt-reminder')?.textContent;
-    expect(reminder()).toBe(reminderText(true));
+    expect(reminder()).toBe(reminderText(true, true));
     chip.setRecordVideo(false);
+    expect(reminder()).toBe('Audio will be recorded. A note is posted in Meet chat.');
+    chip.setPostsNotice(false);
     expect(reminder()).toBe('Audio will be recorded.');
     expect(reminderText(true)).toBe("Audio and the Meet tab's video will be recorded.");
   });

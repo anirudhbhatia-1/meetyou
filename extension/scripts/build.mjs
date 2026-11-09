@@ -50,7 +50,7 @@ await build({
     'src/background/service-worker.ts',
     'src/offscreen/index.ts',
     'src/sidepanel/main.tsx',
-    'src/onboarding/index.ts',
+    'src/onboarding/main.tsx',
   ],
 });
 

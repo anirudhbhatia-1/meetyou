@@ -18,6 +18,7 @@ import { observeActiveSpeakers } from '../adapters/meet/speaker-signal.ts';
 import { PILL_LAYOUT_KEY } from './pill-model.ts';
 import { PromptChip } from './prompt-chip.ts';
 import { RecordingPill, type RecordingSnapshot } from './recording-pill.ts';
+import { postChatMessage } from '../adapters/meet/chat.ts';
 import {
   ACCOUNT_SETTINGS_KEY,
   accountSettingsFrom,
@@ -90,6 +91,7 @@ if (contextValid()) {
   const apply = (items: Record<string, unknown>) => {
     const account = accountSettingsFrom(items);
     promptChip.setOffered(account.offerPrompt);
+    promptChip.setPostsNotice(account.consentMode !== 'off');
     promptChip.setRecordVideo(recordVideoFrom(items) && videoAllowed(account));
   };
   let latest: Record<string, unknown> = {};
@@ -222,7 +224,19 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
     sendResponse({ snapshot: current, metadata, healthReport, muteState });
   } else if (message.target === 'content' && message.type === 'recording.state') {
     applyRecordingState(message);
+  } else if (
+    message.target === 'content' &&
+    message.type === 'meet.post-chat' &&
+    typeof message.text === 'string'
+  ) {
+    // S4-07 consent notice; the text is the user's message and is never logged.
+    postChatMessage(document, message.text.slice(0, 1000)).then(
+      (ok) => sendResponse({ ok }),
+      () => sendResponse({ ok: false }),
+    );
+    return true;
   }
+  return undefined;
 });
 
 window.addEventListener('beforeunload', () => {

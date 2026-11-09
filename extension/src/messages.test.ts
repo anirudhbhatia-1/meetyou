@@ -11,6 +11,7 @@ import {
   parseOffscreenMessage,
   parseSidePanelMessage,
   senderTabId,
+  parseConsentResult,
 } from './messages.ts';
 
 describe('message parsers', () => {
@@ -183,5 +184,42 @@ describe('Meet speaker signal (S3-04)', () => {
         parseOffscreenMessage({ target: 'offscreen', type: 'capture.speaker', ...bad }),
       ).toBeNull();
     }
+  });
+});
+
+describe('consent messages (S4-07)', () => {
+  it('carries the consent step answer on recording.start, bounded', () => {
+    expect(parseBackgroundMessage({ target: 'background', type: 'recording.start' })).toEqual({
+      target: 'background',
+      type: 'recording.start',
+    });
+    expect(
+      parseBackgroundMessage({
+        target: 'background',
+        type: 'recording.start',
+        consent: { post: true, text: 'Hi all' },
+      }),
+    ).toEqual({
+      target: 'background',
+      type: 'recording.start',
+      consent: { post: true, text: 'Hi all' },
+    });
+    // A malformed or oversized answer is dropped, not trusted.
+    expect(
+      parseBackgroundMessage({
+        target: 'background',
+        type: 'recording.start',
+        consent: { post: 'yes', text: 'x'.repeat(2000) },
+      }),
+    ).toEqual({ target: 'background', type: 'recording.start' });
+  });
+
+  it('reads back the stored consent result only when well formed', () => {
+    expect(parseConsentResult({ sessionId: 's1', outcome: 'failed', text: 'Hi' })).toEqual({
+      sessionId: 's1',
+      outcome: 'failed',
+      text: 'Hi',
+    });
+    expect(parseConsentResult({ sessionId: 's1', outcome: 'maybe', text: 'Hi' })).toBeNull();
   });
 });

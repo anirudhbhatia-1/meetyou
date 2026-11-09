@@ -10,10 +10,23 @@ import {
   parseSidePanelMessage,
   senderTabId,
   type BackgroundMessage,
+  type ConsentChoice,
   type MeetCallState,
 } from '../messages.ts';
 import { parseParticipants, type ParticipantName } from './speaker-label.ts';
 import { applyTranscript, EMPTY_TRANSCRIPT, type TranscriptView } from './transcript-model.ts';
+
+/** Start recording, with the consent step's answer when it was shown (DESIGN §8.5). */
+export function sendStart(consent?: ConsentChoice): void {
+  const message: BackgroundMessage = {
+    target: 'background',
+    type: 'recording.start',
+    ...(consent !== undefined ? { consent } : {}),
+  };
+  chrome.runtime.sendMessage(message).catch((error: unknown) => {
+    console.error('sidepanel: start failed', error);
+  });
+}
 
 export function send(type: BackgroundMessage['type']): void {
   const message = { target: 'background', type } as BackgroundMessage;
@@ -245,4 +258,29 @@ export function useLocalSetting<T>(
       .catch((error: unknown) => console.error('sidepanel: save setting failed', error));
   };
   return [value, save];
+}
+
+/** A value from `chrome.storage.local` that follows later changes (another context writes it). */
+export function useStoredValue<T>(key: string, parse: (value: unknown) => T): T | null {
+  const [value, setValue] = useState<T | null>(null);
+  useEffect(() => {
+    let live = true;
+    chrome.storage.local
+      .get(key)
+      .then((items) => {
+        if (live) setValue(parse(items[key]));
+      })
+      .catch((error: unknown) => console.error('sidepanel: read value failed', error));
+    const onChange = (changes: Record<string, { newValue?: unknown }>, area: string) => {
+      const change = changes[key];
+      if (area === 'local' && change !== undefined) setValue(parse(change.newValue));
+    };
+    chrome.storage.onChanged.addListener(onChange);
+    return () => {
+      live = false;
+      chrome.storage.onChanged.removeListener(onChange);
+    };
+    // `parse` is a module-level function, so only `key` decides when to re-read.
+  }, [key]);
+  return value;
 }

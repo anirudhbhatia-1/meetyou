@@ -9,7 +9,7 @@
  * fallbacks and version tags. DOM text read from Meet is untrusted input.
  */
 
-export const MEET_SELECTORS_VERSION = '2026-11-05';
+export const MEET_SELECTORS_VERSION = '2026-11-09';
 
 export interface SelectorDescriptor {
   readonly id: string;
@@ -195,6 +195,46 @@ export const SPEAKER_SELECTORS = {
       'div[data-requested-participant-id]',
       'div[jscontroller="e6S21b"]',
       'div[data-allocation-id]',
+    ],
+    required: false,
+  },
+} as const satisfies Record<string, SelectorDescriptor>;
+
+/**
+ * Meet chat, for the consent notice (S4-07, DESIGN §8.5, FR-CON-01..02). [Verify] on a real call:
+ * the chat panel's button, message box and send button change with Meet releases; a miss falls
+ * back to "Couldn't post — copy this message" (never a silent failure).
+ */
+export const CHAT_SELECTORS = {
+  openButton: {
+    id: 'chat.open-button',
+    description: 'Toolbar button that opens the "In-call messages" panel',
+    selectors: [
+      'button[aria-label*="Chat with everyone" i]',
+      'button[aria-label*="Open chat" i]',
+      'button[aria-label*="in-call messages" i]',
+      'button[data-panel-id="2"]',
+    ],
+    required: false,
+  },
+  input: {
+    id: 'chat.input',
+    description: 'Message box of the chat panel',
+    selectors: [
+      'textarea[aria-label*="Send a message" i]',
+      'textarea[placeholder*="Send a message" i]',
+      'textarea[aria-label*="message" i]',
+      'div[contenteditable="true"][aria-label*="message" i]',
+    ],
+    required: false,
+  },
+  sendButton: {
+    id: 'chat.send-button',
+    description: 'Send button next to the chat message box',
+    selectors: [
+      'button[aria-label*="Send a message" i]',
+      'button[aria-label="Send" i]',
+      'button[aria-label*="send" i][type="button"]',
     ],
     required: false,
   },
