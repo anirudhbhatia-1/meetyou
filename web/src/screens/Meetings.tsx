@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 import {
   Icon,
@@ -10,6 +10,7 @@ import {
   SkeletonRows,
   StatusPill,
 } from '@meetyou/ui';
+import { useAnalytics } from '../lib/analytics.ts';
 import { useApi } from '../lib/api-context.ts';
 import {
   TEMPLATE_LABEL,
@@ -41,6 +42,7 @@ const remembered = { query: '', template: 'all' as Filter };
 /** DESIGN §11 */
 export function Meetings() {
   const api = useApi();
+  const analytics = useAnalytics();
   const now = new Date();
   const [query, setQuery] = useState(remembered.query);
   const [debounced, setDebounced] = useState(remembered.query);
@@ -63,6 +65,13 @@ export function Meetings() {
     [debounced, template, count],
   );
   const remove = useDeleteMeeting({ deleted: list.reload, restored: list.reload });
+  const tracked = useRef('');
+  useEffect(() => {
+    const q = debounced.trim();
+    if (q === '' || list.loading || list.data == null || tracked.current === q) return;
+    tracked.current = q;
+    analytics.track('library_searched', { results: list.data.meetings.length });
+  }, [debounced, list.loading, list.data, analytics]);
 
   return (
     <div className="page">

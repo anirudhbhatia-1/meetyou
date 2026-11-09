@@ -3,6 +3,7 @@ import type {
   ConsentLogEntry,
   ExportView,
   PatchSettingsRequest,
+  ProductEvent,
   UserSettings,
   Meeting,
   MeetingProgress,
@@ -98,6 +99,8 @@ export interface LibraryApi {
   ): Promise<SummaryItem>;
   /** DESIGN §12.4 item 8, per action item. */
   sendItemFeedback(itemId: string, useful: boolean): Promise<void>;
+  /** S4-15 product analytics (typed, no content); the API drops them for an opted-out user. */
+  sendEvents(events: ProductEvent[]): Promise<void>;
   /** DESIGN §12.5 speaker rename, whole meeting. */
   renameSpeaker(
     meetingId: string,

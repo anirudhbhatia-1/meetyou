@@ -2,6 +2,7 @@ import { Button, useToast } from '@meetyou/ui';
 import { useEffect, useState } from 'react';
 
 import type { ExportView } from '../api/types.ts';
+import { useAnalytics } from '../lib/analytics.ts';
 import { useApi } from '../lib/api-context.ts';
 
 /** How often Settings checks an export that is still preparing. */
@@ -40,6 +41,7 @@ function readyUntil(expiresAt: string): string {
  */
 export function DataExport() {
   const api = useApi();
+  const analytics = useAnalytics();
   const toast = useToast();
   const [current, setCurrent] = useState<ExportView | null>(null);
   const [busy, setBusy] = useState(false);
@@ -80,6 +82,7 @@ export function DataExport() {
     setBusy(true);
     try {
       const next = await api.startExport();
+      analytics.track('export_started', {});
       setCurrent(next);
       if (next.status === 'preparing') {
         toast({ message: 'We’re preparing your download. We’ll let you know when it’s ready.' });

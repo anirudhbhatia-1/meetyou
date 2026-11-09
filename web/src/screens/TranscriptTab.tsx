@@ -3,10 +3,14 @@ import { Button, Card, Icon, SkeletonRows, TextInput, useToast } from '@meetyou/
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 
 import type { Participant } from '../api/types.ts';
+import { useAnalytics } from '../lib/analytics.ts';
 import { useApi } from '../lib/api-context.ts';
 import { useMeetingAudio } from '../lib/audio.ts';
 import { formatClock } from '../lib/format.ts';
 import { VideoPlayer, type PlayerHandle } from './VideoPlayer.tsx';
+
+/** A transcript search counts for analytics once the typing has paused this long. */
+const SEARCH_SETTLE_MS = 1_500;
 
 /** Case-insensitive matches of `query` in `text`, highlighted (DESIGN §12.5 `match-hl`). */
 function highlight(text: string, query: string, current: boolean): ReactNode {
@@ -158,6 +162,7 @@ export function TranscriptTab({
   onSpeakerRenamed: () => void;
 }) {
   const api = useApi();
+  const analytics = useAnalytics();
   const toast = useToast();
   const player = useRef<PlayerHandle>(null);
   const audio = useMeetingAudio(api, meetingId);
@@ -182,6 +187,14 @@ export function TranscriptTab({
   );
   const currentMatch = matches[Math.min(hit, matches.length - 1)];
   useEffect(() => setHit(0), [q]);
+  useEffect(() => {
+    if (q === '') return undefined;
+    const timer = setTimeout(
+      () => analytics.track('transcript_searched', { meetingId, matches: matches.length }),
+      SEARCH_SETTLE_MS,
+    );
+    return () => clearTimeout(timer);
+  }, [q, matches.length, meetingId, analytics]);
   useEffect(() => {
     if (currentMatch === undefined) return;
     list.current

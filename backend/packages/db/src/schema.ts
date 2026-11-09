@@ -285,6 +285,17 @@ export interface ExportsTable extends Audit {
   expiresAt: NullableTimestamp;
 }
 
+/** `0008_product_events.sql`: typed product analytics (S4-15, PRD §19.6); no content. */
+export interface ProductEventsTable extends Audit {
+  id: string;
+  workspaceId: string;
+  userId: string;
+  client: 'web' | 'extension';
+  name: string;
+  props: ColumnType<unknown, string, string>;
+  occurredAt: Timestamp;
+}
+
 export interface RefreshTokenFamiliesTable extends Audit {
   id: string;
   userId: string;
@@ -325,6 +336,7 @@ export interface Database {
   meetingQuestions: MeetingQuestionsTable;
   exports: ExportsTable;
   speakerSignals: SpeakerSignalsTable;
+  productEvents: ProductEventsTable;
   refreshTokenFamilies: RefreshTokenFamiliesTable;
   refreshTokens: RefreshTokensTable;
 }

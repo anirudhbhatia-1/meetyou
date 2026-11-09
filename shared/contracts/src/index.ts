@@ -10,3 +10,4 @@ export * from './ask.ts';
 export * from './summary-api.ts';
 export * from './notes-text.ts';
 export * from './exports.ts';
+export * from './analytics.ts';

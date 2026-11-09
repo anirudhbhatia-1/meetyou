@@ -20,6 +20,7 @@ import { searchRoutes } from './routes/search.ts';
 import { summaryRoutes } from './routes/summary.ts';
 import { authRoutes } from './routes/auth.ts';
 import { consentLogRoutes } from './routes/consent-log.ts';
+import { eventsRoutes } from './routes/events.ts';
 import { healthRoutes } from './routes/health.ts';
 import { meRoutes } from './routes/me.ts';
 import { meetingsRoutes } from './routes/meetings.ts';
@@ -150,6 +151,7 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
   await app.register(notesRoutes);
   await app.register(segmentsRoutes);
   await app.register(consentLogRoutes);
+  await app.register(eventsRoutes);
   await app.register(askRoutes, { llm: options.llm ?? null });
   await app.register(summaryRoutes);
   await app.register(searchRoutes);

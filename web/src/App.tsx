@@ -4,6 +4,7 @@ import { CALLBACK_PATH, WebAuth } from './api/auth.ts';
 import { createHttpApi } from './api/http.ts';
 import type { LibraryApi } from './api/types.ts';
 import { Banner, Button, SkeletonRows, ToastProvider } from '@meetyou/ui';
+import { Analytics, AnalyticsContext } from './lib/analytics.ts';
 import { ApiContext } from './lib/api-context.ts';
 import { useOnline } from './lib/online.ts';
 import { useRoute } from './lib/router.ts';
@@ -134,40 +135,58 @@ export function App() {
 function Library({ api, onSignOut }: { api: LibraryApi; onSignOut: () => void }) {
   const route = useRoute();
   const online = useOnline();
+  const analytics = useMemo(() => new Analytics(api), [api]);
+  useEffect(() => {
+    api.getSettings().then(
+      (s) => analytics.setOptOut(s.analyticsOptOut),
+      () => undefined, // The API still drops events for an opted-out user.
+    );
+    const hidden = () => {
+      if (document.visibilityState === 'hidden') analytics.flush();
+    };
+    document.addEventListener('visibilitychange', hidden);
+    return () => {
+      document.removeEventListener('visibilitychange', hidden);
+      analytics.flush();
+    };
+  }, [api, analytics]);
   const open = useAsync(() => api.listActionItems('open'), []);
   const refreshCount = open.reload;
 
   return (
     <ApiContext.Provider value={api}>
-      <ToastProvider>
-        <div className="app">
-          <Sidebar route={route} openActions={open.data?.length ?? null} />
-          <main className="main">
-            {!online && (
-              // DESIGN §16 offline banner. Pages show what they already loaded; nothing is cached
-              // across reloads yet, so the text does not promise saved meetings.
-              <div className="offline-banner">
-                <Banner tone="warning">
-                  You&rsquo;re offline. Showing what was already loaded; changes need a connection.
-                </Banner>
-              </div>
-            )}
-            {route.screen === 'home' && <Home onActionsChanged={refreshCount} />}
-            {route.screen === 'meetings' && <Meetings />}
-            {route.screen === 'detail' && (
-              <MeetingDetail
-                key={route.meetingId}
-                meetingId={route.meetingId}
-                tab={route.tab}
-                onActionsChanged={refreshCount}
-              />
-            )}
-            {route.screen === 'actions' && <ActionItems onChanged={refreshCount} />}
-            {route.screen === 'settings' && <Settings onSignOut={onSignOut} />}
-            {route.screen === 'catalogue' && import.meta.env.DEV && <Catalogue />}
-          </main>
-        </div>
-      </ToastProvider>
+      <AnalyticsContext.Provider value={analytics}>
+        <ToastProvider>
+          <div className="app">
+            <Sidebar route={route} openActions={open.data?.length ?? null} />
+            <main className="main">
+              {!online && (
+                // DESIGN §16 offline banner. Pages show what they already loaded; nothing is cached
+                // across reloads yet, so the text does not promise saved meetings.
+                <div className="offline-banner">
+                  <Banner tone="warning">
+                    You&rsquo;re offline. Showing what was already loaded; changes need a
+                    connection.
+                  </Banner>
+                </div>
+              )}
+              {route.screen === 'home' && <Home onActionsChanged={refreshCount} />}
+              {route.screen === 'meetings' && <Meetings />}
+              {route.screen === 'detail' && (
+                <MeetingDetail
+                  key={route.meetingId}
+                  meetingId={route.meetingId}
+                  tab={route.tab}
+                  onActionsChanged={refreshCount}
+                />
+              )}
+              {route.screen === 'actions' && <ActionItems onChanged={refreshCount} />}
+              {route.screen === 'settings' && <Settings onSignOut={onSignOut} />}
+              {route.screen === 'catalogue' && import.meta.env.DEV && <Catalogue />}
+            </main>
+          </div>
+        </ToastProvider>
+      </AnalyticsContext.Provider>
     </ApiContext.Provider>
   );
 }

@@ -3,6 +3,7 @@ import { Button, Segmented, Sheet, Switch, useToast } from '@meetyou/ui';
 import { useMemo, useState } from 'react';
 
 import type { Meeting, MeetingSummary, Participant } from '../api/types.ts';
+import { useAnalytics } from '../lib/analytics.ts';
 import { meetingTitle } from '../lib/format.ts';
 import { saveTextFile, toNotesDoc } from '../lib/notes-doc.ts';
 
@@ -24,6 +25,7 @@ export function ShareSheet({
   onClose: () => void;
 }) {
   const toast = useToast();
+  const analytics = useAnalytics();
   const [format, setFormat] = useState<'markdown' | 'text'>('markdown');
   const [includeTimes, setIncludeTimes] = useState(false);
   const text = useMemo(
@@ -49,6 +51,11 @@ export function ShareSheet({
                 format === 'markdown' ? 'text/markdown' : 'text/plain',
               );
               toast({ message: 'Downloaded' });
+              analytics.track('notes_shared', {
+                meetingId: meeting.id,
+                action: 'download',
+                format: format === 'markdown' ? 'markdown' : 'plain',
+              });
             }}
           >
             Download file
@@ -59,6 +66,11 @@ export function ShareSheet({
               navigator.clipboard.writeText(text).then(
                 () => {
                   toast({ message: `Copied as ${label}` });
+                  analytics.track('notes_shared', {
+                    meetingId: meeting.id,
+                    action: 'copy',
+                    format: format === 'markdown' ? 'markdown' : 'plain',
+                  });
                   onClose();
                 },
                 () => toast({ message: 'Couldn’t copy. Select the text and copy it instead.' }),

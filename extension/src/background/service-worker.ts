@@ -1,3 +1,5 @@
+import type { ProductEvent } from '@meetyou/contracts';
+
 import {
   parseBackgroundMessage,
   parseMeetCallState,
@@ -27,6 +29,7 @@ import {
   canStop,
   CAPTURE_STATE_KEY,
   CAPTURING,
+  elapsedMs,
   hasLeftCall,
   nextCaptureState,
   parseCaptureState,
@@ -53,6 +56,7 @@ import {
   fetchApiSettings,
   patchApiSettings,
   postApiConsentLog,
+  postApiEvents,
   putApiNotes,
   startApiSession,
 } from '../api-client.ts';
@@ -168,6 +172,7 @@ async function applyCaptureEvent(event: CaptureEvent): Promise<CaptureState> {
   const next = nextCaptureState(previous, event);
   if (next === previous) return next;
   await chrome.storage.session.set({ [CAPTURE_STATE_KEY]: next });
+  trackTransition(previous, next, event);
 
   const badge = badgeFor(next);
   await Promise.all([
@@ -204,6 +209,33 @@ function enqueueCapture(task: () => Promise<void>): void {
   captureQueue = captureQueue.then(task).catch((error: unknown) => {
     logError('capture task failed', error);
   });
+}
+
+type PropsOf<N extends ProductEvent['name']> = Extract<ProductEvent, { name: N }>['props'];
+
+/**
+ * Product analytics (S4-15): one event at a time (a few per meeting), best effort. Nothing is sent
+ * without an account or while the cached account settings say the user opted out.
+ */
+function track<N extends ProductEvent['name']>(name: N, props: PropsOf<N>): void {
+  if (auth === null) return;
+  const event = { name, at: new Date().toISOString(), props } as ProductEvent;
+  void (async () => {
+    const account = accountSettingsFrom(await chrome.storage.local.get(ACCOUNT_SETTINGS_KEY));
+    if (account.analyticsOptOut) return;
+    const token = await auth?.accessToken();
+    if (token == null) return;
+    await postApiEvents(API_URL, token, [event]);
+  })().catch((error: unknown) => logError('analytics failed', error));
+}
+
+/** Recording funnel events from state changes that end or fail a recording. */
+function trackTransition(previous: CaptureState, next: CaptureState, event: CaptureEvent): void {
+  if (event.type === 'failed' && next.error !== null) {
+    track('recording_failed', { error: next.error });
+  } else if (event.type === 'stopped' && previous.startedAt !== null) {
+    track('recording_stopped', { durationMs: elapsedMs(previous, Date.now()) });
+  }
 }
 
 async function failCapture(event: Extract<CaptureEvent, { type: 'failed' }>): Promise<void> {
@@ -431,6 +463,12 @@ async function startRecording(tabId: number | undefined, consent?: ConsentChoice
     video: result.video,
   });
   await applyCaptureEvent({ type: 'video_quality_changed', quality: videoQuality, auto: false });
+  track('recording_started', {
+    video: result.video === 'recording',
+    videoQuality,
+    consentMode: accountSettingsFrom(await chrome.storage.local.get(ACCOUNT_SETTINGS_KEY))
+      .consentMode,
+  });
   if (started.startedAt !== null) {
     const last: LastRecording = {
       sessionId: result.sessionId,

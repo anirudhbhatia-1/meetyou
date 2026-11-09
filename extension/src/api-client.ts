@@ -2,6 +2,7 @@ import {
   Meeting,
   MeetingSummaryResponse,
   type Note,
+  type ProductEvent,
   RecoverSessionResponse,
   UserSettings,
   SignVideoFragmentsResponse,
@@ -188,6 +189,23 @@ export async function postApiConsentLog(
   },
 ): Promise<void> {
   await postJson(apiUrl, '/v1/consent-log', accessToken, entry);
+}
+
+/** S4-15 product analytics: typed events only (the API rejects content and honours opt-out). */
+export async function postApiEvents(
+  apiUrl: string,
+  accessToken: string,
+  events: readonly ProductEvent[],
+): Promise<void> {
+  const path = '/v1/events';
+  const response = await fetch(new URL(path, apiUrl).href, {
+    method: 'POST',
+    headers: { authorization: `Bearer ${accessToken}`, 'content-type': 'application/json' },
+    body: JSON.stringify({ client: 'extension', events }),
+    signal: AbortSignal.timeout(API_TIMEOUT_MS),
+  });
+  // 204: the user opted out and nothing was stored.
+  if (response.status !== 202 && response.status !== 204) throw new ApiError(path, response.status);
 }
 
 /**

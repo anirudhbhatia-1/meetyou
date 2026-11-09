@@ -37,6 +37,7 @@ export type AccountSettings = Pick<
   | 'retentionPolicy'
   | 'consentMode'
   | 'consentMessage'
+  | 'analyticsOptOut'
 >;
 
 export const DEFAULT_ACCOUNT_SETTINGS: AccountSettings = {
@@ -47,6 +48,7 @@ export const DEFAULT_ACCOUNT_SETTINGS: AccountSettings = {
   retentionPolicy: DEFAULT_USER_SETTINGS.retentionPolicy,
   consentMode: DEFAULT_USER_SETTINGS.consentMode,
   consentMessage: DEFAULT_USER_SETTINGS.consentMessage,
+  analyticsOptOut: DEFAULT_USER_SETTINGS.analyticsOptOut,
 };
 
 export function toAccountSettings(s: UserSettings): AccountSettings {
@@ -58,6 +60,7 @@ export function toAccountSettings(s: UserSettings): AccountSettings {
     retentionPolicy: s.retentionPolicy,
     consentMode: s.consentMode,
     consentMessage: s.consentMessage,
+    analyticsOptOut: s.analyticsOptOut,
   };
 }
 

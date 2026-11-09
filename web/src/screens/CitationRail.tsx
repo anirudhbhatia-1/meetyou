@@ -3,6 +3,7 @@ import { Button, Card, Checkbox, Icon, Menu, useToast } from '@meetyou/ui';
 import { useRef, useState } from 'react';
 
 import type { Meeting, MeetingSummary, Participant } from '../api/types.ts';
+import { useAnalytics } from '../lib/analytics.ts';
 import { useApi } from '../lib/api-context.ts';
 import { useMeetingAudio } from '../lib/audio.ts';
 import { formatClock, formatDue } from '../lib/format.ts';
@@ -152,6 +153,7 @@ export function ActionItemsCard({
   onChanged: () => void;
 }) {
   const api = useApi();
+  const analytics = useAnalytics();
   const toast = useToast();
   const [, force] = useState(0);
   const [dueFor, setDueFor] = useState<string | null>(null);
@@ -164,6 +166,7 @@ export function ActionItemsCard({
   const set = async (item: SummaryItem, status: 'open' | 'done'): Promise<boolean> => {
     try {
       await api.setActionItemStatus(item.id, status);
+      analytics.track('action_item_status', { status });
     } catch {
       toast({ message: 'Couldn’t save that. Try again.' });
       return false;

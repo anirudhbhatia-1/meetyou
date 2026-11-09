@@ -871,6 +871,13 @@ Cost per meeting-hour (STT + LLM + storage + infra), by provider and language.
 - Product analytics events contain IDs, counts, durations, and enum values only — never transcript
   text, notes, names, or meeting titles.
 - Users can opt out of product analytics.
+- **Built (S4-15, 2026-11-09):** `POST /v1/events` stores events in our own Postgres table
+  (`product_events`, migration 0008; no vendor). Each event has a strict typed schema in
+  `shared/contracts` (`analytics.ts`) that rejects any other field: `recording_started` (video,
+  quality, consent mode), `recording_stopped` (duration), `recording_failed` (error enum),
+  `summary_opened`, `citation_opened`, `notes_shared` (copy/download, format), `summary_feedback`,
+  `transcript_searched` (match count), `library_searched` (result count), `action_item_status`,
+  `export_started`. Opted-out users: the clients send nothing and the API stores nothing (204).
 
 ---
 

@@ -1,4 +1,5 @@
 import { Banner, Card, Checkbox, Icon, SkeletonRows, StatusPill, useToast } from '@meetyou/ui';
+import { useAnalytics } from '../lib/analytics.ts';
 import { useApi } from '../lib/api-context.ts';
 import {
   formatDue,
@@ -86,6 +87,7 @@ function SetupCard({
 /** DESIGN §10 */
 export function Home({ onActionsChanged }: { onActionsChanged: () => void }) {
   const api = useApi();
+  const analytics = useAnalytics();
   const toast = useToast();
   const now = new Date();
   const me = useAsync(() => api.me(), []);
@@ -97,6 +99,7 @@ export function Home({ onActionsChanged }: { onActionsChanged: () => void }) {
 
   const toggle = async (id: string, done: boolean) => {
     await api.setActionItemStatus(id, done ? 'done' : 'open');
+    analytics.track('action_item_status', { status: done ? 'done' : 'open' });
     todos.reload();
     onActionsChanged();
     if (done) {

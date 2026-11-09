@@ -1,6 +1,7 @@
 import { useState } from 'react';
 
 import { Banner, Button, Card, Checkbox, Segmented, SkeletonRows, useToast } from '@meetyou/ui';
+import { useAnalytics } from '../lib/analytics.ts';
 import { useApi } from '../lib/api-context.ts';
 import { formatDue } from '../lib/format.ts';
 import { href } from '../lib/router.ts';
@@ -16,6 +17,7 @@ const FILTERS: { value: Filter; label: string }[] = [
 /** DESIGN §14 */
 export function ActionItems({ onChanged }: { onChanged: () => void }) {
   const api = useApi();
+  const analytics = useAnalytics();
   const toast = useToast();
   const [filter, setFilter] = useState<Filter>('open');
   const list = useAsync(() => api.listActionItems(filter), [filter]);
@@ -23,6 +25,7 @@ export function ActionItems({ onChanged }: { onChanged: () => void }) {
   const setStatus = async (id: string, status: 'open' | 'done'): Promise<boolean> => {
     try {
       await api.setActionItemStatus(id, status);
+      analytics.track('action_item_status', { status });
     } catch {
       toast({ message: 'Couldn’t save that. Try again.' });
       return false;

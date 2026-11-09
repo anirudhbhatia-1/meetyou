@@ -15,6 +15,7 @@ import {
 import { useEffect, useState, type ReactNode } from 'react';
 
 import type { PatchSettingsRequest, UserSettings } from '../api/types.ts';
+import { useAnalytics } from '../lib/analytics.ts';
 import { useApi } from '../lib/api-context.ts';
 import { TEMPLATE_LABEL, type TemplateId } from '../lib/format.ts';
 import { useAsync } from '../lib/useAsync.ts';
@@ -85,6 +86,7 @@ const RETENTION_EFFECT: Record<UserSettings['retentionPolicy'], string> = {
  */
 export function Settings({ onSignOut }: { onSignOut: () => void }) {
   const api = useApi();
+  const analytics = useAnalytics();
   const toast = useToast();
   const me = useAsync(() => api.me(), []);
   const loaded = useAsync(() => api.getSettings(), []);
@@ -378,7 +380,10 @@ export function Settings({ onSignOut }: { onSignOut: () => void }) {
             <Switch
               label="Share anonymous usage counts"
               checked={!settings.analyticsOptOut}
-              onChange={(share) => save({ analyticsOptOut: !share })}
+              onChange={(share) => {
+                analytics.setOptOut(!share);
+                save({ analyticsOptOut: !share });
+              }}
             />
           }
         />

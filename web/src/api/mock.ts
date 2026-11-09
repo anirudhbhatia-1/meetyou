@@ -110,6 +110,7 @@ export function createMockApi(options: { latencyMs?: number } = {}): LibraryApi 
       return wait({ ...item });
     },
     sendItemFeedback: () => wait(undefined),
+    sendEvents: () => Promise.resolve(),
     renameSpeaker: (meetingId, clusterId, to) => {
       const list = participants[meetingId] ?? [];
       let person = 'participantId' in to ? list.find((p) => p.id === to.participantId) : undefined;

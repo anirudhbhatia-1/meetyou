@@ -1,7 +1,8 @@
 import { notesFileName, notesText, type Meeting, type SummaryItem } from '@meetyou/contracts';
 import { Banner, Button, Icon, SkeletonRows, useToast } from '@meetyou/ui';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
+import { useAnalytics } from '../lib/analytics.ts';
 import { useApi } from '../lib/api-context.ts';
 import { numberCitations } from '../lib/citations.ts';
 import {
@@ -43,12 +44,19 @@ export function MeetingDetail({
   onActionsChanged: () => void;
 }) {
   const api = useApi();
+  const analytics = useAnalytics();
   const now = new Date();
   const meeting = useAsync(() => api.getMeeting(meetingId), [meetingId]);
   const summary = useAsync(() => api.getSummary(meetingId), [meetingId]);
   const segments = useAsync(() => api.getSegments(meetingId), [meetingId]);
   const people = useAsync(() => api.getParticipants(meetingId), [meetingId]);
   const [selected, setSelected] = useState<SummaryItem | null>(null);
+  const opened = useRef(false);
+  useEffect(() => {
+    if (opened.current || tab !== 'notes' || summary.data == null) return;
+    opened.current = true;
+    analytics.track('summary_opened', { meetingId });
+  }, [tab, summary.data, meetingId, analytics]);
   // An answer's citation (Ask tab); the newest pick, note or answer, fills the citation card.
   const [askCite, setAskCite] = useState<AskCitation | null>(null);
   const [playFrom, setPlayFrom] = useState<number | null>(null);
@@ -188,6 +196,11 @@ export function MeetingDetail({
                       notesFileName(meetingTitle(m), m.startedAt, 'md'),
                       notesText(doc, { format: 'markdown', includeTimes: true }),
                     );
+                    analytics.track('notes_shared', {
+                      meetingId,
+                      action: 'download',
+                      format: 'markdown',
+                    });
                   },
                 }
               : {})}
@@ -283,8 +296,10 @@ export function MeetingDetail({
                 onFeedback={
                   summary.data?.summaryId === undefined
                     ? null
-                    : (useful, comment) =>
-                        api.sendFeedback(summary.data?.summaryId ?? '', useful, comment)
+                    : (useful, comment) => {
+                        analytics.track('summary_feedback', { meetingId, useful });
+                        return api.sendFeedback(summary.data?.summaryId ?? '', useful, comment);
+                      }
                 }
                 summary={summary.data ?? null}
                 segments={segments.data ?? []}
@@ -293,6 +308,7 @@ export function MeetingDetail({
                 onSelect={(item) => {
                   setSelected(item);
                   setAskCite(null);
+                  analytics.track('citation_opened', { meetingId });
                 }}
                 onEdited={() => {
                   summary.reload();

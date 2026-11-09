@@ -138,6 +138,16 @@ export function createHttpApi(auth: WebAuth): LibraryApi {
       return SummaryItem.parse(await res.json());
     },
 
+    async sendEvents(events) {
+      const res = await auth.authorized('/v1/events', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ client: 'web', events }),
+      });
+      if (res.status !== 202 && res.status !== 204)
+        throw new Error(`events failed (${res.status})`);
+    },
+
     async sendItemFeedback(itemId, useful) {
       const res = await auth.authorized('/v1/feedback', {
         method: 'POST',
