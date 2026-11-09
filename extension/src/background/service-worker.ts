@@ -397,7 +397,12 @@ async function startRecording(tabId: number | undefined, consent?: ConsentChoice
     return;
   }
 
+  // Meet's home page has no call: recording it would capture the landing screen (seen 2026-11-09).
   const meetingCode = meetingCodeOf(tab.url);
+  if (meetingCode === null) {
+    await applyCaptureEvent({ type: 'failed', error: 'no_meeting' });
+    return;
+  }
   await applyCaptureEvent({
     type: 'start_requested',
     tabId,

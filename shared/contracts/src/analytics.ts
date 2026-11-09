@@ -34,6 +34,7 @@ export const ProductEvent = z.discriminatedUnion('name', [
       'tab_capture_failed',
       'audio_context_failed',
       'not_meet_tab',
+      'no_meeting',
       'no_active_tab',
       'capture_not_allowed',
       'offscreen_failed',

@@ -41,6 +41,8 @@ export type CaptureStatus =
 export type CaptureError =
   | CaptureFailure
   | 'not_meet_tab'
+  /** A Meet page without a call (home, landing): nothing to record yet. */
+  | 'no_meeting'
   | 'no_active_tab'
   | 'capture_not_allowed'
   | 'offscreen_failed'
@@ -276,6 +278,7 @@ const ERRORS = new Set<string>([
   'tab_capture_failed',
   'audio_context_failed',
   'not_meet_tab',
+  'no_meeting',
   'no_active_tab',
   'capture_not_allowed',
   'offscreen_failed',

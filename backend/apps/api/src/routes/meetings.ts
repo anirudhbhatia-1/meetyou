@@ -93,6 +93,8 @@ export const meetingsRoutes: FastifyPluginAsync = async (fastify) => {
             .select(['displayName'])
             .where('workspaceId', '=', workspaceId)
             .where('meetingId', '=', m.id)
+            // The user is not one of "the others": the UI adds "you" itself.
+            .where('isSelf', '=', false)
             .execute();
 
           const videoAsset = await tx
@@ -192,6 +194,7 @@ export const meetingsRoutes: FastifyPluginAsync = async (fastify) => {
           .select(['displayName'])
           .where('workspaceId', '=', workspaceId)
           .where('meetingId', '=', id)
+          .where('isSelf', '=', false)
           .execute();
 
         const videoAsset = await tx
@@ -296,6 +299,7 @@ export const meetingsRoutes: FastifyPluginAsync = async (fastify) => {
           .select(['displayName'])
           .where('workspaceId', '=', workspaceId)
           .where('meetingId', '=', id)
+          .where('isSelf', '=', false)
           .execute();
 
         const videoAsset = await tx

@@ -39,6 +39,7 @@ export const Meeting = z.object({
   status: MeetingStatus,
   processingStep: ProcessingStep.nullable(),
   template: TemplateId,
+  /** The other people in the call; the user is not listed (the UI says "and you"). */
   participantNames: z.array(z.string()),
   /** When the retention policy deletes the recordings (audio and video). */
   recordingExpiresAt: IsoDateTime.nullable(),

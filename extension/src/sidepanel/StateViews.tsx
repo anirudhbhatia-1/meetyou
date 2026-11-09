@@ -92,7 +92,7 @@ export function SecondTabView() {
  * Ready (DESIGN §8.5): Start goes through the consent step when the account's chat notice is One
  * click; Automatic posts and Off skips after recording starts (the service worker decides).
  */
-export function ReadyView() {
+export function ReadyView({ noCall = false }: { noCall?: boolean }) {
   const account = useAccount();
   const [settings] = useLocalSetting(ACCOUNT_SETTINGS_KEY, accountSettingsFrom);
   const [asking, setAsking] = useState(false);
@@ -114,10 +114,11 @@ export function ReadyView() {
       </p>
       <LocalOnlyBanner />
       <RecordingOptions />
+      {noCall && <p className="state-text">Join the Meet call first, then start taking notes.</p>}
       <Button
         variant="primary"
         size="lg"
-        disabled={API_URL !== '' && account === undefined}
+        disabled={noCall || (API_URL !== '' && account === undefined)}
         onClick={() => {
           if (MEET_CHAT_NOTICE_ENABLED && settings?.consentMode === 'one_click') setAsking(true);
           else sendStart();

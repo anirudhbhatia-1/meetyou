@@ -110,6 +110,37 @@ describe('speakers and audio', () => {
 
   const auth = (who = 0) => ({ authorization: `Bearer ${people[who]?.token}` });
 
+  it('lists only the other people in a meeting, never the user', async () => {
+    const workspaceId = people[0]?.workspaceId ?? '';
+    await env.db.inWorkspace(workspaceId, (tx) =>
+      tx
+        .insertInto('participants')
+        .values([
+          {
+            id: `prt_${newUlid()}`,
+            workspaceId,
+            meetingId,
+            displayName: 'You',
+            isSelf: true,
+            source: 'dom',
+          },
+          { id: `prt_${newUlid()}`, workspaceId, meetingId, displayName: 'Neha', source: 'dom' },
+        ])
+        .execute(),
+    );
+    const one = await app.inject({
+      method: 'GET',
+      url: `/v1/meetings/${meetingId}`,
+      headers: auth(),
+    });
+    expect(one.json().participantNames).toEqual(['Neha']);
+    const list = await app.inject({ method: 'GET', url: '/v1/meetings', headers: auth() });
+    const row = (list.json().items as { id: string; participantNames: string[] }[]).find(
+      (m) => m.id === meetingId,
+    );
+    expect(row?.participantNames).toEqual(['Neha']);
+  });
+
   it('renames a speaker for the whole meeting, with a typed name or a participant', async () => {
     const rename = (payload: Record<string, unknown>, who = 0) =>
       app.inject({

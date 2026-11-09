@@ -134,6 +134,11 @@ describe('nextCaptureState', () => {
     expect(parseCaptureState(JSON.parse(JSON.stringify(resumed)))).toEqual(resumed);
   });
 
+  it('remembers a start refused outside a call (Meet home)', () => {
+    const refused = nextCaptureState(IDLE_CAPTURE, { type: 'failed', error: 'no_meeting' });
+    expect(parseCaptureState(JSON.parse(JSON.stringify(refused))).error).toBe('no_meeting');
+  });
+
   it('keeps the recorded time when a running recording is lost', () => {
     const lost = nextCaptureState(recording(), {
       type: 'failed',

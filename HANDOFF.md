@@ -202,7 +202,14 @@ Gaurav's S3-07..S3-11 — Gaurav should not start them).** **Stage 4 is complete
 
 Newest first. One entry per working session (either person).
 
-### 2026-11-09 (latest) — Anirudh (Claude Code): Meet chat consent notice switched off
+### 2026-11-09 (latest) — Anirudh (Claude Code): staging test fixes
+
+From Anirudh's first staging test: a recording could start on Meet's home page (no call), and a
+solo meeting showed "2 people". Now the service worker refuses a start without a meeting code in
+the URL (`no_meeting`: "Join the Meet call first…"), the panel disables Start on Meet home, and the
+API's `participantNames` leave out the user's own row (the UI already adds "you").
+
+### 2026-11-09 — Anirudh (Claude Code): Meet chat consent notice switched off
 
 Anirudh asked to remove the consent message for now (the whole Meet chat notice) and will say when
 to add it back. One switch, `MEET_CHAT_NOTICE_ENABLED = false` in `shared/contracts/src/rest.ts`,

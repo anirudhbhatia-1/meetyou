@@ -69,7 +69,9 @@ export function App() {
         <DevView state={state} meet={meet} onClose={() => setShowDev(false)} />
       ) : (
         <>
-          {view === 'ready' && <ReadyView />}
+          {view === 'ready' && (
+            <ReadyView noCall={meet.callState === 'home' || meet.callState === 'ended'} />
+          )}
           {elsewhere && <SecondTabView />}
           {view === 'live' && !elsewhere && (
             <LiveView
