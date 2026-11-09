@@ -113,6 +113,10 @@ function seg(
     meetingId,
     lane,
     speakerName,
+    // One diarized cluster per remote speaker, so speaker rename can be tried (DESIGN §12.5).
+    ...(lane === 'them'
+      ? { speakerClusterId: `spc_${meetingId}_${speakerName.toLowerCase().replace(/\W+/g, '_')}` }
+      : {}),
     startMs: startS * 1000,
     endMs: startS * 1000 + Math.max(2000, text.length * 60),
     text,

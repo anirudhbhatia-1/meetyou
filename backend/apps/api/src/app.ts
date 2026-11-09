@@ -3,7 +3,7 @@ import fastifyCors from '@fastify/cors';
 import { TokenService, generateSigningJwk, loadKeyRing, type AuthService } from '@meetyou/auth';
 import type { Db } from '@meetyou/db';
 import type { LlmProvider } from '@meetyou/providers';
-import { GcsBucket, signReadUrl } from '@meetyou/storage';
+import { GcsBucket, signReadUrl, type ObjectBucket } from '@meetyou/storage';
 
 import { loadConfig, type ApiConfig } from './config.ts';
 import { handleFastifyError, handleNotFound } from './errors.ts';
@@ -12,7 +12,9 @@ import { idempotencyPlugin, type IdempotencyStore } from './middleware/idempoten
 import { swaggerPlugin } from './plugins/swagger.ts';
 import { accountRoutes } from './routes/account.ts';
 import { askRoutes } from './routes/ask.ts';
+import { audioRoutes } from './routes/audio.ts';
 import { exportRoutes, type SignExportDownload } from './routes/exports.ts';
+import { speakersRoutes } from './routes/speakers.ts';
 import { glossaryRoutes } from './routes/glossary.ts';
 import { searchRoutes } from './routes/search.ts';
 import { summaryRoutes } from './routes/summary.ts';
@@ -41,6 +43,8 @@ export interface BuildAppOptions {
   llm?: LlmProvider | null;
   /** Export download links; signed from the bucket when absent. */
   signExportDownload?: SignExportDownload;
+  /** Recordings for audio playback; the GCS bucket when absent (tests pass a memory bucket). */
+  recordings?: ObjectBucket;
 }
 
 /**
@@ -169,6 +173,9 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
       ? async (key, fileName) => (await signReadUrl(bucket, key, { downloadName: fileName })).url
       : undefined);
   await app.register(exportRoutes, signDownload !== undefined ? { signDownload } : {});
+  const recordings = options.recordings ?? bucket;
+  await app.register(audioRoutes, recordings !== undefined ? { bucket: recordings } : {});
+  await app.register(speakersRoutes);
 
   return app;
 }

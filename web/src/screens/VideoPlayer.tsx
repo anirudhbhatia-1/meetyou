@@ -8,6 +8,7 @@ import { formatClock } from '../lib/format.ts';
 export interface PlayerHandle {
   /** Seeks to a moment on the session clock (segment times) and plays (DESIGN §12.5). */
   playFrom(sessionMs: number): void;
+  pause(): void;
 }
 
 const SPEEDS = [1, 1.25, 1.5, 2] as const;
@@ -22,12 +23,17 @@ export function VideoPlayer({
   ref,
   startAt = null,
   onSessionTime,
+  onPlayingChange,
+  compact = false,
 }: {
   meetingId: string;
   ref?: Ref<PlayerHandle>;
   /** Session time to open at ("Play from" on the Notes tab). */
   startAt?: number | null;
   onSessionTime?: (sessionMs: number | null) => void;
+  onPlayingChange?: (playing: boolean) => void;
+  /** Inside the citation card (DESIGN §12.6): no speed or download control. */
+  compact?: boolean;
 }) {
   const api = useApi();
   const video = useRef<HTMLVideoElement>(null);
@@ -65,6 +71,9 @@ export function VideoPlayer({
       // Chrome may refuse to start with sound outside a click; the seek still happened.
       el.play().catch(() => undefined);
       box.current?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+    },
+    pause() {
+      video.current?.pause();
     },
   }));
 
@@ -126,8 +135,14 @@ export function VideoPlayer({
         preload="metadata"
         playsInline
         onClick={toggle}
-        onPlay={() => setPlaying(true)}
-        onPause={() => setPlaying(false)}
+        onPlay={() => {
+          setPlaying(true);
+          onPlayingChange?.(true);
+        }}
+        onPause={() => {
+          setPlaying(false);
+          onPlayingChange?.(false);
+        }}
         onLoadedMetadata={(e) => {
           setDuration(e.currentTarget.duration);
           e.currentTarget.playbackRate = speed;
@@ -178,32 +193,36 @@ export function VideoPlayer({
             if (el !== null) el.currentTime = Number(e.target.value);
           }}
         />
-        <select
-          className="player-speed"
-          aria-label="Playback speed"
-          value={speed}
-          onChange={(e) => {
-            const next = Number(e.target.value) as (typeof SPEEDS)[number];
-            setSpeed(next);
-            if (video.current !== null) video.current.playbackRate = next;
-          }}
-        >
-          {SPEEDS.map((s) => (
-            <option key={s} value={s}>
-              {s}×
-            </option>
-          ))}
-        </select>
-        <Button
-          variant="ghost"
-          size="sm"
-          className="icon-btn"
-          aria-label="Download video"
-          disabled={downloading}
-          onClick={() => void download()}
-        >
-          <Icon name="download" />
-        </Button>
+        {!compact && (
+          <select
+            className="player-speed"
+            aria-label="Playback speed"
+            value={speed}
+            onChange={(e) => {
+              const next = Number(e.target.value) as (typeof SPEEDS)[number];
+              setSpeed(next);
+              if (video.current !== null) video.current.playbackRate = next;
+            }}
+          >
+            {SPEEDS.map((s) => (
+              <option key={s} value={s}>
+                {s}×
+              </option>
+            ))}
+          </select>
+        )}
+        {!compact && (
+          <Button
+            variant="ghost"
+            size="sm"
+            className="icon-btn"
+            aria-label="Download video"
+            disabled={downloading}
+            onClick={() => void download()}
+          >
+            <Icon name="download" />
+          </Button>
+        )}
         <Button
           variant="ghost"
           size="sm"

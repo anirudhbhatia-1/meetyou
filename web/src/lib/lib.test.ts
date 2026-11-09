@@ -61,9 +61,9 @@ describe('mock API and citations', () => {
   it('searches across titles, people and transcript text, and filters by template', async () => {
     const api = createMockApi({ latencyMs: 0 });
     const hit = await api.listMeetings({ query: 'payments', template: 'all' });
-    expect(hit.map((m) => m.id)).toEqual(['mtg_q4_launch']);
+    expect(hit.meetings.map((m) => m.id)).toEqual(['mtg_q4_launch']);
     const standups = await api.listMeetings({ query: '', template: 'standup' });
-    expect(standups.map((m) => m.id)).toEqual(['mtg_standup']);
+    expect(standups.meetings.map((m) => m.id)).toEqual(['mtg_standup']);
   });
 
   it('numbers citations in reading order and marks action items done', async () => {

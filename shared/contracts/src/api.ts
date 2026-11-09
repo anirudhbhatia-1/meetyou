@@ -1,6 +1,6 @@
 import { z } from 'zod';
 
-import { IsoDateTime, Lane, SessionMs } from './common.ts';
+import { IsoDateTime, SessionMs } from './common.ts';
 import { SessionEnded } from './events.ts';
 import {
   Meeting,
@@ -179,23 +179,13 @@ export const ConsentLogEntry = z.object({
   sentAt: IsoDateTime.nullable(),
   createdAt: IsoDateTime,
 });
+export type ConsentLogEntry = z.infer<typeof ConsentLogEntry>;
 export const ConsentLogResponse = z.object({ entries: z.array(ConsentLogEntry) });
 export type ConsentLogResponse = z.infer<typeof ConsentLogResponse>;
 
-// ---------- Audio (GET /v1/meetings/{id}/audio) ----------
-
-// Audio is stored as 10 s chunks per lane (ARCHITECTURE §11.4); each gets a short-lived signed
-// URL. Ogg Opus chunks play in a browser one after another.
-export const AudioChunkRef = z.object({
-  startMs: SessionMs,
-  durationMs: z.number().int().positive(),
-  url: z.url({ protocol: /^https$/ }),
-});
-export const AudioPlaybackResponse = z.object({
-  expiresAt: IsoDateTime,
-  lanes: z.record(Lane, z.array(AudioChunkRef)),
-});
-export type AudioPlaybackResponse = z.infer<typeof AudioPlaybackResponse>;
+// ---------- Audio (GET /v1/meetings/{id}/audio?lane=me|them) ----------
+// One lane's stored chunks joined into an Ogg Opus file (S4-09); the `x-audio-spans` header
+// carries `AudioSpans` (below) to map file time to the meeting clock.
 
 // ---------- Glossary (GET/PUT /v1/glossary) ----------
 
@@ -215,3 +205,27 @@ export const GlossaryResponse = z.object({
 export type GlossaryResponse = z.infer<typeof GlossaryResponse>;
 export const PutGlossaryRequest = z.object({ terms: z.array(GlossaryTerm).max(50) });
 export type PutGlossaryRequest = z.infer<typeof PutGlossaryRequest>;
+
+// PATCH /v1/meetings/{id}/speakers/{clusterId} (S4-09, FR-SPK-05): one of the meeting's
+// participants, or a new name typed by the user. Applies to the whole meeting.
+export const RenameSpeakerRequest = z.union([
+  z.object({ participantId: z.string().min(1).max(100) }).strict(),
+  z.object({ name: z.string().trim().min(1).max(200) }).strict(),
+]);
+export type RenameSpeakerRequest = z.infer<typeof RenameSpeakerRequest>;
+export const RenameSpeakerResponse = z.object({
+  clusterId: z.string(),
+  participantId: z.string(),
+  displayName: z.string(),
+});
+export type RenameSpeakerResponse = z.infer<typeof RenameSpeakerResponse>;
+
+/** `x-audio-spans` on GET /v1/meetings/{id}/audio: where each stretch of the file sits in the meeting. */
+export const AudioSpans = z.array(
+  z.object({
+    fileMs: z.number().nonnegative(),
+    sessionMs: z.number().nonnegative(),
+    durationMs: z.number().nonnegative(),
+  }),
+);
+export type AudioSpans = z.infer<typeof AudioSpans>;

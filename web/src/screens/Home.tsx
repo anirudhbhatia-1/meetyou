@@ -18,7 +18,7 @@ export function Home({ onActionsChanged }: { onActionsChanged: () => void }) {
   const toast = useToast();
   const now = new Date();
   const me = useAsync(() => api.me(), []);
-  const recent = useAsync(() => api.listMeetings({ query: '', template: 'all' }), []);
+  const recent = useAsync(() => api.listMeetings({ query: '', template: 'all' }, 4), []);
   const todos = useAsync(() => api.listActionItems('open'), []);
 
   const mine = (todos.data ?? []).filter((row) => row.ownedBySelf).slice(0, 4);
@@ -77,11 +77,11 @@ export function Home({ onActionsChanged }: { onActionsChanged: () => void }) {
           </div>
           {recent.loading && recent.data === undefined ? (
             <SkeletonRows />
-          ) : (recent.data ?? []).length === 0 ? (
+          ) : (recent.data?.meetings ?? []).length === 0 ? (
             <p className="empty">No meetings yet. Join a Google Meet call and press Start.</p>
           ) : (
             <ul className="rows">
-              {(recent.data ?? []).slice(0, 4).map((m) => (
+              {(recent.data?.meetings ?? []).slice(0, 4).map((m) => (
                 <li key={m.id}>
                   <button
                     type="button"

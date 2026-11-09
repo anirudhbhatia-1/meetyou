@@ -85,12 +85,60 @@ export function createMockApi(options: { latencyMs?: number } = {}): LibraryApi 
       if (consentAcknowledged === true) settings.consentAcknowledgedAt = new Date().toISOString();
       return wait({ ...settings });
     },
-    listMeetings: (filter) =>
-      wait(
-        meetings
-          .filter((m) => matches(m, filter))
-          .sort((a, b) => Date.parse(b.startedAt) - Date.parse(a.startedAt)),
-      ),
+    listMeetings: (filter, count = 50) => {
+      const all = meetings
+        .filter((m) => !deleted.has(m.id) && matches(m, filter))
+        .sort((a, b) => Date.parse(b.startedAt) - Date.parse(a.startedAt));
+      return wait({ meetings: all.slice(0, count), more: all.length > count });
+    },
+    renameMeeting: (id, title) => {
+      const m = meetings.find((x) => x.id === id);
+      if (m !== undefined) m.title = title;
+      return wait(undefined);
+    },
+    editSummaryItem: (id, patch) => {
+      const item = Object.values(summaries)
+        .flatMap((s) => [
+          ...s.sections.flatMap((x) => x.items),
+          ...s.decisions,
+          ...s.questions,
+          ...s.actionItems,
+        ])
+        .find((i) => i.id === id);
+      if (item === undefined) return Promise.reject(new Error('no such item'));
+      Object.assign(item, patch, { userEdited: true });
+      return wait({ ...item });
+    },
+    sendItemFeedback: () => wait(undefined),
+    renameSpeaker: (meetingId, clusterId, to) => {
+      const list = participants[meetingId] ?? [];
+      let person = 'participantId' in to ? list.find((p) => p.id === to.participantId) : undefined;
+      if (person === undefined) {
+        const name = 'name' in to ? to.name : 'Speaker';
+        person = { id: `prt_mock_${list.length + 1}`, displayName: name, isSelf: false };
+        list.push(person);
+        participants[meetingId] = list;
+      }
+      for (const s of segments[meetingId] ?? []) {
+        if (s.speakerClusterId === clusterId) s.speakerName = person.displayName;
+      }
+      return wait({ participantId: person.id, displayName: person.displayName });
+    },
+    // The mock has no recordings: playback shows its "not available" state.
+    getAudio: () => wait(null),
+    getConsentLog: (meetingId) =>
+      wait([
+        {
+          id: `con_${meetingId}`,
+          mode: 'one_click' as const,
+          outcome: 'posted' as const,
+          noticeText:
+            "Hi all — I'm using Minutes to record this call (audio and screen) and take notes. Batayein agar aap comfortable nahi hain.",
+          sentAt: meetings.find((m) => m.id === meetingId)?.startedAt ?? null,
+          createdAt:
+            meetings.find((m) => m.id === meetingId)?.startedAt ?? new Date().toISOString(),
+        },
+      ]),
     getMeeting: (id) => wait(deleted.has(id) ? null : (meetings.find((m) => m.id === id) ?? null)),
     getSummary: (id) => wait(summaries[id] ?? null),
     getSegments: (id) => wait(segments[id] ?? []),

@@ -4,8 +4,9 @@ import { CALLBACK_PATH, WebAuth } from './api/auth.ts';
 import { createHttpApi } from './api/http.ts';
 import { createMockApi } from './api/mock.ts';
 import type { LibraryApi } from './api/types.ts';
-import { SkeletonRows, ToastProvider } from '@meetyou/ui';
+import { Banner, SkeletonRows, ToastProvider } from '@meetyou/ui';
 import { ApiContext } from './lib/api-context.ts';
+import { useOnline } from './lib/online.ts';
 import { useRoute } from './lib/router.ts';
 import { loadRuntimeConfig } from './lib/runtime-config.ts';
 import { useAsync } from './lib/useAsync.ts';
@@ -113,6 +114,7 @@ export function App() {
 
 function Library({ api, onSignOut }: { api: LibraryApi; onSignOut: () => void }) {
   const route = useRoute();
+  const online = useOnline();
   const open = useAsync(() => api.listActionItems('open'), []);
   const refreshCount = open.reload;
 
@@ -122,6 +124,15 @@ function Library({ api, onSignOut }: { api: LibraryApi; onSignOut: () => void })
         <div className="app">
           <Sidebar route={route} openActions={open.data?.length ?? null} />
           <main className="main">
+            {!online && (
+              // DESIGN §16 offline banner. Pages show what they already loaded; nothing is cached
+              // across reloads yet, so the text does not promise saved meetings.
+              <div className="offline-banner">
+                <Banner tone="warning">
+                  You&rsquo;re offline. Showing what was already loaded; changes need a connection.
+                </Banner>
+              </div>
+            )}
             {route.screen === 'home' && <Home onActionsChanged={refreshCount} />}
             {route.screen === 'meetings' && <Meetings />}
             {route.screen === 'detail' && (

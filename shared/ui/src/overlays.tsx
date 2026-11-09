@@ -197,6 +197,7 @@ export function Menu({
   helper,
   disabled,
   round,
+  inline,
 }: {
   /** Button content (icon and/or text). */
   trigger: ReactNode;
@@ -207,6 +208,8 @@ export function Menu({
   disabled?: boolean;
   /** A 36 px round icon button (DESIGN §6.1 icon). */
   round?: boolean;
+  /** An inline trigger (e.g. an owner name inside a row) instead of a button-looking one. */
+  inline?: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const wrap = useRef<HTMLDivElement>(null);
@@ -252,7 +255,7 @@ export function Menu({
     <div className="more" ref={wrap}>
       <Button
         ref={button}
-        className={round === true ? 'icon-btn round' : undefined}
+        className={round === true ? 'icon-btn round' : inline === true ? 'menu-inline' : undefined}
         aria-label={label}
         aria-haspopup="menu"
         aria-expanded={open}

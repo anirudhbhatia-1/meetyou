@@ -1,5 +1,6 @@
 import type {
   AskUsage,
+  ConsentLogEntry,
   ExportView,
   PatchSettingsRequest,
   UserSettings,
@@ -14,6 +15,7 @@ import type {
 
 export type {
   AskUsage,
+  ConsentLogEntry,
   ExportView,
   PatchSettingsRequest,
   UserSettings,
@@ -30,6 +32,12 @@ export type {
 export type AskResult =
   | { ok: true; question: MeetingQuestion; usage: AskUsage }
   | { ok: false; error: 'rate_limited' | 'unavailable' | 'no_transcript' | 'failed' };
+
+export interface LaneAudio {
+  /** An object URL of the Ogg file (revoke when done). */
+  url: string;
+  spans: { fileMs: number; sessionMs: number; durationMs: number }[];
+}
 
 export interface Participant {
   id: string;
@@ -76,7 +84,30 @@ export interface LibraryApi {
   /** DESIGN §15 (S4-12): every change saves at once; returns what the server stored. */
   getSettings(): Promise<UserSettings>;
   patchSettings(patch: PatchSettingsRequest): Promise<UserSettings>;
-  listMeetings(filter: MeetingFilter): Promise<Meeting[]>;
+  /** DESIGN §11.3: newest first, `count` at a time (50); `more` when older meetings exist. */
+  listMeetings(
+    filter: MeetingFilter,
+    count?: number,
+  ): Promise<{ meetings: Meeting[]; more: boolean }>;
+  /** DESIGN §12.3 rename. */
+  renameMeeting(id: string, title: string): Promise<void>;
+  /** DESIGN §12.4 item 7 inline edit, §12.6 owner and due pickers. */
+  editSummaryItem(
+    id: string,
+    patch: { text?: string; ownerParticipantId?: string | null; dueDate?: string | null },
+  ): Promise<SummaryItem>;
+  /** DESIGN §12.4 item 8, per action item. */
+  sendItemFeedback(itemId: string, useful: boolean): Promise<void>;
+  /** DESIGN §12.5 speaker rename, whole meeting. */
+  renameSpeaker(
+    meetingId: string,
+    clusterId: string,
+    to: { participantId: string } | { name: string },
+  ): Promise<{ participantId: string; displayName: string }>;
+  /** One lane's audio (meetings without video) and where it sits on the meeting clock; null when deleted. */
+  getAudio(meetingId: string, lane: 'me' | 'them'): Promise<LaneAudio | null>;
+  /** DESIGN §13.4. */
+  getConsentLog(meetingId: string): Promise<ConsentLogEntry[]>;
   getMeeting(id: string): Promise<Meeting | null>;
   getSummary(id: string): Promise<MeetingSummary | null>;
   getSegments(id: string): Promise<Segment[]>;

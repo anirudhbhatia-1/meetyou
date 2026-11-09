@@ -42,6 +42,24 @@ export class TimeMap {
     this.#spans = spans;
   }
 
+  /** Contiguous stretches merged (one per pause or reconnect), small enough to send to a player. */
+  runs(): Span[] {
+    const out: Span[] = [];
+    for (const span of this.#spans) {
+      const last = out.at(-1);
+      if (
+        last !== undefined &&
+        Math.abs(last.fileMs + last.durationMs - span.fileMs) < 1 &&
+        Math.abs(last.sessionMs + last.durationMs - span.sessionMs) < 1
+      ) {
+        last.durationMs += span.durationMs;
+      } else {
+        out.push({ ...span });
+      }
+    }
+    return out;
+  }
+
   get durationMs(): number {
     const last = this.#spans.at(-1);
     return last === undefined ? 0 : last.fileMs + last.durationMs;

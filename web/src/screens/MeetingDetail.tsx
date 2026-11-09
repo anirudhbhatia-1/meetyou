@@ -1,47 +1,27 @@
-import {
-  notesFileName,
-  notesText,
-  type Meeting,
-  type Segment,
-  type SummaryItem,
-} from '@meetyou/contracts';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { notesFileName, notesText, type Meeting, type SummaryItem } from '@meetyou/contracts';
+import { Banner, Button, Icon, SkeletonRows, useToast } from '@meetyou/ui';
+import { useEffect, useState } from 'react';
 
-import type { MeetingSummary, Participant } from '../api/types.ts';
-import {
-  Banner,
-  Button,
-  Card,
-  Checkbox,
-  CitationChip,
-  Icon,
-  SkeletonRows,
-  UnverifiedChip,
-  useToast,
-} from '@meetyou/ui';
 import { useApi } from '../lib/api-context.ts';
 import { numberCitations } from '../lib/citations.ts';
-import { saveTextFile, toNotesDoc } from '../lib/notes-doc.ts';
 import {
-  formatClock,
-  formatDue,
   formatLength,
   formatWhen,
   meetingTitle,
   recordingLabel,
   TEMPLATE_LABEL,
 } from '../lib/format.ts';
+import { saveTextFile, toNotesDoc } from '../lib/notes-doc.ts';
 import { href, navigate, type DetailTab } from '../lib/router.ts';
 import { useAsync } from '../lib/useAsync.ts';
 import { AskTab, type AskCitation } from './AskTab.tsx';
+import { ActionItemsCard, CitationCard } from './CitationRail.tsx';
+import { ConsentLogSheet } from './ConsentLogSheet.tsx';
 import { MoreMenu, useDeleteMeeting } from './MeetingMenu.tsx';
-import {
-  CandidateBanner,
-  ImprovedBanner,
-  NotesFeedback,
-  TemplateMenu,
-} from './SummaryControls.tsx';
-import { VideoPlayer, type PlayerHandle } from './VideoPlayer.tsx';
+import { NotesTab } from './NotesTab.tsx';
+import { ShareSheet } from './ShareSheet.tsx';
+import { CandidateBanner, ImprovedBanner, TemplateMenu } from './SummaryControls.tsx';
+import { TranscriptTab } from './TranscriptTab.tsx';
 
 /** Finished meetings: their notes can be rewritten (a failed run included). */
 const SETTLED: ReadonlySet<string> = new Set(['ready', 'updated', 'failed', 'too_short']);
@@ -72,6 +52,20 @@ export function MeetingDetail({
   // An answer's citation (Ask tab); the newest pick, note or answer, fills the citation card.
   const [askCite, setAskCite] = useState<AskCitation | null>(null);
   const [playFrom, setPlayFrom] = useState<number | null>(null);
+  const [renaming, setRenaming] = useState(false);
+  const [sheet, setSheet] = useState<'share' | 'consent' | null>(null);
+  const rename = (value: string) => {
+    setRenaming(false);
+    const title = value.trim();
+    if (title === '' || title === meeting.data?.title) return;
+    api.renameMeeting(meetingId, title).then(
+      () => {
+        meeting.reload();
+        toast({ message: 'Renamed' });
+      },
+      () => toast({ message: 'Couldn’t rename the meeting. Try again.' }),
+    );
+  };
   const remove = useDeleteMeeting({
     deleted: () => navigate({ screen: 'meetings' }),
     restored: (id) => navigate({ screen: 'detail', meetingId: id, tab: 'notes' }),
@@ -171,12 +165,19 @@ export function MeetingDetail({
                 .catch(() => toast({ message: 'Couldn’t rewrite the notes. Try again.' }));
             }}
           />
-          {/* TODO(S4-10): share sheet (§13.1). */}
-          <Button variant="primary" disabled title="Share sheet comes with S4-10">
-            Share
+          <Button
+            variant="primary"
+            aria-label="Share notes"
+            disabled={summary.data == null}
+            title={summary.data == null ? 'Available once the notes are ready' : undefined}
+            onClick={() => setSheet('share')}
+          >
+            <Icon name="share" /> <span className="hide-sm">Share</span>
           </Button>
           <MoreMenu
             onDelete={() => remove.request(meetingId)}
+            onRename={() => setRenaming(true)}
+            onConsentLog={() => setSheet('consent')}
             {...(summary.data != null
               ? {
                   onDownload: () => {
@@ -200,8 +201,39 @@ export function MeetingDetail({
             {m.participantNames.length === 0 ? 'You' : `${m.participantNames.join(', ')} and you`}
             {rec !== null && ` · ${rec}`}
           </p>
-          <h1 className="meeting-title">{meetingTitle(m)}</h1>
+          {renaming ? (
+            <input
+              className="meeting-title meeting-title-input"
+              aria-label="Meeting name"
+              autoFocus
+              defaultValue={m.title}
+              maxLength={200}
+              onBlur={(e) => rename(e.currentTarget.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') e.currentTarget.blur();
+                if (e.key === 'Escape') setRenaming(false);
+              }}
+            />
+          ) : (
+            <h1
+              className="meeting-title"
+              title="Double-click to rename"
+              onDoubleClick={() => setRenaming(true)}
+            >
+              {meetingTitle(m)}
+            </h1>
+          )}
         </header>
+        {sheet === 'share' && summary.data != null && (
+          <ShareSheet
+            meeting={m}
+            summary={summary.data}
+            segments={segments.data ?? []}
+            people={people.data ?? []}
+            onClose={() => setSheet(null)}
+          />
+        )}
+        {sheet === 'consent' && <ConsentLogSheet meeting={m} onClose={() => setSheet(null)} />}
         <>
           <div className="tabs" role="tablist" aria-label="Meeting">
             {(m.status === 'recording'
@@ -255,11 +287,25 @@ export function MeetingDetail({
                         api.sendFeedback(summary.data?.summaryId ?? '', useful, comment)
                 }
                 summary={summary.data ?? null}
+                segments={segments.data ?? []}
                 loading={summary.loading}
                 selected={selected}
                 onSelect={(item) => {
                   setSelected(item);
                   setAskCite(null);
+                }}
+                onEdited={() => {
+                  summary.reload();
+                  onActionsChanged();
+                }}
+                onRetry={() => {
+                  void api
+                    .regenerateSummary(meetingId, m.template)
+                    .then(() => {
+                      setRewriteFrom(shownVersion);
+                      setRewriting(m.template);
+                    })
+                    .catch(() => toast({ message: 'Couldn’t start. Try again.' }));
                 }}
                 status={m.status}
               />
@@ -268,10 +314,16 @@ export function MeetingDetail({
               <TranscriptTab
                 meetingId={meetingId}
                 segments={segments.data ?? []}
+                people={people.data ?? []}
                 loading={segments.loading}
                 video={m.video}
-                highlight={askCite?.segmentIds ?? selected?.segmentIds ?? []}
+                highlightIds={askCite?.segmentIds ?? selected?.segmentIds ?? []}
                 startAt={playFrom}
+                onSpeakerRenamed={() => {
+                  segments.reload();
+                  people.reload();
+                  meeting.reload();
+                }}
               />
             )}
             {tab === 'ask' && m.status !== 'recording' && (
@@ -286,6 +338,7 @@ export function MeetingDetail({
             )}
             <aside className="rail">
               <CitationCard
+                meeting={m}
                 item={askCite ?? selected}
                 number={
                   askCite !== null
@@ -295,14 +348,10 @@ export function MeetingDetail({
                       : (numberCitations(summary.data).get(selected.id) ?? null)
                 }
                 segments={segments.data ?? []}
-                canPlay={m.video?.status === 'ready'}
-                onPlay={(ms) => {
-                  setPlayFrom(ms);
+                onShowInTranscript={(continueAt) => {
+                  if (continueAt !== null) setPlayFrom(continueAt);
                   navigate({ screen: 'detail', meetingId, tab: 'transcript' });
                 }}
-                onShowInTranscript={() =>
-                  navigate({ screen: 'detail', meetingId, tab: 'transcript' })
-                }
               />
               <ActionItemsCard
                 summary={summary.data ?? null}
@@ -314,327 +363,5 @@ export function MeetingDetail({
         </>
       </div>
     </div>
-  );
-}
-
-function NotesTab({
-  summary,
-  loading,
-  selected,
-  onSelect,
-  status,
-  fading,
-  onFeedback,
-}: {
-  fading: boolean;
-  onFeedback: ((useful: boolean, comment?: string) => Promise<void>) | null;
-  summary: MeetingSummary | null;
-  loading: boolean;
-  selected: SummaryItem | null;
-  onSelect: (item: SummaryItem) => void;
-  status: string;
-}) {
-  const numbers = useMemo(
-    () => (summary === null ? new Map<string, number>() : numberCitations(summary)),
-    [summary],
-  );
-  if (loading && summary === null)
-    return (
-      <Card className="notes">
-        <SkeletonRows rows={5} />
-      </Card>
-    );
-  if (summary === null && status === 'processing') {
-    // Notes are still being written; the Transcript tab (and video) can be used meanwhile.
-    return (
-      <Card className="processing">
-        <span className="proc-dot" aria-hidden />
-        <h2>Writing your notes…</h2>
-        <p className="meta">
-          This usually takes under a minute. You can leave this page — we&rsquo;ll let you know when
-          they&rsquo;re ready. The transcript is ready now.
-        </p>
-      </Card>
-    );
-  }
-  if (summary === null) {
-    return (
-      <Card className="notes">
-        <p className="empty">
-          {status === 'too_short'
-            ? 'This meeting was too short for notes.'
-            : status === 'failed'
-              ? 'We couldn’t write notes for this meeting. Pick a template above to try again.'
-              : 'No notes for this meeting yet.'}
-        </p>
-      </Card>
-    );
-  }
-  const bullet = (item: SummaryItem) => {
-    const n = numbers.get(item.id);
-    return (
-      <li key={item.id} className={`ai-line ${item.flagged ? 'unverified' : ''}`}>
-        <span>{item.text}</span>
-        {item.flagged ? (
-          // DESIGN §6.14: never a citation chip on an unverified item.
-          <UnverifiedChip />
-        ) : (
-          n !== undefined && (
-            <CitationChip
-              n={n}
-              selected={selected?.id === item.id}
-              onSelect={() => onSelect(item)}
-            />
-          )
-        )}
-      </li>
-    );
-  };
-  return (
-    <Card className={`notes ${fading ? 'fading' : ''}`}>
-      <p className="legend">
-        <span className="swatch swatch-ink" aria-hidden /> You wrote this
-        <span className="swatch swatch-muted" aria-hidden /> Added from the conversation
-        <span className="cite cite-static" aria-hidden>
-          1
-        </span>{' '}
-        Click to see who said it
-      </p>
-      <p className="overview">{summary.overview}</p>
-      {summary.sections.map((section, i) => (
-        <section key={section.note?.id ?? `topic-${i}`} className="note-section">
-          <h3 className={section.note === null ? 'topic-heading' : 'note-heading'}>
-            {section.note?.text ?? 'From the conversation'}
-          </h3>
-          <p className="meta small num">
-            {section.note === null
-              ? 'added from the conversation'
-              : `your note · ${formatClock(section.note.sessionMs)}`}
-          </p>
-          {section.items.length === 0 ? (
-            <p className="ai-line italic">Nothing in the conversation matched this note yet.</p>
-          ) : (
-            <ul className="bullets">{section.items.map(bullet)}</ul>
-          )}
-        </section>
-      ))}
-      {summary.decisions.length > 0 && (
-        <section className="note-section">
-          <h3 className="note-heading">Decisions</h3>
-          <ul className="bullets decisions">{summary.decisions.map(bullet)}</ul>
-        </section>
-      )}
-      {summary.questions.length > 0 && (
-        <section className="note-section">
-          <h3 className="note-heading">Open questions</h3>
-          <ul className="bullets questions">{summary.questions.map(bullet)}</ul>
-        </section>
-      )}
-      {onFeedback !== null && <NotesFeedback onSend={onFeedback} />}
-    </Card>
-  );
-}
-
-function TranscriptTab({
-  meetingId,
-  segments,
-  loading,
-  video,
-  highlight,
-  startAt,
-}: {
-  meetingId: string;
-  segments: Segment[];
-  loading: boolean;
-  video: { status: string; durationMs: number | null } | null;
-  highlight: string[];
-  startAt: number | null;
-}) {
-  const player = useRef<PlayerHandle>(null);
-  const [now, setNow] = useState<number | null>(null);
-  const ready = video?.status === 'ready';
-  return (
-    <Card className="transcript">
-      {video !== null &&
-        (ready ? (
-          <VideoPlayer
-            ref={player}
-            meetingId={meetingId}
-            startAt={startAt}
-            onSessionTime={setNow}
-          />
-        ) : (
-          <div className={`video-slot video-${video.status}`}>
-            {video.status === 'uploading' ? (
-              <p className="meta">
-                <Icon name="video" /> Video is still uploading from the computer that recorded it.
-                Your notes and transcript are ready.
-              </p>
-            ) : video.status === 'processing' ? (
-              <p className="meta">Preparing video…</p>
-            ) : video.status === 'failed' ? (
-              <p className="meta">Video couldn&rsquo;t be saved. Audio and notes are fine.</p>
-            ) : (
-              <p className="meta">Recording was deleted after the retention period.</p>
-            )}
-          </div>
-        ))}
-      {loading && segments.length === 0 ? (
-        <SkeletonRows rows={6} />
-      ) : segments.length === 0 ? (
-        <p className="empty">No transcript for this meeting.</p>
-      ) : (
-        <ol className="segments">
-          {segments.map((s) => {
-            const playingNow = now !== null && now >= s.startMs && now < s.endMs;
-            const cls = `segment ${highlight.includes(s.id) || playingNow ? 'segment-hl' : ''} ${ready ? 'segment-seek' : ''}`;
-            const body = (
-              <>
-                <span className="meta small num">{formatClock(s.startMs)}</span>
-                <span>
-                  <span className={`speaker ${s.lane === 'me' ? 'speaker-me' : ''}`}>
-                    {s.lane === 'me' ? 'You' : (s.speakerName ?? 'Speaker')}
-                  </span>
-                  <span className="segment-text">{s.text}</span>
-                </span>
-              </>
-            );
-            return (
-              <li key={s.id} className={cls} aria-current={playingNow ? 'true' : undefined}>
-                {ready ? (
-                  // DESIGN §12.5 click-to-seek: the line plays the video from its start.
-                  <button
-                    type="button"
-                    className="segment-btn"
-                    onClick={() => player.current?.playFrom(s.startMs)}
-                  >
-                    {body}
-                  </button>
-                ) : (
-                  body
-                )}
-              </li>
-            );
-          })}
-        </ol>
-      )}
-    </Card>
-  );
-}
-
-function CitationCard({
-  item,
-  number,
-  segments,
-  canPlay,
-  onPlay,
-  onShowInTranscript,
-}: {
-  /** A note's item or an answer's citation: only the cited segments matter here. */
-  item: Pick<SummaryItem, 'segmentIds'> | null;
-  number: number | null;
-  segments: Segment[];
-  canPlay: boolean;
-  onPlay: (sessionMs: number) => void;
-  onShowInTranscript: () => void;
-}) {
-  if (item === null || number === null) {
-    return (
-      <Card className="cite-card">
-        <p className="meta">Click a number next to a note to see who said it.</p>
-      </Card>
-    );
-  }
-  const cited = segments.filter((s) => item.segmentIds.includes(s.id));
-  const start = cited[0]?.startMs ?? 0;
-  const end = cited.at(-1)?.endMs ?? start;
-  return (
-    <Card highlight className="cite-card">
-      <p className="meta">
-        <span className="cite cite-on cite-static">{number}</span> Where this came from ·{' '}
-        <span className="num">
-          {formatClock(start)}–{formatClock(end)}
-        </span>
-      </p>
-      {cited.map((s) => (
-        <blockquote key={s.id}>
-          <span className="speaker">{s.lane === 'me' ? 'You' : (s.speakerName ?? 'Speaker')}</span>
-          <q>{s.text}</q>
-        </blockquote>
-      ))}
-      <div className="cite-actions">
-        {/* TODO(S4-17): audio playback for meetings without video (DESIGN §12.6). */}
-        <Button
-          disabled={!canPlay}
-          title={canPlay ? undefined : 'Plays when the meeting has video'}
-          onClick={() => onPlay(start)}
-        >
-          <Icon name="play" /> Play from {formatClock(start)}
-        </Button>
-        <Button variant="ghost" onClick={onShowInTranscript}>
-          Show in transcript
-        </Button>
-      </div>
-    </Card>
-  );
-}
-
-function ActionItemsCard({
-  summary,
-  people,
-  onChanged,
-}: {
-  summary: MeetingSummary | null;
-  people: Participant[];
-  onChanged: () => void;
-}) {
-  const api = useApi();
-  const toast = useToast();
-  const [, force] = useState(0);
-  if (summary === null || summary.actionItems.length === 0) return null;
-  const owner = (id: string | null) => {
-    const p = people.find((x) => x.id === id);
-    return p === undefined ? 'Unassigned' : p.isSelf ? 'You' : p.displayName;
-  };
-  const set = async (item: SummaryItem, status: 'open' | 'done'): Promise<boolean> => {
-    try {
-      await api.setActionItemStatus(item.id, status);
-    } catch {
-      toast({ message: 'Couldn’t save that. Try again.' });
-      return false;
-    }
-    item.status = status;
-    force((n) => n + 1);
-    onChanged();
-    return true;
-  };
-  return (
-    <Card className="actions-card">
-      <h2 className="card-title">Action items</h2>
-      <ul className="todos">
-        {summary.actionItems.map((item) => (
-          <li key={item.id}>
-            <Checkbox
-              checked={item.status === 'done'}
-              onChange={(checked) => {
-                void set(item, checked ? 'done' : 'open').then((saved) => {
-                  if (saved && checked) {
-                    toast({ message: 'Marked done', undo: () => void set(item, 'open') });
-                  }
-                });
-              }}
-            />
-            <span>
-              <span className={`todo-text ${item.status === 'done' ? 'done' : ''}`}>
-                {item.text}
-              </span>
-              <span className="meta small">
-                {owner(item.ownerParticipantId)} · {formatDue(item)}
-              </span>
-            </span>
-          </li>
-        ))}
-      </ul>
-    </Card>
   );
 }

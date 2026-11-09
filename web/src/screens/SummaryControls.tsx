@@ -24,7 +24,7 @@ export function TemplateMenu({
       disabled={disabled}
       trigger={
         <>
-          <Icon name="refresh-cw" /> {TEMPLATE_LABEL[current]}
+          <Icon name="refresh-cw" /> <span className="hide-sm">{TEMPLATE_LABEL[current]}</span>
         </>
       }
       items={TEMPLATES.map((t) => ({

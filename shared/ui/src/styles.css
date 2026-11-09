@@ -641,3 +641,21 @@ a {
 .segmented-disabled {
   opacity: 0.45;
 }
+
+/* An inline menu trigger inside text (owner and due pickers, DESIGN §12.6). */
+.btn.menu-inline {
+  height: auto;
+  min-height: 24px;
+  padding: 0 4px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-decoration: underline dotted;
+  text-underline-offset: 3px;
+}
+.btn.menu-inline:hover:not(:disabled) {
+  background: var(--olive-wash);
+  color: var(--olive);
+}

@@ -23,6 +23,9 @@ import { navigate } from '../lib/router.ts';
 import { useAsync } from '../lib/useAsync.ts';
 import { MoreMenu, useDeleteMeeting } from './MeetingMenu.tsx';
 
+/** DESIGN §11.3 page size. */
+const PAGE = 50;
+
 type Filter = TemplateId | 'all';
 const FILTERS: { value: Filter; label: string }[] = [
   { value: 'all', label: 'All' },
@@ -52,9 +55,12 @@ export function Meetings() {
     remembered.template = template;
   }, [template]);
 
+  // DESIGN §11.3: 50 at a time; "Show older meetings" asks for 50 more.
+  const [count, setCount] = useState(PAGE);
+  useEffect(() => setCount(PAGE), [debounced, template]);
   const list = useAsync(
-    () => api.listMeetings({ query: debounced, template }),
-    [debounced, template],
+    () => api.listMeetings({ query: debounced, template }, count),
+    [debounced, template, count],
   );
   const remove = useDeleteMeeting({ deleted: list.reload, restored: list.reload });
 
@@ -92,7 +98,7 @@ export function Meetings() {
         </div>
         {list.loading && list.data === undefined ? (
           <SkeletonRows />
-        ) : (list.data ?? []).length === 0 ? (
+        ) : (list.data?.meetings ?? []).length === 0 ? (
           <div className="empty">
             {debounced.trim() === '' ? (
               <p>
@@ -110,7 +116,7 @@ export function Meetings() {
           </div>
         ) : (
           <ul>
-            {(list.data ?? []).map((m) => {
+            {(list.data?.meetings ?? []).map((m) => {
               const rec = recordingLabel(m.recordingExpiresAt, now);
               return (
                 <li key={m.id} className="table-line">
@@ -143,6 +149,13 @@ export function Meetings() {
               );
             })}
           </ul>
+        )}
+        {list.data?.more === true && (
+          <div className="list-more">
+            <Button variant="ghost" onClick={() => setCount((n) => n + PAGE)}>
+              Show older meetings
+            </Button>
+          </div>
         )}
       </Card>
     </div>

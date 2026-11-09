@@ -1,6 +1,6 @@
 import { useState } from 'react';
 
-import { Card, Checkbox, Segmented, SkeletonRows, useToast } from '@meetyou/ui';
+import { Banner, Button, Card, Checkbox, Segmented, SkeletonRows, useToast } from '@meetyou/ui';
 import { useApi } from '../lib/api-context.ts';
 import { formatDue } from '../lib/format.ts';
 import { href } from '../lib/router.ts';
@@ -20,10 +20,16 @@ export function ActionItems({ onChanged }: { onChanged: () => void }) {
   const [filter, setFilter] = useState<Filter>('open');
   const list = useAsync(() => api.listActionItems(filter), [filter]);
 
-  const setStatus = async (id: string, status: 'open' | 'done') => {
-    await api.setActionItemStatus(id, status);
+  const setStatus = async (id: string, status: 'open' | 'done'): Promise<boolean> => {
+    try {
+      await api.setActionItemStatus(id, status);
+    } catch {
+      toast({ message: 'Couldn’t save that. Try again.' });
+      return false;
+    }
     list.reload();
     onChanged();
+    return true;
   };
 
   return (
@@ -36,7 +42,19 @@ export function ActionItems({ onChanged }: { onChanged: () => void }) {
       </header>
       <Segmented label="Show" options={FILTERS} value={filter} onChange={setFilter} />
       <Card className="actions-list">
-        {list.loading && list.data === undefined ? (
+        {list.error && list.data === undefined ? (
+          // DESIGN §16: never a blank screen.
+          <Banner
+            tone="error"
+            action={
+              <Button size="sm" onClick={list.reload}>
+                Try again
+              </Button>
+            }
+          >
+            Something went wrong. Try again.
+          </Banner>
+        ) : list.loading && list.data === undefined ? (
           <SkeletonRows />
         ) : (list.data ?? []).length === 0 ? (
           <p className="empty">
@@ -51,13 +69,14 @@ export function ActionItems({ onChanged }: { onChanged: () => void }) {
                   <Checkbox
                     checked={done}
                     onChange={(checked) => {
-                      void setStatus(row.item.id, checked ? 'done' : 'open');
-                      if (checked) {
-                        toast({
-                          message: 'Marked done',
-                          undo: () => void setStatus(row.item.id, 'open'),
-                        });
-                      }
+                      void setStatus(row.item.id, checked ? 'done' : 'open').then((saved) => {
+                        if (saved && checked) {
+                          toast({
+                            message: 'Marked done',
+                            undo: () => void setStatus(row.item.id, 'open'),
+                          });
+                        }
+                      });
                     }}
                   />
                   <span className="action-main">

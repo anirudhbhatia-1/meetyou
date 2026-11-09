@@ -167,10 +167,18 @@ describe.runIf(hasFfmpeg())('worker runs video.finalize from the queue (S2-06, S
       `ws/${workspaceId}/meetings/${meetingId}/video/playback.mp4`,
       `ws/${workspaceId}/meetings/${meetingId}/video/poster.jpg`,
     ]);
-    // Finalize ran once and is gone; only the retention sweep waits for the video's expiry.
-    const jobs = await env.pool.query<{ task_identifier: string }>(
-      'select task_identifier from graphile_worker.jobs',
-    );
+    // Finalize ran once and is gone; only the retention sweep waits for the video's expiry. The
+    // row is committed before the task returns (fragment cleanup follows), so wait for the job
+    // itself to complete before looking at the queue.
+    const queued = () =>
+      env.pool.query<{ task_identifier: string }>(
+        'select task_identifier from graphile_worker.jobs',
+      );
+    let jobs = await queued();
+    for (let i = 0; i < 100 && jobs.rows.some((j) => j.task_identifier === 'video.finalize'); i++) {
+      await new Promise((r) => setTimeout(r, 100));
+      jobs = await queued();
+    }
     expect(jobs.rows).toEqual([{ task_identifier: 'retention.sweep' }]);
     // The sweep is days away: nothing is due, so the backlog metric reads 0.
     expect(await queueDepth(env.pool)).toEqual({ count: 0, oldestMs: 0 });

@@ -11,12 +11,15 @@ import {
   MeResponse,
   SearchResponse,
   Segment,
-  type SummaryItem,
+  SummaryItem,
   type SummaryVersion,
   UserSettings,
   VideoPlaybackResponse,
   ExportListResponse,
   ExportResponse,
+  AudioSpans,
+  ConsentLogResponse,
+  RenameSpeakerResponse,
 } from '@meetyou/contracts';
 
 import type { WebAuth } from './auth.ts';
@@ -52,6 +55,9 @@ function toMeetingSummary(body: MeetingSummaryResponse): MeetingSummary | null {
  * The library API over HTTP (S4-14, ARCHITECTURE §12.1). Paths are same-origin: the web server
  * proxies `/v1` to the API. Responses are validated with the shared contracts (§12.2).
  */
+/** DESIGN §11.3: meetings load 50 at a time. */
+const PAGE = 50;
+
 export function createHttpApi(auth: WebAuth): LibraryApi {
   const get = async (path: string): Promise<unknown> => {
     const res = await auth.authorized(path, { headers: { accept: 'application/json' } });
@@ -81,13 +87,23 @@ export function createHttpApi(auth: WebAuth): LibraryApi {
       return UserSettings.parse(await res.json());
     },
 
-    async listMeetings(filter: MeetingFilter) {
-      // TODO(S4-09): follow `nextCursor` (infinite scroll); the first 100 cover alpha.
-      const query = new URLSearchParams({ limit: '100' });
-      if (filter.template !== 'all') query.set('template', filter.template);
-      const items = MeetingList.parse(await get(`/v1/meetings?${query.toString()}`)).items;
+    async listMeetings(filter: MeetingFilter, count = PAGE) {
       const q = filter.query.trim();
-      if (q === '') return items;
+      // A search ranks every meeting the user has, so it reads them all; browsing reads `count`.
+      const wanted = q === '' ? count : Number.POSITIVE_INFINITY;
+      const items: Meeting[] = [];
+      let cursor: string | null = null;
+      do {
+        const query = new URLSearchParams({ limit: '100' });
+        if (filter.template !== 'all') query.set('template', filter.template);
+        if (cursor !== null) query.set('cursor', cursor);
+        const page = MeetingList.parse(await get(`/v1/meetings?${query.toString()}`));
+        items.push(...page.items);
+        cursor = page.nextCursor;
+      } while (cursor !== null && items.length < wanted);
+      if (q === '') {
+        return { meetings: items.slice(0, count), more: items.length > count || cursor !== null };
+      }
       // S3-09: transcripts, notes, summaries and titles on the server, best match first; people's
       // names are matched here (they are not indexed).
       const found = SearchResponse.parse(
@@ -97,9 +113,72 @@ export function createHttpApi(auth: WebAuth): LibraryApi {
       const words = q.toLowerCase().split(/\s+/).filter(Boolean);
       const byPeople = (m: Meeting) =>
         words.every((w) => m.participantNames.join(' ').toLowerCase().includes(w));
-      return items
+      const meetings = items
         .filter((m) => rank.has(m.id) || byPeople(m))
         .sort((a, b) => (rank.get(a.id) ?? 1e9) - (rank.get(b.id) ?? 1e9));
+      return { meetings, more: false };
+    },
+
+    async renameMeeting(id, title) {
+      const res = await auth.authorized(`/v1/meetings/${encodeURIComponent(id)}`, {
+        method: 'PATCH',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ title }),
+      });
+      if (!res.ok) throw new Error(`rename failed (${res.status})`);
+    },
+
+    async editSummaryItem(id, patch) {
+      const res = await auth.authorized(`/v1/summary-items/${encodeURIComponent(id)}`, {
+        method: 'PATCH',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify(patch),
+      });
+      if (!res.ok) throw new Error(`item update failed (${res.status})`);
+      return SummaryItem.parse(await res.json());
+    },
+
+    async sendItemFeedback(itemId, useful) {
+      const res = await auth.authorized('/v1/feedback', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          targetType: 'summary_item',
+          targetId: itemId,
+          rating: useful ? 1 : -1,
+        }),
+      });
+      if (res.status !== 201) throw new Error(`feedback failed (${res.status})`);
+    },
+
+    async renameSpeaker(meetingId, clusterId, to) {
+      const res = await auth.authorized(
+        `/v1/meetings/${encodeURIComponent(meetingId)}/speakers/${encodeURIComponent(clusterId)}`,
+        {
+          method: 'PATCH',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify(to),
+        },
+      );
+      if (!res.ok) throw new Error(`speaker rename failed (${res.status})`);
+      return RenameSpeakerResponse.parse(await res.json());
+    },
+
+    async getAudio(meetingId, lane) {
+      const res = await auth.authorized(
+        `/v1/meetings/${encodeURIComponent(meetingId)}/audio?lane=${lane}`,
+      );
+      if (res.status === 404) return null;
+      if (!res.ok) throw new Error(`audio failed (${res.status})`);
+      const header = res.headers.get('x-audio-spans') ?? '';
+      const json = atob(header.replace(/-/g, '+').replace(/_/g, '/'));
+      const spans = AudioSpans.parse(JSON.parse(json));
+      return { url: URL.createObjectURL(await res.blob()), spans };
+    },
+
+    async getConsentLog(meetingId) {
+      const body = await get(`/v1/meetings/${encodeURIComponent(meetingId)}/consent-log`);
+      return body === null ? [] : ConsentLogResponse.parse(body).entries;
     },
 
     async getMeeting(id) {

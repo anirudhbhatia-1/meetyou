@@ -2,7 +2,6 @@ import { describe, expect, it } from 'vitest';
 
 import {
   ActionItemList,
-  AudioPlaybackResponse,
   EndSessionRequest,
   ListActionItemsQuery,
   ListMeetingsQuery,
@@ -65,15 +64,6 @@ describe('Phase 1 endpoint shapes (ARCHITECTURE §12.1)', () => {
         workspaceId: 'ws_1',
         email: 'a@example.com',
         displayName: 'A',
-      }).success,
-    ).toBe(true);
-    expect(
-      AudioPlaybackResponse.safeParse({
-        expiresAt: '2026-11-06T10:00:00Z',
-        lanes: {
-          me: [{ startMs: 0, durationMs: 10_000, url: 'https://storage.googleapis.com/x' }],
-          them: [],
-        },
       }).success,
     ).toBe(true);
     expect(ActionItemList.parse({ items: [], nextCursor: null })).toEqual({

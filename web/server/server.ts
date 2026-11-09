@@ -41,7 +41,15 @@ const FORWARD_REQUEST = [
   'user-agent',
   'x-minutes-client',
 ];
-const FORWARD_RESPONSE = ['cache-control', 'content-type', 'etag', 'retry-after', 'location'];
+const FORWARD_RESPONSE = [
+  'cache-control',
+  'content-type',
+  'etag',
+  'retry-after',
+  'location',
+  // Audio playback's time map (S4-09).
+  'x-audio-spans',
+];
 
 // Signed video and poster URLs are served by Cloud Storage (V4 signed URLs).
 const CSP = [
@@ -49,7 +57,8 @@ const CSP = [
   "script-src 'self'",
   "style-src 'self' 'unsafe-inline'",
   "img-src 'self' data: https://storage.googleapis.com",
-  'media-src https://storage.googleapis.com',
+  // Video from signed Cloud Storage URLs; audio is fetched through /v1 and played from a blob.
+  'media-src https://storage.googleapis.com blob:',
   "font-src 'self' data:",
   "connect-src 'self'",
   "frame-ancestors 'none'",
