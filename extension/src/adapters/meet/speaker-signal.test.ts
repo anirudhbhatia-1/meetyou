@@ -222,6 +222,28 @@ describe('Meet Active-Speaker Signal Adapter (S1-08)', () => {
       expect(speakers[0]?.displayName).toBe('Anirudh Bhatia');
     });
 
+    it('prefers a name-based ID over the video slot ID, which moves between people', () => {
+      const tile = (name: string | null): ParentNode => {
+        const waveNode: MockDomNode = { attributes: { 'data-is-speaking': 'true' } };
+        const labelNode: MockDomNode = { attributes: { 'aria-label': `More options for ${name}` } };
+        const tileNode: MockDomNode = {
+          attributes: { jscontroller: 'e6S21b', 'data-allocation-id': 'slot-3' },
+          children: name === null ? [waveNode] : [waveNode, labelNode],
+        };
+        const rootNode: MockDomNode = { children: [tileNode] };
+        waveNode.parent = tileNode;
+        labelNode.parent = tileNode;
+        tileNode.parent = rootNode;
+        return {
+          querySelectorAll: (sel: string) => queryAll(rootNode, sel).map((d) => makeMockElement(d)),
+        } as unknown as ParentNode;
+      };
+      expect(detectActiveSpeakers(tile('Neha Kapoor'))[0]?.participantId).toMatch(
+        /^p_[0-9a-f]{8}$/,
+      );
+      expect(detectActiveSpeakers(tile(null))[0]?.participantId).toBe('slot-3');
+    });
+
     it('ignores elements with data-is-speaking="false"', () => {
       const waveNode: MockDomNode = {
         attributes: { 'data-is-speaking': 'false' },

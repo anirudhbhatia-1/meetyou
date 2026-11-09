@@ -11,7 +11,7 @@ Agents and developers must follow accepted ADRs; changing one requires a new ADR
 | [0004](0004-auth-and-token-model.md) | Auth and token model for the extension | Accepted 2026-10-29 |
 | [0005](0005-job-queue-and-outbox.md) | Job queue and outbox implementation | Accepted 2026-10-29 |
 | 0006 | Library surface: extension page vs web app | Not started |
-| 0007 | LLM provider and prompt/version management | Not started |
+| [0007](0007-llm-provider-and-prompt-versions.md) | LLM provider and prompt/version management | Proposed 2026-11-09 — Gemini 3.6 Flash (Gemini API, paid tier for real meetings); evaluation baseline in `tools/summary-eval` |
 | 0008 | Desktop app approach | Not started (Phase 2) |
 | 0009 | Retrieval design | Not started (Phase 2) |
 | 0010 | Meeting bot: buy vs build | Not started (Phase 3) |

@@ -48,36 +48,70 @@ interface NewSegment extends Segment {
   cluster?: string;
 }
 
-function toSegments(
+/** Words further apart than this on the session clock (a pause, a reconnect) start a new segment. */
+const SPLIT_GAP_MS = 2_000;
+
+/**
+ * Batch utterances on the session clock. The joined file has no silence for pauses, so the model
+ * may run one utterance across one: it is split where its words jump across such a gap, so no
+ * stored segment spans time that was never recorded.
+ */
+export function toSegments(
   workspaceId: string,
   meetingId: string,
   lane: Lane,
   batch: readonly BatchSegment[],
   time: TimeMap,
 ): NewSegment[] {
-  return batch.map((b) => {
+  return batch.flatMap((b) => {
     const cluster =
       lane === 'them' && b.speaker !== undefined ? `batch_spk_${b.speaker + 1}` : undefined;
-    const startMs = time.toSession(b.startMs);
-    return {
+    const words = b.words.map((w) => ({
+      text: w.text,
+      startMs: time.toSession(w.startMs),
+      endMs: time.toSession(w.endMs),
+    }));
+    const runs: (typeof words)[] = [];
+    for (const w of words) {
+      const run = runs.at(-1);
+      const last = run?.at(-1);
+      if (run !== undefined && last !== undefined && w.startMs - last.endMs <= SPLIT_GAP_MS) {
+        run.push(w);
+      } else {
+        runs.push([w]);
+      }
+    }
+    const pieces =
+      runs.length <= 1
+        ? [
+            {
+              text: b.text,
+              startMs: time.toSession(b.startMs),
+              endMs: time.toSession(b.endMs),
+              words,
+            },
+          ]
+        : runs.map((run) => ({
+            text: run.map((w) => w.text).join(' '),
+            startMs: run[0]?.startMs ?? 0,
+            endMs: run.at(-1)?.endMs ?? 0,
+            words: run,
+          }));
+    return pieces.map((piece) => ({
       id: `seg_${newUlid()}`,
       workspaceId,
       meetingId,
       lane,
       ...(cluster !== undefined ? { speakerClusterId: cluster, cluster } : {}),
-      startMs,
-      endMs: Math.max(startMs, time.toSession(b.endMs)),
-      text: b.text,
-      rawText: b.text,
+      startMs: piece.startMs,
+      endMs: Math.max(piece.startMs, piece.endMs),
+      text: piece.text,
+      rawText: piece.text,
       language: b.language ?? 'und',
-      source: 'batch',
+      source: 'batch' as const,
       flags: [],
-      words: b.words.map((w) => ({
-        text: w.text,
-        startMs: time.toSession(w.startMs),
-        endMs: time.toSession(w.endMs),
-      })),
-    };
+      words: piece.words,
+    }));
   });
 }
 

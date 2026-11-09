@@ -11,9 +11,10 @@ tasks owned by your developer unless they say otherwise.
 single source of truth for scope, architecture, and working style. If a rule here conflicts with an
 agent's default behavior, this file wins.
 
-> **Project status: Stage 2 code complete and running on staging (2026-11-07); Stage 3 (notes and
-> summaries) is next.** Live S2 tests (gateway failover, worker crash, 60-min video sync) are still
-> to run. Create other product code only for IMPLEMENTATION_PLAN tasks your developer has started.
+> **Project status: Stage 3 (notes and summaries) complete in code (2026-11-09); staging
+> verification and templates v2 pending (HANDOFF §7).** Live S2 tests (gateway failover, worker
+> crash, 60-min video sync) are still to run. Create other product code only for
+> IMPLEMENTATION_PLAN tasks your developer has started.
 
 ---
 
@@ -150,7 +151,9 @@ backend/apps/worker    (S2-06) background worker: video.finalize, meeting/accoun
 backend/apps/smoke     (S2-12) staging smoke job: synthetic speech through gateway → segments via API
 backend/packages/log   (S2-11) content-free structured logs (field allow-list, Cloud Logging severity)
 backend/packages/tracing (S2-11) OpenTelemetry spans, one trace per meeting, OTLP to Google's Telemetry API
-backend/packages/summarizer (S3-01, S3-12) summary engine and Ask this meeting: data-wrapped prompts, templates as data, schema retry
+backend/packages/summarizer (S3-01, S3-12) summary engine and Ask this meeting: data-wrapped prompts, templates as data, schema retry, validation chain
+backend/packages/pipeline (S3-03/04/11) worker jobs: meeting.summarize, meeting.retranscribe (batch pass), account.export, retention scheduling
+tools/summary-eval     (S3-05/06) golden meetings, metrics, recorded outputs + CI regression gate, injection cases
 docs/                  PRD, features, architecture, design, plan, research, ADRs, benchmark kit, legal drafts,
                        STAGING_SETUP.md (step-by-step cloud setup runbook)
 ```
@@ -289,7 +292,9 @@ Work like a careful senior engineer pairing with the developer.
   **follows Meet mute** by default. Agents reply in **English**.
 
 ### Open (do not assume an answer)
-- LLM for summaries (D-04, ADR-0007): building on Gemini Flash first; the evaluation decides.
+- LLM for summaries (D-04): [ADR-0007](docs/adr/0007-llm-provider-and-prompt-versions.md)
+  **Proposed** 2026-11-09 — Gemini 3.6 Flash on the Gemini API (evaluation baseline in
+  `tools/summary-eval`); Anirudh to accept.
 
 ---
 

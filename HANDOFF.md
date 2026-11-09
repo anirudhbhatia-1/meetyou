@@ -6,10 +6,10 @@ pointer to where the full detail lives — the linked document stays the source 
 
 | Field | Value |
 |---|---|
-| Last updated | 2026-11-07 (Anirudh: Meet mute now gates the me lane; Ask answers meeting details; faster video finalize) |
+| Last updated | 2026-11-09 (Anirudh: Stage 3 complete in code — summaries, search, glossary, export, batch pass, evaluation) |
 | Updated by | Anirudh (Claude Code) |
 | Repository | [anirudhbhatia-1/meetyou](https://github.com/anirudhbhatia-1/meetyou) — branches `main`, `anirudh`, `Gauravbro` |
-| Current stage | **Stage 3** in progress — S3-01 code done (Anirudh); next S3-02 validation chain; Gaurav S3-09..S3-11 can start (§7) |
+| Current stage | **Stage 3** complete in code (S3-01..S3-12, Anirudh); templates v2 parked, ADR-0007 proposed, staging checks pending (§7, §9 2026-11-09) |
 
 ---
 
@@ -171,16 +171,15 @@ Facts learned so far that change how we build. Full sources in STT_PREFLIGHT.md 
 
 ## 7. What happens next
 
-Stages 0–2 are complete in code; Stage 2 is deployed to staging with CI/CD (every green `main`
-deploys and smoke-tests). Next, **Stage 3 — notes and summaries** (IMPLEMENTATION_PLAN Stage 3):
+Stages 0–2 are complete in code and deployed to staging with CI/CD (every green `main` deploys
+and smoke-tests). **Stage 3 is complete in code (2026-11-09, Anirudh did all of S3, including
+Gaurav's S3-07..S3-11 — Gaurav should not start them).** Next:
 
-1. **Anirudh:** S3-01 summarization engine on **Gemini Flash** (LLM adapter behind the provider
-   interface), then S3-02 validation chain, S3-03 fast-path pipeline, S3-05 evaluation → ADR-0007.
-   Needs a **paid-tier Gemini key in Secret Manager** before real meetings on staging.
-2. **Gaurav:** S3-07 template content (after the S3-01 template format exists), S3-08 summary
-   endpoints (after S3-03), and now: **S3-09 search**, **S3-10 glossary endpoint**, **S3-11 export
-   job** — these depend only on S2 and can start today. Language rule changed: agents reply in
-   English (AGENTS §1).
+1. **Anirudh:** turn S3 on in staging (STAGING_SETUP §9.5) and test a call end to end; accept or
+   amend ADR-0007; finish templates v2 from the stash once the Gemini quota allows; grow the
+   golden set from 10 to 30+ meetings (PRD §14.6).
+   A **paid-tier Gemini key** is still needed before real (non-test) meetings.
+2. **Gaurav:** review the S3 commits (2026-11-09) and Stage 4 tasks per IMPLEMENTATION_PLAN.
 3. Still to run (Anirudh): live S2 tests — gateway failover (S2-04), worker crash mid-job (S2-06),
    60-min video sync (S2-14); trace arrival check (STAGING_SETUP §9.3).
 
@@ -198,7 +197,107 @@ deploys and smoke-tests). Next, **Stage 3 — notes and summaries** (IMPLEMENTAT
 
 Newest first. One entry per working session (either person).
 
-### 2026-11-07 (latest) — Anirudh (Claude Code): mute gating, Ask details, faster video finalize
+### 2026-11-09 (latest) — Anirudh (Claude Code): Stage 3 complete in code
+Anirudh decided to finish **all of Stage 3 today himself**, including Gaurav's S3-07..S3-11 (Gaurav
+should not start them), and to change **no documents except this entry** (follow-ups listed
+below). Every task ships with its UI (DESIGN). `pnpm check` green; commits ef3d8c7..(this push).
+- **S3-02 validation chain** (`@meetyou/summarizer` `validate.ts`, `due-date.ts`): citations must
+  be non-echo segments of the meeting (deduplicated, transcript order; none left → item flagged
+  "unverified"), owners must be participants (else unassigned), unknown notes dropped, due phrases
+  resolved in English and Hinglish ("kal tak", "by Friday"; "next X" stays unresolved), numbers
+  not found in the cited lines flag the item.
+- **S3-03 pipeline** (new `@meetyou/pipeline`): `meeting.summarize` job (reasons `session_end`,
+  `regenerate`, `batch`), enqueued by the gateway in the session-end transaction; processing steps
+  summarizing → validating → done; versioned summaries (a rewrite is an unaccepted candidate);
+  failures mark the meeting `failed`, vendor outages retry; usage row per version. Progress stream
+  `GET /v1/meetings/:id/events` (SSE; the web reads it with fetch because of the bearer token).
+- **S3-08 summary API + web**: `GET …/summary`, `…/summary:regenerate|keep|discard`,
+  `PATCH /v1/summary-items/:id`, `POST /v1/feedback`, `GET /v1/action-items`; web Notes tab on the
+  real API with template menu, Keep / Go back, unverified chip, feedback, action items.
+- **S3-09 search**: `GET /v1/search`, Postgres FTS (`simple` config, migration **0005** GIN
+  indexes), Hinglish spelling normalised in the query, prefix match, highlighted snippets; the
+  Meetings list uses it.
+- **S3-10 glossary**: `GET/PUT /v1/glossary` (whole list, case-insensitive dedupe, 422 when it does
+  not fit Deepgram's keyterm budget, order kept); Settings → **Vocabulary** chips (DESIGN §15.5).
+- **S3-11 export**: migration **0006** `exports`; `POST /v1/exports` (reuses one in progress),
+  `GET /v1/exports[/:id]` (fresh 15-min signed link); worker `account.export` builds a zip
+  (README, account settings + vocabulary, per meeting `meeting.json` / `notes.md` /
+  `transcript.md`; no audio/video) with a small built-in zip writer (no new dependency; checked
+  with `unzip -t`), file kept 24 h then `export.expire` deletes it; account deletion removes
+  exports. Settings → "Download all my data" row; meeting More → **Download as .md** (DESIGN
+  §13.1 text from a shared formatter in `@meetyou/contracts` `notes-text.ts`).
+- **S3-04 batch pass**: migration **0007** (`participants.external_id`, `speaker_signals`). The
+  extension now forwards Meet's active-speaker signal (other people only) → `participant.joined` /
+  `speaker.active` → gateway stores them. Worker `meeting.retranscribe` (queued after the first
+  notes when on, meeting ≥ 2 min, retention not "immediate"): joins each lane's stored Opus chunks
+  into one Ogg file without decoding (Ogg muxer moved to `@meetyou/storage`), Deepgram batch
+  (diarize `them`), maps file time back to the session clock, names clusters from the speaker
+  signal (≥ 60 % share, ≥ 2 s; user-chosen names kept), and if > 5 % of words changed replaces
+  the segments, re-points citations and Ask answers to the new segments, and rewrites the notes
+  (status `updated`, DESIGN §12.3 banner). Done action items carry over to new versions (also on
+  Keep). Live clusters are named before the first notes even with batch off. **Off by default:**
+  `BATCH_TRANSCRIPTION=on` (paid Deepgram minutes).
+- **S3-05/S3-06 evaluation** (`tools/summary-eval`): 10 synthetic golden meetings (English,
+  Devanagari Hindi, Hinglish; all five templates; with/without notes; echo; 3 injection cases —
+  transcript, display name, note), PRD §14.6 metrics, recorded outputs + `baseline.json`; the CI
+  test gates on the recordings (no API calls) and fails when the prompt or a template version
+  changes without a new live run (`eval:live`, free key, synthetic only). Injection tests: data
+  stays in its blocks, the system prompt says data is never an instruction, no tools in the
+  vendor request. Lesson: golden segment IDs must look like production (`seg_` + ULID) or the
+  schema makes the model invent IDs. Baseline (v1, 10 meetings): action precision/recall
+  0.95/0.95, owners 1.0, decisions 0.9, 0.3 unverified per summary, 0 injection failures.
+- **S3-07 templates v2 — parked:** ordered **sections** per template plus refined emphasis
+  (standup "will do" = action item; client commitments incl. the client's; interview next steps
+  stated out loud are decisions), prompt `summary-v2`. 7 of 10 golden meetings re-recorded (all
+  action items and owners right, e.g. g01 4/4 instead of 3/4); g06, g08, g10 hit the free-tier rate
+  limit, so by Anirudh's choice v2 is **not committed**: it is in `git stash` on `anirudh`
+  ("S3-07 templates v2 …"). To finish: `git stash pop`, re-record those three
+  (`pnpm --filter @meetyou/summary-eval eval:live -- --only g06` …), rescore with `-- --recorded`,
+  check the gate, commit. Templates v1 stay in use.
+- **Audit + review pass** (Anirudh asked to check S3 for gaps and bugs; two read-only review
+  agents plus fixes, all with tests):
+  - **Audio retention never ran:** nothing wrote `audio_assets`, so D-02 never deleted audio.
+    The gateway now records one row per lane (its chunk prefix, bytes, duration); the summarize
+    job sets `delete_after` from the user's setting once the first run settled ("immediate" never
+    on failure) and schedules the sweep (§9.2 step 9).
+  - Summarize: status changes now commit with the jobs they trigger (the batch job could start,
+    see `processing` and quit); a failed batch/rewrite no longer marks good notes `failed`; a
+    rewrite after a failed first run becomes the notes; summary writes lock the meeting row
+    (version and "You" races) and drop citations to segments the batch pass replaced.
+  - Batch pass: replaces only the lanes it re-read (a failed lane kept its citations deleted
+    before), one usage row per billed call, also runs for `too_short` meetings (live STT failed),
+    segment inserts chunked (bind-parameter limit on long meetings).
+  - Export: a zip written after the account was deleted is removed; concurrent requests make
+    one export (advisory lock); download errors no longer say "expired".
+  - API: action-item paging skipped items (µs vs ms cursor); PATCH refuses deleted meetings and
+    owner/due on non-actions; rewrite refused while processing (409); glossary saves serialized.
+  - Search: snippets built only for the top 300 rows (was every match: 1.75 s → 1.15 s for
+    500 meetings × 120 lines on PGlite), one-letter words ignored, deleted meetings filtered
+    before the limit. **Known limit:** under forced RLS Postgres cannot use the GIN index (`@@` is
+    not leakproof), so search scans the workspace's rows; measure on staging (S3-09 target < 1 s).
+  - Web: the `/v1` proxy crashed the server when the API dropped a streamed response (now
+    `pipeline` + abort on client disconnect); Vocabulary could wipe the saved list before it
+    loaded; failed reloads showed "meeting not found"; Keep / Go back / Marked done report errors.
+  - Extension: speaker signals stop while paused, are dated when Meet showed them, and are capped
+    while offline; the gateway ignores them after the end. Markdown export escapes link/HTML
+    characters from meeting text. **Unverified:** whether Meet's `data-allocation-id` is stable
+    per participant (names could attach to the wrong person if it is per video tile).
+- **Finishing pass (Anirudh: "complete the unfinished tasks"):** Deepgram batch accepts the
+  joined Ogg (one synthetic call, Anirudh approved: duration matched, 29 words, 2 speakers); it ran
+  one utterance across a pause, so batch segments are now split where their words jump a gap.
+  The Meet adapter no longer uses `data-allocation-id` (a video slot Meet reassigns) when a name is
+  available. Docs written: **ADR-0007 Proposed** (Gemini 3.6 Flash; Anirudh to accept),
+  IMPLEMENTATION_PLAN S3 statuses and owners, STAGING_SETUP §9.5 (worker LLM env, batch switch,
+  export), AGENTS status/layout/D-04, PRD D-04.
+- **Not verified on staging:** summaries, batch pass, export, speaker forwarding in a real Meet.
+  Known gap: numbers said in Hindi words ("पचास हज़ार") flag an item that writes "50,000".
+- **To turn on in staging** (Anirudh, Cloud Shell): STAGING_SETUP §9.5. Migrations 0005–0007 run
+  with the deploy.
+- **Still open:** templates v2 (above); golden set 10 of 30+ (PRD §14.6); accept ADR-0007;
+  staging checks (60 s P95, search < 1 s, end-to-end call); ARCHITECTURE §8.3/§11.4 and DESIGN
+  §12.3/§13.2 "built" notes.
+
+### 2026-11-07 — Anirudh (Claude Code): mute gating, Ask details, faster video finalize
 From Anirudh's staging test (Ask live with the free key):
 - **Muted mic was still transcribed.** The content script detected Meet's mute, but the service
   worker only logged it (`TODO(FR-CAP-11)`). Now (D-10): the worker forwards the **recorded tab's**

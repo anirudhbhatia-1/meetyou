@@ -551,6 +551,38 @@ user's meeting is 404), the model sees only that recording, citations must be it
 fixed refusal texts, 500 characters, 30 per hour and 150 per 24 hours per user, tokens stored per
 question. The API's request timeout (60 s) covers a Gemini call (about 13 s on a short meeting).
 
+### 9.5 Notes, batch pass and export on staging (S3, 2026-11-09)
+Migrations 0005 (search indexes), 0006 (`exports`) and 0007 (participants' Meet IDs,
+`speaker_signals`) run with the deploy. The **worker** writes the notes (`meeting.summarize`), so it
+needs the same Gemini key and settings as the API (§9.4); without them meetings become ready with no
+notes.
+1. Worker: the Gemini key (secret from §9.4) and the free-key switches, until the key is paid:
+   ```bash
+   gcloud secrets add-iam-policy-binding meetyou-staging-gemini-api-key \
+     --member=serviceAccount:meetyou-staging-worker-sa@<project>.iam.gserviceaccount.com \
+     --role=roles/secretmanager.secretAccessor
+   gcloud run services update meetyou-staging-worker --region asia-south1 \
+     --update-secrets GEMINI_API_KEY=meetyou-staging-gemini-api-key:latest \
+     --update-env-vars LLM_PROVIDER=gemini,GEMINI_FREE_TIER_ACCEPTED=true,GEMINI_FREE_TIER_ON_STAGING=true
+   ```
+2. Optional, **paid Deepgram minutes**: the batch pass (S3-04) re-transcribes each meeting of 2+
+   minutes after its first notes (not with "delete immediately" retention):
+   ```bash
+   gcloud secrets add-iam-policy-binding meetyou-staging-deepgram-api-key \
+     --member=serviceAccount:meetyou-staging-worker-sa@<project>.iam.gserviceaccount.com \
+     --role=roles/secretmanager.secretAccessor
+   gcloud run services update meetyou-staging-worker --region asia-south1 \
+     --update-secrets DEEPGRAM_API_KEY=meetyou-staging-deepgram-api-key:latest \
+     --update-env-vars STT_PROVIDER=deepgram,BATCH_TRANSCRIPTION=on
+   ```
+   The worker refuses to start with `BATCH_TRANSCRIPTION=on` but no `STT_PROVIDER` key.
+3. Export (S3-11): the worker writes `ws/<workspace>/exports/<id>.zip` to the recordings bucket
+   (its existing object role), the API signs the download link (the `signBlob` permission from §5.2
+   it already has for video).
+4. Check after a test call: the meeting page shows notes within about a minute (progress while
+   writing), `audio_assets` rows have a `delete_after`, Settings → Download all my data gives a
+   zip, and with step 2 the log line `batch.done` appears (`status` `replaced` or `kept`).
+
 ## 10. Deploy order and checks
 
 First time:

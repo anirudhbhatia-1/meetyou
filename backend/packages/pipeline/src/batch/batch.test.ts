@@ -8,8 +8,8 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
 import { ensureSelfParticipant } from '../meeting-data.ts';
 import { acceptSummary, storeSummary } from '../store.ts';
-import { joinLaneAudio } from './lane-audio.ts';
-import { retranscribeTask } from './task.ts';
+import { joinLaneAudio, TimeMap } from './lane-audio.ts';
+import { retranscribeTask, toSegments } from './task.ts';
 
 /** A 20 ms Opus silence frame (CELT, mono); content does not matter to the fake provider. */
 const SILENCE = new Uint8Array([0xf8, 0xff, 0xfe]);
@@ -51,6 +51,40 @@ describe('joinLaneAudio', () => {
     expect(joined?.timeMap.toSession(990)).toBe(1_990);
     expect(joined?.timeMap.toSession(1_010)).toBe(32_010);
     expect(await joinLaneAudio(bucket, 'ws1', 'm1', 'me')).toBeNull();
+  });
+});
+
+describe('toSegments', () => {
+  it('splits an utterance that runs across a pause in the recording', () => {
+    // File 0–2 s is session 1–3 s; file 2–4 s is session 33–35 s (a 30 s pause between).
+    const time = new TimeMap([
+      { fileMs: 0, sessionMs: 1_000, durationMs: 2_000 },
+      { fileMs: 2_000, sessionMs: 33_000, durationMs: 2_000 },
+    ]);
+    const segments = toSegments(
+      'ws',
+      'mtg',
+      'them',
+      [
+        {
+          startMs: 500,
+          endMs: 3_500,
+          speaker: 1,
+          text: 'Release Friday. Okay done.',
+          words: [
+            { text: 'Release', startMs: 500, endMs: 900 },
+            { text: 'Friday.', startMs: 1_000, endMs: 1_800 },
+            { text: 'Okay', startMs: 2_200, endMs: 2_600 },
+            { text: 'done.', startMs: 2_700, endMs: 3_500 },
+          ],
+        },
+      ],
+      time,
+    );
+    expect(segments.map((s) => [s.text, s.startMs, s.endMs, s.speakerClusterId])).toEqual([
+      ['Release Friday.', 1_500, 2_800, 'batch_spk_2'],
+      ['Okay done.', 33_200, 34_500, 'batch_spk_2'],
+    ]);
   });
 });
 

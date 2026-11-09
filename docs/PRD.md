@@ -921,7 +921,7 @@ Phase 2 planning starts after M3 data is available.
 | D-01 | Hindi/Hinglish transcript script | **Decided 2026-10-28:** Roman display by default; store provider original; Devanagari setting later; mixed-script fallback if transliteration benchmarks poorly | Team | ✅ Closed |
 | D-02 | Default audio retention | **Decided 2026-10-28:** 7 days default; user can pick immediate (after successful processing) or 30 days; audio only | Team | ✅ Closed |
 | D-03 | STT provider | **Decided 2026-11-01** ([ADR-0001](adr/0001-stt-provider.md)): first Google Chirp 3 primary (gated); **amended 2026-11-05: Deepgram Nova-3 only**, Chirp 3 and Sarvam dropped | Team | ✅ Closed |
-| D-04 | LLM provider for summaries | **Build first on Gemini Flash (Anirudh, 2026-11-07)**; final choice by evaluation (14.6) in ADR-0007. Paid tier for any user data | Team | M2 |
+| D-04 | LLM provider for summaries | **Build first on Gemini Flash (Anirudh, 2026-11-07)**; final choice by evaluation (14.6) in ADR-0007 (**Proposed 2026-11-09**: Gemini 3.6 Flash). Paid tier for any user data | Team | M2 |
 | D-05 | Consent notice default mode | **Decided 2026-11-07 (Anirudh): One click** (automatic and off stay as settings) | Team | ✅ Closed |
 | D-06 | Stream raw PCM or compressed audio to the relay | **Decided 2026-10-29:** Opus 24 kbps ([ADR-0003](adr/0003-audio-transport-format.md)) | Team | ✅ Closed |
 | D-07 | Library surface | **Decided 2026-11-05 (Anirudh): web app from alpha**, like Fireflies — sign in and see your meetings from any device; hosting in ADR-0006 | Team | ✅ Closed |

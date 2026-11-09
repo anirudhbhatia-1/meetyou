@@ -61,11 +61,12 @@ export function nameHash(name: string): string {
  * Extracts participant identity from a video tile element.
  */
 function extractTileIdentity(tile: Element): ActiveSpeakerInfo | null {
-  // 1. Direct ID attributes from Meet DOM
+  // 1. Direct ID attributes from Meet DOM. The participant IDs follow a person for the call;
+  // `data-allocation-id` names a video slot that Meet reassigns as people move, so it is used
+  // only when there is no name to derive a stable ID from (speaker naming, S3-04).
   const participantId =
-    tile.getAttribute('data-participant-id') ??
-    tile.getAttribute('data-requested-participant-id') ??
-    tile.getAttribute('data-allocation-id');
+    tile.getAttribute('data-participant-id') ?? tile.getAttribute('data-requested-participant-id');
+  const slotId = tile.getAttribute('data-allocation-id');
 
   // Check self indicator
   const hasSelfAttr =
@@ -105,7 +106,7 @@ function extractTileIdentity(tile: Element): ActiveSpeakerInfo | null {
       ? participantId
       : displayName !== undefined
         ? `p_${nameHash(displayName.toLowerCase().replace(/\s+/g, ' ').trim())}`
-        : null;
+        : slotId;
 
   if (resolvedId === null) {
     return null;

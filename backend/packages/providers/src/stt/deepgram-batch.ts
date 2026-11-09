@@ -11,7 +11,8 @@ const TIMEOUT_MS = 10 * 60 * 1000;
  * (reference/speech-to-text/listen-pre-recorded, 2026-11-06): `language=multi` with Nova-3,
  * `diarize_model` (the `diarize` flag is deprecated), `utterances`, `mip_opt_out`, and per-utterance
  * `words[].punctuated_word`, `speaker`, `languages`. Raw audio goes in the body with its
- * Content-Type, as the S0 benchmark did for WAV; [Verify] Ogg Opus chunks in a batch run (S2-14).
+ * Content-Type, as the S0 benchmark did for WAV. Ogg Opus as the batch pass joins it (S3-04) checked
+ * 2026-11-09 on the synthetic fixture: accepted, duration matches, diarized words returned.
  */
 export function deepgramBatchUrl(diarize: boolean): string {
   const p = new URLSearchParams({
