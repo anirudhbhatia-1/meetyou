@@ -206,7 +206,8 @@ describe('nextCaptureState', () => {
 
   it('moves to error from any status and allows a new start from error', () => {
     const failed = nextCaptureState(recording(), { type: 'failed', error: 'capture_lost' });
-    expect(failed).toEqual({ ...IDLE_CAPTURE, status: 'error', error: 'capture_lost' });
+    // tabId survives so the recorded tab's pill is told when the error is dismissed.
+    expect(failed).toEqual({ ...IDLE_CAPTURE, status: 'error', error: 'capture_lost', tabId: 7 });
     expect(
       nextCaptureState(failed, {
         type: 'start_requested',

@@ -27,7 +27,10 @@ export const sessionsRoutes: FastifyPluginAsync<SessionsRoutesOptions> = async (
   fastify.post(
     '/v1/sessions',
     {
-      preHandler: fastify.requireAuth,
+      preHandler: [
+        fastify.requireAuth,
+        fastify.rateLimit({ name: 'sessions', limit: 10, windowMs: 60_000, by: 'workspace' }),
+      ],
       schema: {
         description:
           'Start a capture session, create meeting record, and issue single-use stream token',
@@ -139,54 +142,9 @@ export const sessionsRoutes: FastifyPluginAsync<SessionsRoutesOptions> = async (
     },
   );
 
-  // 2. POST /v1/sessions/:id/end (Mark recording ended)
-  fastify.post(
-    '/v1/sessions/:id/end',
-    {
-      preHandler: fastify.requireAuth,
-      schema: {
-        description: 'End capture session and transition meeting to processing state',
-        tags: ['sessions'],
-        params: {
-          type: 'object',
-          properties: {
-            id: { type: 'string' },
-          },
-          required: ['id'],
-        },
-      },
-    },
-    async (request, reply) => {
-      const workspaceId = request.workspaceId;
-      const { id: sessionId } = request.params as { id: string };
-      if (!workspaceId || !request.inWorkspace) {
-        throw new UnauthorizedError('Unauthorized');
-      }
-
-      const endedAt = new Date();
-      const startMs = endedAt.getTime();
-
-      const ended = await request.inWorkspace(async (tx) => {
-        const meeting = await meetingForSession(tx, sessionId);
-        if (!meeting) return null;
-
-        await endMeeting(tx, meeting.id, endedAt);
-        return meeting;
-      });
-
-      if (!ended) {
-        throw new NotFoundError(`Session ${sessionId} not found`);
-      }
-
-      recordSpan('session.end_request', ended.id, { sessionId }, startMs);
-      return reply.send({
-        status: 'ended',
-        sessionId,
-        meetingId: ended.id,
-        endedAt: endedAt.toISOString(),
-      });
-    },
-  );
+  // The former POST /v1/sessions/:id/end route was removed 2026-11-09: no client ever called
+  // it (the extension ends a session over the stream's `control: end`), and its response did not
+  // match any contract.
 
   // 3. POST /v1/sessions/:id/recover (Reconnect stream token issue)
   fastify.post(

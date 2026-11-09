@@ -165,9 +165,8 @@ function CallVideo({ sessionId }: { sessionId: string | null }) {
 }
 
 /**
- * Recording options card (§8.5, FR-CAP-14). TODO(S4-17): "Video quality" (Standard · Data saver)
- * needs a start-time quality in the offscreen recorder, and the retention "Delete after notes"
- * lock needs Settings (S4-12). "What to record: Whole screen" is P1 (FR-CAP-15).
+ * Recording options card (§8.5, FR-CAP-14): video switch, quality (Standard · Data saver) and
+ * the retention lock, all built; "What to record: Whole screen" stays P1 (FR-CAP-15).
  */
 const QUALITY_OPTIONS = [
   { value: 'standard', label: 'Standard' },

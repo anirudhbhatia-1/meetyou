@@ -59,6 +59,9 @@ export interface PartPlan {
  * Lines parts up on the session clock. Timing comes from the part events; a part without them
  * (older recording, lost event) is placed right after the previous one.
  */
+/** Matches the sign route's bound; anything above is a corrupt listing. */
+export const MAX_FRAGMENT_INDEX = 20_000;
+
 export function planParts(
   stored: readonly { partId: string; indices: number[] }[],
   timing: readonly PartTiming[],
@@ -75,7 +78,10 @@ export function planParts(
     const indices = [...part.indices].sort((a, b) => a - b);
     const last = Math.max(indices.at(-1) ?? -1, (info?.fragments ?? 0) - 1);
     const present = new Set(indices);
-    const missing = Array.from({ length: last + 1 }, (_, i) => i).filter((i) => !present.has(i));
+    const missing = Array.from(
+      { length: Math.min(last, MAX_FRAGMENT_INDEX) + 1 },
+      (_, i) => i,
+    ).filter((i) => !present.has(i));
     const startMs = info?.startMs ?? nextStart;
     plans.push({ partId: part.partId, startMs, indices, missing, playable: present.has(0) });
     nextStart = startMs + (last + 1) * FRAGMENT_MS;

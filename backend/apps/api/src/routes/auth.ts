@@ -24,6 +24,10 @@ export const authRoutes: FastifyPluginAsync<AuthRoutesOptions> = async (fastify,
 
   let authService = options.authService;
   if (!authService && db && config.googleClientId) {
+    if (!config.googleClientSecret) {
+      // A silent '' secret made every Google exchange fail with an opaque error (2026-11-09 audit).
+      fastify.log.warn('GOOGLE_CLIENT_SECRET is not set: Google sign-in will fail');
+    }
     authService = new AuthService({
       db,
       tokens,
@@ -62,6 +66,7 @@ export const authRoutes: FastifyPluginAsync<AuthRoutesOptions> = async (fastify,
   fastify.post(
     '/v1/auth/google',
     {
+      preHandler: fastify.rateLimit({ name: 'auth', limit: 10, windowMs: 60_000, by: 'ip' }),
       schema: {
         description: 'Exchange Google authorization code with PKCE for access and refresh tokens',
         tags: ['auth'],
@@ -112,6 +117,7 @@ export const authRoutes: FastifyPluginAsync<AuthRoutesOptions> = async (fastify,
   fastify.post(
     '/v1/auth/refresh',
     {
+      preHandler: fastify.rateLimit({ name: 'refresh', limit: 60, windowMs: 60_000, by: 'ip' }),
       schema: {
         description: 'Rotate refresh token to obtain a new access and refresh token pair',
         tags: ['auth'],

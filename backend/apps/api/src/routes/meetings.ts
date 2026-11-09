@@ -8,7 +8,8 @@ import { BadRequestError, NotFoundError, UnauthorizedError } from '../errors.ts'
 import { decodeCursor, encodeCursor, parseLimit } from '../utils/pagination.ts';
 
 const UpdateMeetingRequest = z.object({
-  title: z.string().min(1).max(200).optional(),
+  // Trimmed so a whitespace-only title cannot blank the row (2026-11-09 audit).
+  title: z.string().trim().min(1).max(200).optional(),
   template: TemplateId.optional(),
 });
 
@@ -27,6 +28,7 @@ export const meetingsRoutes: FastifyPluginAsync = async (fastify) => {
             cursor: { type: 'string' },
             limit: { type: 'integer' },
             template: { type: 'string' },
+            q: { type: 'string' },
           },
         },
       },
@@ -41,6 +43,7 @@ export const meetingsRoutes: FastifyPluginAsync = async (fastify) => {
         cursor?: string;
         limit?: string | number;
         template?: string;
+        q?: string;
       };
       const limit = parseLimit(query.limit);
       const cursorData = decodeCursor(query.cursor);
@@ -57,6 +60,12 @@ export const meetingsRoutes: FastifyPluginAsync = async (fastify) => {
           if (parsedTemplate.success) {
             q = q.where('template', '=', parsedTemplate.data);
           }
+        }
+
+        // Title search for the library list (FR-LIB-02); content search stays in /v1/search.
+        const needle = query.q?.trim().slice(0, 200);
+        if (needle) {
+          q = q.where('title', 'ilike', `%${needle.replace(/[%_\\]/g, '\\$&')}%`);
         }
 
         // Apply cursor condition: startedAt <= cursorTimestamp
@@ -83,36 +92,47 @@ export const meetingsRoutes: FastifyPluginAsync = async (fastify) => {
       const hasNextPage = items.length > limit;
       const pageItems = hasNextPage ? items.slice(0, limit) : items;
 
-      // Enrich with participants and video assets
+      // Enrich with participants and assets: three queries for the whole page, not per meeting
+      // (the per-row version was 3N+1; 2026-11-09 audit).
       const enriched: MeetingType[] = await request.inWorkspace(async (tx) => {
+        const ids = pageItems.map((m) => m.id);
+        if (ids.length === 0) return [];
+
+        const allParticipants = await tx
+          .selectFrom('participants')
+          .select(['meetingId', 'displayName'])
+          .where('workspaceId', '=', workspaceId)
+          .where('meetingId', 'in', ids)
+          // The user is not one of "the others": the UI adds "you" itself.
+          .where('isSelf', '=', false)
+          .execute();
+        const videoAssets = await tx
+          .selectFrom('videoAssets')
+          .select(['meetingId', 'status', 'durationMs', 'deleteAfter'])
+          // The meeting's playback row; per-part rows (ADR-0011) carry a partId.
+          .where('partId', 'is', null)
+          .where('workspaceId', '=', workspaceId)
+          .where('meetingId', 'in', ids)
+          .execute();
+        const audioAssets = await tx
+          .selectFrom('audioAssets')
+          .select(['meetingId', 'deleteAfter'])
+          .where('workspaceId', '=', workspaceId)
+          .where('meetingId', 'in', ids)
+          .execute();
+
+        const names = new Map<string, string[]>();
+        for (const p of allParticipants) {
+          names.set(p.meetingId, [...(names.get(p.meetingId) ?? []), p.displayName]);
+        }
+        const videoBy = new Map(videoAssets.map((v) => [v.meetingId, v]));
+        const audioBy = new Map(audioAssets.map((a) => [a.meetingId, a]));
+
         const result: MeetingType[] = [];
-
         for (const m of pageItems) {
-          const participants = await tx
-            .selectFrom('participants')
-            .select(['displayName'])
-            .where('workspaceId', '=', workspaceId)
-            .where('meetingId', '=', m.id)
-            // The user is not one of "the others": the UI adds "you" itself.
-            .where('isSelf', '=', false)
-            .execute();
-
-          const videoAsset = await tx
-            .selectFrom('videoAssets')
-            .select(['status', 'durationMs', 'deleteAfter'])
-            // The meeting's playback row; per-part rows (ADR-0011) carry a partId.
-            .where('partId', 'is', null)
-            .where('workspaceId', '=', workspaceId)
-            .where('meetingId', '=', m.id)
-            .executeTakeFirst();
-
-          const audioAsset = await tx
-            .selectFrom('audioAssets')
-            .select(['deleteAfter'])
-            .where('workspaceId', '=', workspaceId)
-            .where('meetingId', '=', m.id)
-            .executeTakeFirst();
-
+          const participants = (names.get(m.id) ?? []).map((displayName) => ({ displayName }));
+          const videoAsset = videoBy.get(m.id);
+          const audioAsset = audioBy.get(m.id);
           const recordingExpires = videoAsset?.deleteAfter ?? audioAsset?.deleteAfter;
 
           result.push({

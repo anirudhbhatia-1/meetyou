@@ -9,6 +9,7 @@ import { loadConfig, type ApiConfig } from './config.ts';
 import { handleFastifyError, handleNotFound } from './errors.ts';
 import { authPlugin } from './middleware/auth.ts';
 import { idempotencyPlugin, type IdempotencyStore } from './middleware/idempotency.ts';
+import { rateLimitPlugin } from './middleware/rate-limit.ts';
 import { swaggerPlugin } from './plugins/swagger.ts';
 import { accountRoutes } from './routes/account.ts';
 import { askRoutes } from './routes/ask.ts';
@@ -123,6 +124,7 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
   });
 
   // 4. Idempotency Key Middleware
+  await app.register(rateLimitPlugin);
   await app.register(idempotencyPlugin, {
     store: options.idempotencyStore,
   });

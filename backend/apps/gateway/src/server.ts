@@ -632,8 +632,16 @@ export function createGateway(options: GatewayOptions): Gateway {
       } catch {
         return null;
       }
-      // Single use (ADR-0004 §4.4): a replayed token is refused on every instance.
-      if (!(await registry.spendTokenId(claims.jti, claims.expiresAt.getTime() - Date.now()))) {
+      // Single use (ADR-0004 §4.4): a replayed token is refused on every instance. The spent
+      // record outlives expiry by the verifier's clock tolerance, or a token would be replayable
+      // in the 30 s the verifier still accepts it (2026-11-09 audit).
+      const toleranceMs = 30_000;
+      if (
+        !(await registry.spendTokenId(
+          claims.jti,
+          claims.expiresAt.getTime() - Date.now() + toleranceMs,
+        ))
+      ) {
         log('stream.token_replayed', { sessionId: claims.sessionId });
         return null;
       }
@@ -683,6 +691,21 @@ export function createGateway(options: GatewayOptions): Gateway {
         );
         wss.handleUpgrade(req, socket, head, (ws) => {
           log('stream.connected', { sessionId: session.sessionId });
+          // Half-open TCP keeps Deepgram streams alive forever without this (2026-11-09 audit).
+          let alive = true;
+          ws.on('pong', () => {
+            alive = true;
+          });
+          const heartbeat = setInterval(() => {
+            if (!alive) {
+              clearInterval(heartbeat);
+              ws.terminate();
+              return;
+            }
+            alive = false;
+            ws.ping();
+          }, 30_000);
+          ws.on('close', () => clearInterval(heartbeat));
           session.attach(ws);
         });
       })

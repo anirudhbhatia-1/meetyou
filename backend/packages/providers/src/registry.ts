@@ -56,7 +56,18 @@ export function createLlmProvider(
  * is set (Anirudh, 2026-11-07, until the paid key is in place).
  */
 export function assertFreeKeyAllowed(env: ProviderEnv): void {
-  if (env.GEMINI_FREE_TIER_ACCEPTED !== 'true' || DEV_ENVS.has(env.APP_ENV)) return;
+  // The declaration itself is checked, not just the flag: outside local/CI a Gemini key may only
+  // run with an explicit statement about its tier, so an unlabelled free key cannot slip into
+  // production by leaving the flag unset (2026-11-09 audit).
+  if (DEV_ENVS.has(env.APP_ENV)) return;
+  if (env.GEMINI_API_KEY !== undefined && env.GEMINI_API_KEY !== '') {
+    if (env.GEMINI_FREE_TIER_ACCEPTED === undefined) {
+      throw new Error(
+        `Gemini key in ${env.APP_ENV} needs GEMINI_FREE_TIER_ACCEPTED=true|false (ADR-0001 §7)`,
+      );
+    }
+  }
+  if (env.GEMINI_FREE_TIER_ACCEPTED !== 'true') return;
   if (env.APP_ENV === 'staging' && env.GEMINI_FREE_TIER_ON_STAGING === 'true') return;
   throw new Error(`free-tier Gemini key refused in ${env.APP_ENV} (ADR-0001 §7)`);
 }

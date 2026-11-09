@@ -20,34 +20,7 @@ export const segmentsRoutes: FastifyPluginAsync = async (fastify) => {
           },
           required: ['id'],
         },
-        response: {
-          200: {
-            type: 'object',
-            properties: {
-              items: {
-                type: 'array',
-                items: {
-                  type: 'object',
-                  properties: {
-                    id: { type: 'string' },
-                    workspaceId: { type: 'string' },
-                    meetingId: { type: 'string' },
-                    lane: { type: 'string' },
-                    speakerClusterId: { type: ['string', 'null'] },
-                    speakerName: { type: ['string', 'null'] },
-                    startMs: { type: 'integer' },
-                    endMs: { type: 'integer' },
-                    text: { type: 'string' },
-                    rawText: { type: 'string' },
-                    language: { type: 'string' },
-                    source: { type: 'string' },
-                    flags: { type: 'array', items: { type: 'string' } },
-                  },
-                },
-              },
-            },
-          },
-        },
+        // No response serializer schema: it stripped `words`; Segment.parse validates.
       },
     },
     async (request, reply) => {
@@ -63,6 +36,7 @@ export const segmentsRoutes: FastifyPluginAsync = async (fastify) => {
           .select(['id'])
           .where('workspaceId', '=', workspaceId)
           .where('id', '=', id)
+          .where('deletedAt', 'is', null)
           .executeTakeFirst();
 
         if (!meeting) return null;
@@ -132,7 +106,8 @@ export const segmentsRoutes: FastifyPluginAsync = async (fastify) => {
         });
       });
 
-      return reply.send({ items });
+      // SegmentList (shared/contracts): one page today; the cursor is reserved.
+      return reply.send({ items, nextCursor: null });
     },
   );
 };

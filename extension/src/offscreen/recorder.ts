@@ -254,6 +254,11 @@ export async function startRecorder(options: {
         quality,
         onFragment: events.onVideoFragment,
         onError: events.onError,
+        onFailed: () => {
+          video = 'failed';
+          events.onVideo('failed');
+          void stopPart('error');
+        },
       });
       video = 'recording';
       emit(partStartedEvent(sessionId, part.partId, mimeType, capture.video, quality, startMs));
@@ -309,6 +314,9 @@ export async function startRecorder(options: {
 
   return {
     sessionId,
+    get video() {
+      return video;
+    },
     get lanes() {
       return capture.lanes;
     },
@@ -319,7 +327,6 @@ export async function startRecorder(options: {
     get link() {
       return link;
     },
-    video,
     audioClear() {
       // `off` with a client means the gateway refused the stream for good; video need not wait.
       if (client === null || link === 'off') return true;

@@ -74,6 +74,8 @@ export function startVideoPart(options: {
   quality: VideoQuality;
   /** A fragment is in IndexedDB (wakes the uploader). */
   onFragment(): void;
+  /** The encoder died mid-part; the recording continues audio-only. */
+  onFailed?: () => void;
   onError(context: string, error: unknown): void;
 }): VideoPart {
   const partId = `vp_${newUlid()}`;
@@ -107,7 +109,11 @@ export function startVideoPart(options: {
       }
     });
   };
-  recorder.onerror = (event) => options.onError('MediaRecorder error', event);
+  recorder.onerror = (event) => {
+    options.onError('MediaRecorder error', event);
+    // The panel must show "Video stopped" (DESIGN §9, FR-CAP-12); logging alone hid it.
+    options.onFailed?.();
+  };
   recorder.start(FRAGMENT_MS);
 
   return {

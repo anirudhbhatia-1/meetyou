@@ -186,12 +186,18 @@ describe('API Service Scaffold (S2-08)', () => {
       });
 
       const key = 'idem_key_12345';
+      // Replays are cached per workspace (2026-11-09 audit): the caller must be signed in.
+      const { token } = await tokens.issueAccessToken({
+        userId: 'usr_idem',
+        workspaceId: 'ws_idem',
+        scope: 'user',
+      });
 
       // 1st request
       const res1 = await app.inject({
         method: 'POST',
         url: '/test/mutate',
-        headers: { 'idempotency-key': key },
+        headers: { 'idempotency-key': key, authorization: `Bearer ${token}` },
       });
       expect(res1.statusCode).toBe(200);
       expect(JSON.parse(res1.body)).toEqual({ count: 1 });
@@ -201,7 +207,7 @@ describe('API Service Scaffold (S2-08)', () => {
       const res2 = await app.inject({
         method: 'POST',
         url: '/test/mutate',
-        headers: { 'idempotency-key': key },
+        headers: { 'idempotency-key': key, authorization: `Bearer ${token}` },
       });
       expect(res2.statusCode).toBe(200);
       expect(JSON.parse(res2.body)).toEqual({ count: 1 });

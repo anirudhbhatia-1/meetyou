@@ -122,7 +122,10 @@ export const exportRoutes: FastifyPluginAsync<ExportRoutesOptions> = async (fast
   fastify.get(
     '/v1/exports/:id',
     {
-      preHandler: fastify.requireAuth,
+      preHandler: [
+        fastify.requireAuth,
+        fastify.rateLimit({ name: 'exports', limit: 5, windowMs: 60 * 60_000, by: 'workspace' }),
+      ],
       schema: {
         tags: ['exports'],
         params: { type: 'object', properties: { id: { type: 'string' } }, required: ['id'] },

@@ -2,9 +2,9 @@ import { Banner, Button, Icon, Menu, useToast, type MenuEntry } from '@meetyou/u
 import { useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent } from 'react';
 import type { Note } from '@meetyou/contracts';
 
-import type { CaptureState } from '../background/capture-state.ts';
+import { elapsedMs, type CaptureState } from '../background/capture-state.ts';
 import { CONSENT_RESULT_KEY, parseConsentResult, type MicReply } from '../messages.ts';
-import { useLocalSetting, useStoredValue, type LiveFeed } from './hooks.ts';
+import { send, useLocalSetting, useStoredValue, type LiveFeed } from './hooks.ts';
 import { composeNote, MARKER_LABEL, NOTE_CHIPS, type NoteMarker } from './notes.ts';
 import {
   connectionFor,
@@ -65,7 +65,7 @@ export function LiveView({
       )}
       <ComposerTip noteCount={notes.notes.length} />
       <Composer
-        startedAt={state.startedAt}
+        state={state}
         disabled={state.sessionId === null}
         onAdd={(note) => {
           notes.add(note);
@@ -100,6 +100,18 @@ function LiveBanners({ state, feed }: { state: CaptureState; feed: LiveFeed }) {
       )}
       {state.video === 'failed' && (
         <Banner tone="warning">Screen recording stopped. Audio is still being recorded.</Banner>
+      )}
+      {state.authLost && (
+        <Banner
+          tone="error"
+          action={
+            <Button size="sm" onClick={() => send('auth.sign_in')}>
+              Sign in
+            </Button>
+          }
+        >
+          Sign in again to keep your notes. Recording continues on this computer.
+        </Banner>
       )}
       {state.stt !== 'ok' && state.status === 'recording' && (
         <Banner tone="warning">
@@ -331,7 +343,7 @@ function TranscriptList({
         {lines.map((line) => (
           <div key={line.key} className={`line ${line.final ? '' : 'line-interim'}`}>
             <span className={`line-who ${line.lane === 'me' ? 'line-you' : ''}`}>
-              {/* TODO(S4-06): Roman interim for Devanagari STT output (§8.6 script consistency). */}
+              {/* Interim Roman transliteration intentionally not built: Hindi shows as the provider returns it (decision 2026-11-06). */}
               {line.lane === 'me' ? 'You' : speakerLabel('them', line.speaker, participants)}{' '}
               <span className="line-time num">{formatClock(line.startMs)}</span>
             </span>
@@ -391,20 +403,19 @@ function NotesList({ notes }: { notes: NotesStore }) {
 }
 
 function Composer({
-  startedAt,
+  state,
   disabled,
   onAdd,
 }: {
-  startedAt: number | null;
+  state: CaptureState;
   disabled: boolean;
   onAdd: (note: Note) => void;
 }) {
   const [chip, setChip] = useState<NoteMarker | 'note'>('note');
   const [draft, setDraft] = useState('');
   const submit = (): void => {
-    // TODO(S4-06): stamp with the offscreen session clock (ARCHITECTURE §5.5); wall clock since
-    // start drifts by the paused time.
-    const note = composeNote(draft, chip, startedAt === null ? 0 : Date.now() - startedAt);
+    // Recorded time, pauses excluded — the same clock as the header timer (2026-11-09 audit).
+    const note = composeNote(draft, chip, elapsedMs(state, Date.now()));
     if (note === null) return;
     onAdd(note);
     setDraft('');

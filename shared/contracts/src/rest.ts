@@ -197,7 +197,8 @@ export type StartSessionResponse = z.infer<typeof StartSessionResponse>;
 // POST /v1/sessions/{sessionId}/video/fragments:sign (ADR-0011 §3.3)
 export const SignVideoFragmentsRequest = z.object({
   partId: z.string().regex(/^vp_[0-9A-HJKMNP-TV-Z]{26}$/),
-  indices: z.array(z.number().int().nonnegative()).min(1).max(50),
+  // Bounded: finalize sizes arrays by the highest index (2026-11-09 audit).
+  indices: z.array(z.number().int().nonnegative().max(20_000)).min(1).max(50),
   contentType: z.enum(['video/mp4', 'video/webm']),
 });
 export const SignVideoFragmentsResponse = z.object({

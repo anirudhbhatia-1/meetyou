@@ -37,11 +37,15 @@ export async function meetingForSession(
   tx: WorkspaceTx,
   sessionId: string,
 ): Promise<{ id: string; endedAt: Date | null } | undefined> {
-  return tx
-    .selectFrom('meetings')
-    .select(['id', 'endedAt'])
-    .where('sessionId', '=', sessionId)
-    .executeTakeFirst();
+  return (
+    tx
+      .selectFrom('meetings')
+      .select(['id', 'endedAt'])
+      .where('sessionId', '=', sessionId)
+      // A soft-deleted meeting is gone for every session-scoped caller (recover, video sign).
+      .where('deletedAt', 'is', null)
+      .executeTakeFirst()
+  );
 }
 
 /**

@@ -15,7 +15,7 @@ import {
 } from '../messages.ts';
 import { CaptureStartError } from './capture.ts';
 import { devSessionSource, putFragment, signDevVideoFragments } from './dev-gateway.ts';
-import { openMinutesDb } from './idb.ts';
+import { clearAudioBuffer, openMinutesDb } from './idb.ts';
 import { startRecorder, type Recorder, type SessionSource } from './recorder.ts';
 import type { VideoQuality } from './video-recorder.ts';
 import {
@@ -93,7 +93,13 @@ async function apiAccessToken(): Promise<string> {
   const reply = parseAccessTokenReply(
     await chrome.runtime.sendMessage({ target: 'background', type: 'auth.token' }),
   );
-  if (reply.token === null) throw new Error('signed out');
+  if (reply.token === null) {
+    // DESIGN §9 "Signed out": tell the panel instead of reconnecting forever (2026-11-09 audit).
+    notifyBackground({ target: 'background', type: 'capture.auth_lost' });
+    throw new Error('signed out');
+  }
+  // A later successful borrow clears the banner (the user signed in again).
+  notifyBackground({ target: 'background', type: 'capture.auth_restored' });
   return reply.token;
 }
 
@@ -358,8 +364,18 @@ void videoUploader().then(async (current) => {
 // Video that never uploads (no gateway, or a session the gateway lost) is kept no longer than
 // recordings are retained by default (D-02), so `video_buffer` cannot grow without bound.
 void openMinutesDb()
-  .then((db) => pruneStaleFragments(db, Date.now() - VIDEO_RETENTION_MS).finally(() => db.close()))
-  .then((pruned) => {
+  .then(async (db) => {
+    try {
+      const pruned = await pruneStaleFragments(db, Date.now() - VIDEO_RETENTION_MS);
+      // Audio frames have no recovery path yet (S5-X1): anything still here is a leak.
+      const cleared = await clearAudioBuffer(db);
+      return { pruned, cleared };
+    } finally {
+      db.close();
+    }
+  })
+  .then(({ pruned, cleared }) => {
     if (pruned > 0) console.info('offscreen: stale video fragments deleted', pruned);
+    if (cleared > 0) console.info('offscreen: stale audio frames deleted', cleared);
   })
   .catch((error: unknown) => logError('video prune failed', error));

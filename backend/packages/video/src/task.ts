@@ -58,6 +58,27 @@ const RETENTION_DAYS: Record<string, number> = { immediate: 0, '7d': 7, '30d': 3
  * Retention (D-02): `delete_after` = meeting end + the workspace's retention policy; the retention
  * job (S2-10) deletes the files after that.
  */
+/** Rechecks before a never-ended meeting is written off (~24 h with the recheck backoff). */
+const GIVE_UP_CHECKS = 100;
+
+/** Marks the meeting's playback row failed (if any upload started) and drops its fragments. */
+async function markVideoFailed(
+  deps: { db: Db; store: VideoStore },
+  workspaceId: string,
+  meetingId: string,
+): Promise<void> {
+  await deps.db.inWorkspace(workspaceId, (tx) =>
+    tx
+      .updateTable('videoAssets')
+      .set({ status: 'failed' })
+      .where('meetingId', '=', meetingId)
+      .where('partId', 'is', null)
+      .where('status', '=', 'uploading')
+      .execute(),
+  );
+  await deps.store.deleteVideoFragments(workspaceId, meetingId);
+}
+
 export function videoFinalizeTask(deps: {
   db: Db;
   store: VideoStore;
@@ -72,6 +93,14 @@ export function videoFinalizeTask(deps: {
     );
     if (meeting === undefined) return; // deleted meanwhile: nothing to do
     const endedAt = meeting.endedAt?.getTime() ?? null;
+    // A meeting whose gateway died before `ended()` keeps endedAt null forever; without a cut-off
+    // this job re-enqueued itself every recheck for good (2026-11-09 audit).
+    const checksSoFar = payload.checks ?? 0;
+    if (endedAt === null && checksSoFar >= GIVE_UP_CHECKS) {
+      helpers.logger.warn(`video.finalize: giving up, meeting never ended (${meetingId})`);
+      await markVideoFailed(deps, workspaceId, meetingId);
+      return;
+    }
     const stored = await deps.store.listVideo(workspaceId, meetingId);
     const timing = await deps.store.listVideoPartInfo(workspaceId, meetingId);
     const waited = endedAt !== null && now() - endedAt >= UPLOAD_WAIT_MS;
@@ -97,6 +126,9 @@ export function videoFinalizeTask(deps: {
       });
       if (result === null) {
         helpers.logger.info(`video.finalize: nothing playable (${meetingId})`);
+        // Leave a `failed` row (the meeting page says so) and drop the fragments; without this
+        // the row stayed `uploading` and playback 404'd forever (2026-11-09 audit).
+        await markVideoFailed(deps, workspaceId, meetingId);
         return;
       }
       const policy = await deps.db.inWorkspace(workspaceId, (tx) =>

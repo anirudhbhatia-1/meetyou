@@ -51,7 +51,13 @@ interface Row {
 export const searchRoutes: FastifyPluginAsync = async (fastify) => {
   fastify.get(
     '/v1/search',
-    { preHandler: fastify.requireAuth, schema: { tags: ['search'] } },
+    {
+      preHandler: [
+        fastify.requireAuth,
+        fastify.rateLimit({ name: 'search', limit: 60, windowMs: 60_000, by: 'workspace' }),
+      ],
+      schema: { tags: ['search'] },
+    },
     async (request, reply) => {
       const { workspaceId, inWorkspace } = request;
       if (!workspaceId || !inWorkspace) throw new UnauthorizedError('Unauthorized');

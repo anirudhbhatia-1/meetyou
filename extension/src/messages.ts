@@ -56,6 +56,9 @@ export type BackgroundMessage =
   | { target: 'background'; type: 'capture.stt'; stt: SttHealth }
   /** Every uploadable video fragment is uploaded; the offscreen document may close (ADR-0011). */
   | { target: 'background'; type: 'capture.upload_idle' }
+  /** The access-token borrow failed signed-out / succeeded again (DESIGN §9 "Signed out"). */
+  | { target: 'background'; type: 'capture.auth_lost' }
+  | { target: 'background'; type: 'capture.auth_restored' }
   /** Click on the Meet recording pill (DESIGN §8.4). */
   | { target: 'background'; type: 'pill.open-sidepanel' }
   /** Cloud mode sign-in from the side panel; replies `AuthReply`. */
@@ -246,6 +249,8 @@ const SIMPLE_BACKGROUND = new Set<string>([
   'capture.limit_reached',
   'capture.mic_lost',
   'capture.upload_idle',
+  'capture.auth_lost',
+  'capture.auth_restored',
   'pill.open-sidepanel',
   'auth.sign_in',
   'auth.sign_out',

@@ -239,9 +239,18 @@ function trackTransition(previous: CaptureState, next: CaptureState, event: Capt
 }
 
 async function failCapture(event: Extract<CaptureEvent, { type: 'failed' }>): Promise<void> {
-  await closeOffscreenDocument().catch((error: unknown) => {
-    logError('close offscreen after failure', error);
-  });
+  // The document may still be uploading the previous meeting's video: closing it would halt that
+  // upload until the next start (2026-11-09 audit). `capture.upload_idle` closes it later.
+  try {
+    const status = parseCaptureStatusReply(
+      await sendToOffscreen({ target: 'offscreen', type: 'capture.status' }),
+    );
+    if (status?.busy !== true) await closeOffscreenDocument();
+  } catch {
+    await closeOffscreenDocument().catch((error: unknown) => {
+      logError('close offscreen after failure', error);
+    });
+  }
   await applyCaptureEvent(event);
 }
 
@@ -891,10 +900,18 @@ chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
   configureSidePanel(tabId, url).catch((error: unknown) =>
     logError('configure side panel failed', error),
   );
-  // Leaving the meeting's URL in the recorded tab ends the recording.
+  // Leaving the meeting's URL in the recorded tab ends the recording. Without the `tabs`
+  // permission Chrome only reveals URLs under our host permission (meet.google.com), so a
+  // navigation to any other site arrives with no URL at all — that too means the meeting is
+  // gone, or tab capture would keep recording the next site (2026-11-09 audit, FR-REC-06).
   const changedUrl = changeInfo.url;
   if (changedUrl !== undefined) {
     enqueueCapture(() => stopIfMeetingChanged(tabId, changedUrl));
+  } else if (changeInfo.status === 'loading' && tab.url === undefined) {
+    enqueueCapture(async () => {
+      const state = await loadCaptureState();
+      if (state.tabId === tabId && canStop(state)) await stopRecording();
+    });
   }
 });
 
@@ -973,19 +990,25 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     if (record.type === 'meet.page-ready') {
       void refreshAccountSettings();
       // The content script asks once so its prompt chip never shows over a running recording.
-      void loadCaptureState().then((state) => {
-        // Another tab's recording shows no pill here (it belongs to the recorded tab), and no
-        // prompt either: only one recording runs at a time (FR-REC-07).
-        sendResponse(
-          fromTab !== null && state.tabId === fromTab
-            ? contentStateMessage(state)
-            : {
-                status: canStop(state) ? 'elsewhere' : 'idle',
-                startedAt: null,
-                video: 'off',
-              },
-        );
-      });
+      void loadCaptureState()
+        .catch(() => null)
+        .then((state) => {
+          if (state === null) {
+            sendResponse({ status: 'idle', startedAt: null, video: 'off' });
+            return;
+          }
+          // Another tab's recording shows no pill here (it belongs to the recorded tab), and no
+          // prompt either: only one recording runs at a time (FR-REC-07).
+          sendResponse(
+            fromTab !== null && state.tabId === fromTab
+              ? contentStateMessage(state)
+              : {
+                  status: canStop(state) ? 'elsewhere' : 'idle',
+                  startedAt: null,
+                  video: 'off',
+                },
+          );
+        });
       return true;
     }
     if (record.type === 'meet.mute-changed' && typeof record.muted === 'boolean') {
@@ -1072,18 +1095,23 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     case 'recording.mic': {
       const deviceId = parsed.deviceId;
       enqueueCapture(async () => {
-        const state = await loadCaptureState();
-        if (!CAPTURING.has(state.status)) {
+        try {
+          const state = await loadCaptureState();
+          if (!CAPTURING.has(state.status)) {
+            sendResponse({ ok: false } satisfies MicReply);
+            return;
+          }
+          const reply = (await sendToOffscreen({
+            target: 'offscreen',
+            type: 'capture.mic',
+            deviceId,
+          }).catch(() => null)) as MicReply | null;
+          if (reply?.ok === true) await applyCaptureEvent({ type: 'mic_restored' });
+          sendResponse(reply ?? { ok: false });
+        } catch (error: unknown) {
+          logError('mic switch failed', error);
           sendResponse({ ok: false } satisfies MicReply);
-          return;
         }
-        const reply = (await sendToOffscreen({
-          target: 'offscreen',
-          type: 'capture.mic',
-          deviceId,
-        }).catch(() => null)) as MicReply | null;
-        if (reply?.ok === true) await applyCaptureEvent({ type: 'mic_restored' });
-        sendResponse(reply ?? { ok: false });
       });
       return true;
     }
@@ -1173,11 +1201,28 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       break;
     case 'recording.dismiss':
       enqueueCapture(async () => {
+        const state = await loadCaptureState();
         await applyCaptureEvent({ type: 'dismissed' });
+        // The notes reached the server before Stop (S4-06); the local copy's job is done.
+        if (state.sessionId !== null) {
+          await chrome.storage.local
+            .remove(notesKey(state.sessionId))
+            .catch((error: unknown) => logError('notes cleanup failed', error));
+        }
       });
       break;
     case 'capture.upload_idle':
       enqueueCapture(closeIfUploadsDone);
+      break;
+    case 'capture.auth_lost':
+      enqueueCapture(async () => {
+        await applyCaptureEvent({ type: 'auth_lost' });
+      });
+      break;
+    case 'capture.auth_restored':
+      enqueueCapture(async () => {
+        await applyCaptureEvent({ type: 'auth_restored' });
+      });
       break;
     case 'capture.mic_lost':
       enqueueCapture(async () => {

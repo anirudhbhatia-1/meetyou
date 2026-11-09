@@ -1,18 +1,17 @@
 import type { FastifyPluginAsync } from 'fastify';
-import { Note, NoteMarker, newUlid } from '@meetyou/contracts';
+import { Note, NoteMarker, newUlid, PutNotesRequest } from '@meetyou/contracts';
 import { z } from 'zod';
 
-import { BadRequestError, NotFoundError, UnauthorizedError } from '../errors.ts';
+import { BadRequestError, ConflictError, NotFoundError, UnauthorizedError } from '../errors.ts';
+
+/** Client note ids are opaque but bounded (`note_<ulid>` from the panel). */
+const NoteId = z.string().regex(/^[A-Za-z0-9_-]{4,40}$/);
 
 const CreateNoteRequest = z.object({
-  id: z.string().optional(),
+  id: NoteId.optional(),
   text: z.string().min(1).max(2000),
   sessionMs: z.number().int().nonnegative(),
   marker: NoteMarker.nullable().optional(),
-});
-
-const SyncNotesRequest = z.object({
-  notes: z.array(Note),
 });
 
 export const notesRoutes: FastifyPluginAsync = async (fastify) => {
@@ -35,7 +34,7 @@ export const notesRoutes: FastifyPluginAsync = async (fastify) => {
           200: {
             type: 'object',
             properties: {
-              items: {
+              notes: {
                 type: 'array',
                 items: {
                   type: 'object',
@@ -66,6 +65,7 @@ export const notesRoutes: FastifyPluginAsync = async (fastify) => {
           .select(['id'])
           .where('workspaceId', '=', workspaceId)
           .where('id', '=', id)
+          .where('deletedAt', 'is', null)
           .executeTakeFirst();
 
         if (!meeting) return null;
@@ -86,14 +86,14 @@ export const notesRoutes: FastifyPluginAsync = async (fastify) => {
         throw new NotFoundError(`Meeting ${id} not found`);
       }
 
-      const items: Note[] = notes.map((n) => ({
+      const list: Note[] = notes.map((n) => ({
         id: n.id,
         sessionMs: Number(n.sessionMs),
         marker: n.marker,
         text: n.text,
       }));
 
-      return reply.send({ items });
+      return reply.send({ notes: list });
     },
   );
 
@@ -135,6 +135,7 @@ export const notesRoutes: FastifyPluginAsync = async (fastify) => {
           .select(['id'])
           .where('workspaceId', '=', workspaceId)
           .where('id', '=', id)
+          .where('deletedAt', 'is', null)
           .executeTakeFirst();
 
         if (!meeting) return null;
@@ -148,6 +149,13 @@ export const notesRoutes: FastifyPluginAsync = async (fastify) => {
 
         const nextOrder = (maxOrder?.maxOrder ?? 0) + 1;
 
+        const duplicate = await tx
+          .selectFrom('notes')
+          .select('id')
+          .where('workspaceId', '=', workspaceId)
+          .where('id', '=', noteId)
+          .executeTakeFirst();
+        if (duplicate !== undefined) throw new ConflictError('note id already exists');
         const row = await tx
           .insertInto('notes')
           .values({
@@ -204,7 +212,7 @@ export const notesRoutes: FastifyPluginAsync = async (fastify) => {
         throw new UnauthorizedError('Unauthorized');
       }
 
-      const parseResult = SyncNotesRequest.safeParse(request.body);
+      const parseResult = PutNotesRequest.safeParse(request.body);
       if (!parseResult.success) {
         throw new BadRequestError(
           parseResult.error.issues[0]?.message ?? 'Invalid sync notes body',
@@ -219,6 +227,7 @@ export const notesRoutes: FastifyPluginAsync = async (fastify) => {
           .select(['id'])
           .where('workspaceId', '=', workspaceId)
           .where('id', '=', id)
+          .where('deletedAt', 'is', null)
           .executeTakeFirst();
 
         if (!meeting) return null;
@@ -254,7 +263,7 @@ export const notesRoutes: FastifyPluginAsync = async (fastify) => {
         throw new NotFoundError(`Meeting ${id} not found`);
       }
 
-      return reply.send({ items: synced });
+      return reply.send({ notes: synced });
     },
   );
 };

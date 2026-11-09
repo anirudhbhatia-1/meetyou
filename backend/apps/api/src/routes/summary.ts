@@ -212,7 +212,18 @@ export const summaryRoutes: FastifyPluginAsync<{ pollMs?: number; streamMs?: num
   // POST /v1/meetings/{id}/summary:regenerate (FR-SUM-07): a candidate version, kept or not later.
   fastify.post(
     '/v1/meetings/:id/summary::regenerate',
-    { preHandler: fastify.requireAuth, schema: { tags: ['summary'], params: idParams } },
+    {
+      preHandler: [
+        fastify.requireAuth,
+        fastify.rateLimit({
+          name: 'regenerate',
+          limit: 10,
+          windowMs: 60 * 60_000,
+          by: 'workspace',
+        }),
+      ],
+      schema: { tags: ['summary'], params: idParams },
+    },
     async (request, reply) => {
       const { workspaceId, inWorkspace } = scope(request);
       const { id: meetingId } = request.params as { id: string };

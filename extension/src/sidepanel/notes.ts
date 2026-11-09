@@ -45,8 +45,8 @@ export function composeNote(
 
 /**
  * Notes are kept in `chrome.storage.local` per session so a closed or reloaded panel keeps them.
- * TODO(S4-06): the notes sync client moves them to IndexedDB and syncs them (debounced PUT,
- * FR-NOTE-01/05); until then they stay on this computer and are not part of the summary.
+ * They sync to the server 2 s after the last change and once more before Stop (S4-06); the key is
+ * removed when the panel is dismissed after the recording.
  */
 export function notesKey(sessionId: string): string {
   return `notes:${sessionId}`;

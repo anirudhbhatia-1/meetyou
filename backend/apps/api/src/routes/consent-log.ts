@@ -123,6 +123,7 @@ export const consentLogRoutes: FastifyPluginAsync = async (fastify) => {
           .select(['id'])
           .where('workspaceId', '=', workspaceId)
           .where('id', '=', id)
+          .where('deletedAt', 'is', null)
           .executeTakeFirst();
 
         if (!meeting) return null;
@@ -142,16 +143,18 @@ export const consentLogRoutes: FastifyPluginAsync = async (fastify) => {
         throw new NotFoundError(`Meeting ${id} not found`);
       }
 
-      const items = logs.map((l) => ({
+      // ConsentLogResponse (shared/contracts): the web sheet parses `{entries}` with createdAt.
+      const entries = logs.map((l) => ({
         id: l.id,
         meetingId: l.meetingId,
         mode: l.mode,
         outcome: l.outcome,
         noticeText: l.noticeText,
         sentAt: l.sentAt ? new Date(l.sentAt).toISOString() : null,
+        createdAt: new Date(l.createdAt).toISOString(),
       }));
 
-      return reply.send({ items });
+      return reply.send({ entries });
     },
   );
 };

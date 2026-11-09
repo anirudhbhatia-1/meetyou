@@ -7,7 +7,7 @@ export type PillTone = 'live' | 'paused' | 'warn' | 'error';
 export interface PillView {
   label: string;
   tone: PillTone;
-  /** mm:ss since start. Not shown while paused: the clock has no paused time yet (S4-05 TODO). */
+  /** mm:ss of recorded time (the broadcast start already excludes pauses); hidden while paused. */
   showTimer: boolean;
   /** 14 px `video` icon after the timer while the screen is being recorded. */
   showVideo: boolean;

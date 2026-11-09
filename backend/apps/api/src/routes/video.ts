@@ -4,7 +4,7 @@ import { meetingVideoPlayback, signFragmentUploads, type GcsBucket } from '@meet
 import type { FastifyPluginAsync, FastifyRequest } from 'fastify';
 import type { z } from 'zod';
 
-import { AppError, BadRequestError, NotFoundError } from '../errors.ts';
+import { AppError, BadRequestError, NotFoundError, UnauthorizedError } from '../errors.ts';
 
 /** Fragments keep uploading after the meeting ends, at most this long (ADR-0011 §3.3–3.4). */
 export const UPLOAD_GRACE_MS = 24 * 60 * 60 * 1000;
@@ -18,7 +18,8 @@ export interface VideoRoutesOptions {
 
 function workspaceOf(request: FastifyRequest): string {
   if (request.workspaceId === undefined || request.inWorkspace === undefined) {
-    throw new AppError(503, 'database_unavailable', 'database not configured', true);
+    // requireAuth fills these; missing means no valid token, like every other route.
+    throw new UnauthorizedError('Unauthorized');
   }
   return request.workspaceId;
 }
@@ -49,11 +50,24 @@ export const videoRoutes: FastifyPluginAsync<VideoRoutesOptions> = async (fastif
       const parsed = SignVideoFragmentsRequest.safeParse(request.body);
       if (!parsed.success) throw new BadRequestError('invalid sign request', 'invalid_request');
       const bucket = bucketOrFail();
-      const meeting = await request.inWorkspace?.((tx) =>
-        meetingForSession(tx, request.params.sessionId),
-      );
+      const found = await request.inWorkspace?.(async (tx) => {
+        const meeting = await meetingForSession(tx, request.params.sessionId);
+        if (meeting === undefined) return undefined;
+        const settings = await tx
+          .selectFrom('userSettings')
+          .select('retentionPolicy')
+          .limit(1)
+          .executeTakeFirst();
+        return { meeting, retention: settings?.retentionPolicy ?? '7d' };
+      });
       // RLS: another workspace's session looks the same as an unknown one.
-      if (meeting === undefined) throw new NotFoundError('session not found', 'session_not_found');
+      if (found === undefined) throw new NotFoundError('session not found', 'session_not_found');
+      // "Delete after notes" keeps nothing to replay: refuse uploads instead of storing video
+      // that the sweep would race to delete (2026-11-09 audit).
+      if (found.retention === 'immediate') {
+        throw new AppError(409, 'video_disabled', 'retention keeps no recordings', false);
+      }
+      const meeting = found.meeting;
       if (meeting.endedAt !== null && now() - meeting.endedAt.getTime() > UPLOAD_GRACE_MS) {
         throw new AppError(410, 'upload_window_closed', 'video uploads have closed', false);
       }

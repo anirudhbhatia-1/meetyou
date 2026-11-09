@@ -2,7 +2,6 @@ import { describe, expect, it } from 'vitest';
 
 import {
   ActionItemList,
-  EndSessionRequest,
   ListActionItemsQuery,
   ListMeetingsQuery,
   MeResponse,
@@ -46,8 +45,6 @@ describe('Phase 1 endpoint shapes (ARCHITECTURE §12.1)', () => {
   });
 
   it('validates sessions, notes and glossary limits', () => {
-    expect(EndSessionRequest.safeParse({ reason: 'left_call', atMs: 1000 }).success).toBe(true);
-    expect(EndSessionRequest.safeParse({ reason: 'bored', atMs: 1000 }).success).toBe(false);
     expect(RecoverSessionResponse.parse({ state: 'ended', meetingId: `mtg_${ULID}` }).state).toBe(
       'ended',
     );

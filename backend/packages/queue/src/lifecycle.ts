@@ -129,7 +129,21 @@ export async function cancelMeetingDeletion(
   const { workspaceId, meetingId } = options;
   const now = options.now ?? new Date();
 
-  // 1. Restore meeting
+  // 1. Restore the meeting — but only while its deletion request is still pending. After the
+  // grace window the hard delete may already be removing storage objects; "restoring" then would
+  // leave a meeting with no recordings (2026-11-09 audit).
+  const pending = await tx
+    .selectFrom('deletionRequests')
+    .select('id')
+    .where('workspaceId', '=', workspaceId)
+    .where('scope', '=', 'meeting')
+    .where('targetId', '=', meetingId)
+    .where('cancelledAt', 'is', null)
+    .where('completedAt', 'is', null)
+    .where('executeAfter', '>', now)
+    .executeTakeFirst();
+  if (pending === undefined) return false;
+
   const restoredMeeting = await tx
     .updateTable('meetings')
     .set({ deletedAt: null })
@@ -382,21 +396,35 @@ export function retentionSweepTask(deps: {
         audioDeletedCount++;
       }
 
-      // 2. Process expired video assets
+      // 2. Process expired video assets (same D-02 safety rule as audio: a meeting still
+      // processing or failed keeps its recording — 2026-11-09 audit).
       let videoQuery = tx
         .selectFrom('videoAssets')
-        .select(['id', 'storageKey', 'meetingId', 'status'])
-        .where('deleteAfter', '<=', now)
-        .where('status', '!=', 'expired')
-        .where('storageKey', 'is not', null);
+        .innerJoin('meetings', 'meetings.id', 'videoAssets.meetingId')
+        .select([
+          'videoAssets.id as id',
+          'videoAssets.storageKey',
+          'videoAssets.meetingId',
+          'videoAssets.status',
+          'meetings.status as meetingStatus',
+        ])
+        .where('videoAssets.deleteAfter', '<=', now)
+        .where('videoAssets.status', '!=', 'expired')
+        .where('videoAssets.storageKey', 'is not', null);
 
       if (meetingId) {
-        videoQuery = videoQuery.where('meetingId', '=', meetingId);
+        videoQuery = videoQuery.where('videoAssets.meetingId', '=', meetingId);
       }
 
       const expiredVideos = await videoQuery.execute();
 
       for (const video of expiredVideos) {
+        if (video.meetingStatus === 'failed' || video.meetingStatus === 'processing') {
+          helpers.logger.info(
+            `retention.sweep: video preserved because meeting processing is ${video.meetingStatus} (${video.meetingId})`,
+          );
+          continue;
+        }
         if (!dryRun) {
           if (video.storageKey && deps.storage?.deleteVideoFile) {
             await deps.storage.deleteVideoFile(video.storageKey);

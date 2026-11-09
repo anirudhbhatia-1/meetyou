@@ -318,14 +318,18 @@ export function useMeetingProgress(
     setProgress(null);
     if (!active || sessionId === null) return undefined;
     let live = true;
+    const settled = new Set(['ready', 'updated', 'too_short', 'failed']);
     const tick = async () => {
       const reply = (await chrome.runtime
         .sendMessage({ target: 'background', type: 'meeting.progress', sessionId })
         .catch(() => null)) as { progress?: MeetingProgressView | null } | null;
-      if (live && reply?.progress != null) setProgress(reply.progress);
+      if (!live || reply?.progress == null) return;
+      setProgress(reply.progress);
+      // Nothing changes after the notes settle: polling on (two API GETs a tick) was waste.
+      if (settled.has(reply.progress.status)) clearInterval(timer);
     };
-    void tick();
     const timer = setInterval(() => void tick(), PROGRESS_POLL_MS);
+    void tick();
     return () => {
       live = false;
       clearInterval(timer);

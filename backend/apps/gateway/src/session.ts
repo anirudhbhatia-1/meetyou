@@ -100,6 +100,8 @@ export class StreamSession {
   readonly #laneStt: Record<Lane, LaneStt> = { me: newLaneStt(), them: newLaneStt() };
   #socket: WebSocket | null = null;
   #ended = false;
+  /** True while (or after) #end runs; makes `control end` idempotent. */
+  #ending = false;
   /** A chunk write failed: later chunks of the lane are not written or acked until a new hello. */
   readonly #writeFailed: Record<Lane, boolean> = { me: false, them: false };
   #idleTimer: ReturnType<typeof setTimeout> | null = null;
@@ -466,12 +468,16 @@ export class StreamSession {
   }
 
   async #end(socket: WebSocket): Promise<void> {
+    // Two quick `control end` frames must not run this twice (double summarize enqueue).
+    if (this.#ending) return;
+    this.#ending = true;
     this.#ended = true;
     this.#onState({ ended: true, endedAt: Date.now() });
     await Promise.all(LANES.map((l) => this.#writeChunk(l, true)));
     if (LANES.some((l) => this.#writeFailed[l])) {
       // The client keeps its unacknowledged frames and retries; ending now would refuse them.
       this.#ended = false;
+      this.#ending = false;
       this.#onState({ ended: false, endedAt: null });
       if (this.#socket === socket) this.#fail(socket, 'storage_failed', true);
       return;

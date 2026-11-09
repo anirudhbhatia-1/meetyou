@@ -29,7 +29,13 @@ declare namespace chrome {
       tabId: number;
     }
     const onUpdated: {
-      addListener(callback: (tabId: number, changeInfo: { url?: string }, tab: Tab) => void): void;
+      addListener(
+        callback: (
+          tabId: number,
+          changeInfo: { url?: string; status?: 'loading' | 'complete' },
+          tab: Tab,
+        ) => void,
+      ): void;
     };
     const onActivated: {
       addListener(callback: (activeInfo: ActiveInfo) => void): void;

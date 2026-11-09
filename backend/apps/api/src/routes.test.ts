@@ -3,6 +3,7 @@ import { TokenService, generateSigningJwk, loadKeyRing } from '@meetyou/auth';
 // Queue schema included: DELETE /v1/meetings enqueues the hard delete (S2-10).
 import { createQueueTestEnv } from '@meetyou/queue/testing';
 import { newUlid, RecoverSessionResponse } from '@meetyou/contracts';
+import { endMeeting } from '@meetyou/db';
 
 import { buildApp } from './app.ts';
 
@@ -256,16 +257,18 @@ describe('Core REST API Endpoints (S2-09)', () => {
       expect(RecoverSessionResponse.parse(body).state).toBe('resumable');
     });
 
-    it('ends a session and transitions meeting to processing', async () => {
+    it('ends a session (gateway path) and refuses recovery afterwards', async () => {
+      // REST /end was removed 2026-11-09 (sessions end over the stream protocol): gone for good.
       const res = await app.inject({
         method: 'POST',
         url: `/v1/sessions/${sessionId}/end`,
         headers: { authorization: `Bearer ${tokenA}` },
       });
-      expect(res.statusCode).toBe(200);
-      const body = JSON.parse(res.body);
-      expect(body.status).toBe('ended');
-      expect(body.meetingId).toBe(meetingId);
+      expect(res.statusCode).toBe(404);
+      // End the meeting the way the gateway does.
+      await testDb.db.inWorkspace(workspaceIdA, async (tx) => {
+        await endMeeting(tx, meetingId, new Date());
+      });
 
       const recovered = await app.inject({
         method: 'POST',
@@ -452,7 +455,7 @@ describe('Core REST API Endpoints (S2-09)', () => {
         headers: { authorization: `Bearer ${tokenA}` },
       });
       expect(getRes.statusCode).toBe(200);
-      const items = JSON.parse(getRes.body).items;
+      const items = JSON.parse(getRes.body).notes;
       expect(items.length).toBe(2);
       expect(items[0].sessionMs).toBe(5000); // 5s comes before 10s!
       expect(items[1].sessionMs).toBe(10000);
@@ -471,7 +474,7 @@ describe('Core REST API Endpoints (S2-09)', () => {
         },
       });
       expect(syncRes.statusCode).toBe(200);
-      const items = JSON.parse(syncRes.body).items;
+      const items = JSON.parse(syncRes.body).notes;
       expect(items.length).toBe(2);
       expect(items[0].id).toBe('not_1');
     });
@@ -520,9 +523,11 @@ describe('Core REST API Endpoints (S2-09)', () => {
         headers: { authorization: `Bearer ${tokenA}` },
       });
       expect(getRes.statusCode).toBe(200);
-      const items = JSON.parse(getRes.body).items;
-      expect(items.length).toBe(1);
-      expect(items[0].outcome).toBe('posted');
+      // ConsentLogResponse: `{entries}` with createdAt (what the web sheet parses).
+      const entries = JSON.parse(getRes.body).entries;
+      expect(entries.length).toBe(1);
+      expect(entries[0].outcome).toBe('posted');
+      expect(typeof entries[0].createdAt).toBe('string');
     });
   });
 

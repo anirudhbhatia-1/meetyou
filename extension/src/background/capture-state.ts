@@ -73,6 +73,8 @@ export interface CaptureState {
   /** Video quality in use (DESIGN §8.6 video line); `dataSaverAuto` when a slow upload chose it. */
   videoQuality: VideoQuality;
   dataSaverAuto: boolean;
+  /** Signed out mid-recording (DESIGN §9): capture keeps buffering, the panel asks to sign in. */
+  authLost: boolean;
   /** Live transcript health; `degraded`/`down` = transcript delayed (DESIGN §9). */
   stt: SttHealth;
   error: CaptureError | null;
@@ -99,6 +101,8 @@ export type CaptureEvent =
   | { type: 'mic_lost' }
   /** Another microphone was opened for the `me` lane (§9 "Choose microphone"). */
   | { type: 'mic_restored' }
+  | { type: 'auth_lost' }
+  | { type: 'auth_restored' }
   | { type: 'call_joined' }
   | { type: 'stop_requested' }
   | { type: 'stopped' }
@@ -125,6 +129,7 @@ export const IDLE_CAPTURE: CaptureState = {
   videoQuality: 'standard',
   dataSaverAuto: false,
   stt: 'ok',
+  authLost: false,
   error: null,
   stoppedAfterMs: null,
 };
@@ -226,6 +231,12 @@ export function nextCaptureState(state: CaptureState, event: CaptureEvent): Capt
     case 'mic_restored':
       if (!CAPTURING.has(state.status) || state.lanes === null) return state;
       return { ...state, lanes: { ...state.lanes, me: true }, micError: null };
+    case 'auth_lost':
+      if (!CAPTURING.has(state.status) || state.authLost) return state;
+      return { ...state, authLost: true };
+    case 'auth_restored':
+      if (!state.authLost) return state;
+      return { ...state, authLost: false };
     case 'stop_requested':
       if (!canStop(state)) return state;
       return { ...state, status: 'stopping' };
@@ -256,6 +267,9 @@ export function nextCaptureState(state: CaptureState, event: CaptureEvent): Capt
       return {
         ...IDLE_CAPTURE,
         status: 'error',
+        // Kept so the recorded tab's pill is told when the error is dismissed (it stuck on
+        // "Recording stopped" otherwise; 2026-11-09 audit).
+        tabId: state.tabId,
         error: event.error,
         stoppedAfterMs:
           event.at !== undefined && CAPTURING.has(state.status) ? elapsedMs(state, event.at) : null,
@@ -311,6 +325,7 @@ export function parseCaptureState(raw: unknown): CaptureState {
     videoQuality: isVideoQuality(r.videoQuality) ? r.videoQuality : 'standard',
     dataSaverAuto: r.dataSaverAuto === true,
     stt: typeof r.stt === 'string' && STT.has(r.stt) ? (r.stt as SttHealth) : 'ok',
+    authLost: r.authLost === true,
     error: typeof r.error === 'string' && ERRORS.has(r.error) ? (r.error as CaptureError) : null,
     stoppedAfterMs:
       typeof r.stoppedAfterMs === 'number' && r.stoppedAfterMs >= 0 ? r.stoppedAfterMs : null,

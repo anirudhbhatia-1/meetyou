@@ -15,7 +15,10 @@ export const eventsRoutes: FastifyPluginAsync = async (fastify) => {
   fastify.post(
     '/v1/events',
     {
-      preHandler: fastify.requireAuth,
+      preHandler: [
+        fastify.requireAuth,
+        fastify.rateLimit({ name: 'events', limit: 60, windowMs: 60_000, by: 'workspace' }),
+      ],
       schema: {
         description: 'Record product analytics events (no content)',
         tags: ['analytics'],

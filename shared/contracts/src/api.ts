@@ -62,16 +62,8 @@ export const StreamTokenResponse = z.object({
 });
 export type StreamTokenResponse = z.infer<typeof StreamTokenResponse>;
 
-// POST /v1/sessions/{id}/end
-export const EndSessionRequest = z.object({
-  reason: SessionEnded.shape.reason,
-  /** Session clock at the end (ARCHITECTURE §5.5). */
-  atMs: SessionMs,
-});
-export const EndSessionResponse = z.object({
-  meetingId: z.string().min(1),
-  status: MeetingStatus,
-});
+// POST /v1/sessions/{id}/end was removed 2026-11-09: sessions end over the stream protocol
+// (`control: end`, ws-protocol.ts), and nothing ever called the REST route.
 
 // POST /v1/sessions/{id}/recover (FR-CAP-08): after a crash, the extension still holds frames of
 // this session. A live session gets a new stream token; an ended one is closed for good.
@@ -83,14 +75,13 @@ export type RecoverSessionResponse = z.infer<typeof RecoverSessionResponse>;
 
 // ---------- Meetings ----------
 
-// GET /v1/meetings?cursor=&limit=&q=&template=&status=
+// GET /v1/meetings?cursor=&limit=&q=&template=
 export const ListMeetingsQuery = z.object({
   cursor: Cursor.optional(),
   limit: Limit.default(20),
   /** Title and participant search; full-text search over content is /v1/search (S3-09). */
   q: z.string().trim().min(1).max(200).optional(),
   template: TemplateId.optional(),
-  status: MeetingStatus.optional(),
 });
 export type ListMeetingsQuery = z.infer<typeof ListMeetingsQuery>;
 export const MeetingList = page(Meeting);
@@ -105,33 +96,24 @@ export const PatchMeetingRequest = nonEmpty(
 );
 export type PatchMeetingRequest = z.infer<typeof PatchMeetingRequest>;
 
-// DELETE /v1/meetings/{id} → undo within the grace period with POST /v1/meetings/{id}:restore
-export const DeleteMeetingResponse = z.object({
-  deletedAt: IsoDateTime,
-  /** Deletion becomes final after this (10 s grace, S2-10). */
-  restoreUntil: IsoDateTime,
-});
+// DELETE /v1/meetings/{id} answers 204; undo within the grace period with
+// POST /v1/meetings/{id}:restore (10 s, S2-10).
 
 // ---------- Transcript ----------
 
-// GET /v1/meetings/{id}/segments?cursor=&limit= (ordered by startMs)
-export const ListSegmentsQuery = z.object({
-  cursor: Cursor.optional(),
-  limit: Limit.default(100),
-});
+// GET /v1/meetings/{id}/segments (ordered by startMs; one page today, cursor reserved)
 export const SegmentList = page(Segment);
 export type SegmentList = z.infer<typeof SegmentList>;
 
 // ---------- Notes (FR-NOTE-01/05, S4-06 sync client) ----------
 
-// GET /v1/meetings/{id}/notes. `version` is also sent as the ETag; PUT sends it back as If-Match
-// and gets 412 when another device saved in between (ARCHITECTURE §12.2).
+// GET /v1/meetings/{id}/notes.
 export const NotesResponse = z.object({
   notes: z.array(Note).max(500),
-  version: z.string().min(1),
 });
 export type NotesResponse = z.infer<typeof NotesResponse>;
-// PUT /v1/meetings/{id}/notes: the whole list (replace), with If-Match.
+// PUT /v1/meetings/{id}/notes: the whole list (replace). Last write wins (one user per
+// workspace in alpha); an If-Match version check is Stage-5 work if multi-device editing lands.
 export const PutNotesRequest = z.object({ notes: z.array(Note).max(500) });
 export type PutNotesRequest = z.infer<typeof PutNotesRequest>;
 

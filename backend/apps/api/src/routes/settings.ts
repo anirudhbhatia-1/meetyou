@@ -1,5 +1,10 @@
 import type { FastifyPluginAsync } from 'fastify';
-import { DEFAULT_USER_SETTINGS, PatchSettingsRequest, type UserSettings } from '@meetyou/contracts';
+import {
+  DEFAULT_USER_SETTINGS,
+  PatchSettingsRequest,
+  type UserSettings,
+  newUlid,
+} from '@meetyou/contracts';
 
 import { BadRequestError, NotFoundError, UnauthorizedError } from '../errors.ts';
 
@@ -54,7 +59,7 @@ export const settingsRoutes: FastifyPluginAsync = async (fastify) => {
           const inserted = await tx
             .insertInto('userSettings')
             .values({
-              id: `set_${Date.now()}`,
+              id: `set_${newUlid()}`,
               workspaceId,
               userId,
               ...DEFAULT_USER_SETTINGS,

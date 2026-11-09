@@ -99,9 +99,15 @@ const idempotencyPluginAsync: FastifyPluginAsync<IdempotencyOptions> = async (fa
     if (key === '') return;
 
     request.idempotencyKey = key;
-    // Composite key scoped to workspace (if authenticated) or caller IP
-    const scope = request.workspaceId ?? request.ip ?? 'anon';
-    const compositeKey = `${scope}:${key}`;
+    // The key is only ever scoped to the caller's workspace. The instance-level hook runs before
+    // the route's `requireAuth`, so authenticate here; without a workspace (public routes such as
+    // /v1/auth/google) nothing is cached — an IP scope would let one NAT user replay another's
+    // response (found in the 2026-11-09 audit).
+    if (request.workspaceId === undefined && typeof request.headers.authorization === 'string') {
+      await fastify.requireAuth(request, reply);
+    }
+    if (request.workspaceId === undefined) return;
+    const compositeKey = `${request.workspaceId}:${key}`;
     request.idempotencyCompositeKey = compositeKey;
 
     const existing = await store.get(compositeKey);
