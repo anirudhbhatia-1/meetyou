@@ -104,6 +104,13 @@ export const UserSettings = z.object({
 });
 export type UserSettings = z.infer<typeof UserSettings>;
 
+/**
+ * The Meet chat consent notice (S4-07) is switched off for now (Anirudh, 2026-11-09): nothing is
+ * posted in Meet chat, and its settings, the panel's consent step and the consent log are hidden.
+ * The code stays; set this to true to bring the feature back.
+ */
+export const MEET_CHAT_NOTICE_ENABLED = false;
+
 /** Default consent notice when video is off and the user has not edited the text (DESIGN §8.5). */
 export const CONSENT_MESSAGE_AUDIO_ONLY =
   "Hi all — I'm using Minutes to take notes on this call. Batayein agar aap comfortable nahi hain.";

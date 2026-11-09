@@ -1,4 +1,8 @@
-import { CONSENT_MESSAGE_AUDIO_ONLY, DEFAULT_USER_SETTINGS } from '@meetyou/contracts';
+import {
+  CONSENT_MESSAGE_AUDIO_ONLY,
+  DEFAULT_USER_SETTINGS,
+  MEET_CHAT_NOTICE_ENABLED,
+} from '@meetyou/contracts';
 import {
   AlertDialog,
   Banner,
@@ -162,51 +166,56 @@ export function Settings({ onSignOut }: { onSignOut: () => void }) {
             />
           }
         />
-        <Row
-          title="Tell people in Meet chat"
-          helper="A short note is posted in the call’s chat when recording starts."
-          control={
-            <Segmented
-              label="Tell people in Meet chat"
-              value={settings.consentMode}
-              onChange={(consentMode) =>
-                consentMode === 'off' ? setConfirmOff(true) : save({ consentMode })
+        {MEET_CHAT_NOTICE_ENABLED && (
+          <>
+            <Row
+              title="Tell people in Meet chat"
+              helper="A short note is posted in the call’s chat when recording starts."
+              control={
+                <Segmented
+                  label="Tell people in Meet chat"
+                  value={settings.consentMode}
+                  onChange={(consentMode) =>
+                    consentMode === 'off' ? setConfirmOff(true) : save({ consentMode })
+                  }
+                  options={[
+                    { value: 'one_click', label: 'One click' },
+                    { value: 'automatic', label: 'Automatic' },
+                    { value: 'off', label: 'Off' },
+                  ]}
+                />
               }
-              options={[
-                { value: 'one_click', label: 'One click' },
-                { value: 'automatic', label: 'Automatic' },
-                { value: 'off', label: 'Off' },
-              ]}
             />
-          }
-        />
-        <Row title="Consent message" helper="What people see in Meet chat.">
-          <div className="settings-row-wide">
-            <TextArea
-              aria-label="Consent message"
-              value={message}
-              maxLength={1000}
-              rows={3}
-              onChange={(e) => setMessage(e.target.value)}
-              onBlur={() => {
-                const text = message.trim();
-                if (text !== '' && text !== settings.consentMessage) save({ consentMessage: text });
-                if (text === '') setMessage(settings.consentMessage);
-              }}
-            />
-            <Button
-              variant="ghost"
-              size="sm"
-              disabled={settings.consentMessage === defaultMessage}
-              onClick={() => {
-                setMessage(defaultMessage);
-                save({ consentMessage: defaultMessage });
-              }}
-            >
-              Reset to default
-            </Button>
-          </div>
-        </Row>
+            <Row title="Consent message" helper="What people see in Meet chat.">
+              <div className="settings-row-wide">
+                <TextArea
+                  aria-label="Consent message"
+                  value={message}
+                  maxLength={1000}
+                  rows={3}
+                  onChange={(e) => setMessage(e.target.value)}
+                  onBlur={() => {
+                    const text = message.trim();
+                    if (text !== '' && text !== settings.consentMessage)
+                      save({ consentMessage: text });
+                    if (text === '') setMessage(settings.consentMessage);
+                  }}
+                />
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  disabled={settings.consentMessage === defaultMessage}
+                  onClick={() => {
+                    setMessage(defaultMessage);
+                    save({ consentMessage: defaultMessage });
+                  }}
+                >
+                  Reset to default
+                </Button>
+              </div>
+            </Row>
+          </>
+        )}
         <Row
           title="Pause my mic when I’m muted in Meet"
           helper="Side comments stay off the record."

@@ -1,3 +1,4 @@
+import { MEET_CHAT_NOTICE_ENABLED } from '@meetyou/contracts';
 import { describe, expect, it, vi, beforeEach } from 'vitest';
 import { PromptChip, reminderText, startHint, startShortcut } from './prompt-chip.ts';
 
@@ -307,8 +308,10 @@ describe('PromptChip', () => {
         .getElementById('meetyou-prompt-root')
         ?.shadow?.children.flatMap((c) => c.children)
         .find((c) => c.className === 'prompt-reminder')?.textContent;
-    expect(reminder()).toBe(reminderText(true, true));
+    // The chat notice is switched off for now (MEET_CHAT_NOTICE_ENABLED), so nothing mentions it.
+    expect(reminder()).toBe(reminderText(true, MEET_CHAT_NOTICE_ENABLED));
     chip.setRecordVideo(false);
+    chip.setPostsNotice(true);
     expect(reminder()).toBe('Audio will be recorded. A note is posted in Meet chat.');
     chip.setPostsNotice(false);
     expect(reminder()).toBe('Audio will be recorded.');

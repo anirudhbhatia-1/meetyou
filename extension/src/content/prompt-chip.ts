@@ -1,3 +1,4 @@
+import { MEET_CHAT_NOTICE_ENABLED } from '@meetyou/contracts';
 import { lightColors as c, fonts, radius } from '@meetyou/design-tokens';
 
 /**
@@ -75,7 +76,7 @@ export class PromptChip {
   /** Settings → "Offer to take notes when I join a call" (DESIGN §15.1). */
   private offered = true;
   private lastCallState: string | null = null;
-  private postsNotice = true;
+  private postsNotice = MEET_CHAT_NOTICE_ENABLED;
   private readonly boundOnKeyDown: (e: KeyboardEvent) => void;
 
   constructor(doc: Document = document, callbacks: PromptChipCallbacks) {

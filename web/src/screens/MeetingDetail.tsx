@@ -1,4 +1,10 @@
-import { notesFileName, notesText, type Meeting, type SummaryItem } from '@meetyou/contracts';
+import {
+  MEET_CHAT_NOTICE_ENABLED,
+  notesFileName,
+  notesText,
+  type Meeting,
+  type SummaryItem,
+} from '@meetyou/contracts';
 import { Banner, Button, Icon, SkeletonRows, useToast } from '@meetyou/ui';
 import { useEffect, useRef, useState } from 'react';
 
@@ -185,7 +191,7 @@ export function MeetingDetail({
           <MoreMenu
             onDelete={() => remove.request(meetingId)}
             onRename={() => setRenaming(true)}
-            onConsentLog={() => setSheet('consent')}
+            {...(MEET_CHAT_NOTICE_ENABLED ? { onConsentLog: () => setSheet('consent') } : {})}
             {...(summary.data != null
               ? {
                   onDownload: () => {

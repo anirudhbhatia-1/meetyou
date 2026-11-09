@@ -202,7 +202,15 @@ Gaurav's S3-07..S3-11 — Gaurav should not start them).** **Stage 4 is complete
 
 Newest first. One entry per working session (either person).
 
-### 2026-11-09 (latest) — Anirudh (Claude Code): Stage 4 complete in code
+### 2026-11-09 (latest) — Anirudh (Claude Code): Meet chat consent notice switched off
+
+Anirudh asked to remove the consent message for now (the whole Meet chat notice) and will say when
+to add it back. One switch, `MEET_CHAT_NOTICE_ENABLED = false` in `shared/contracts/src/rest.ts`,
+hides the Settings rows, the onboarding preference, the panel consent step, the prompt's "A note
+is posted" line and the Consent log menu item, and the service worker posts nothing. AGENTS §3
+rule 9 is marked paused and §9 records the decision. Flip the switch to bring it all back.
+
+### 2026-11-09 — Anirudh (Claude Code): Stage 4 complete in code
 
 Anirudh asked for all of S4 (including S4-07), analytics in our own API, docs updated as tasks
 land, and the Moonrise colour (#dae2f8 → #d6a4a4) instead of orange, with every feature connected

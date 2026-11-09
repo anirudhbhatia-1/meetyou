@@ -1,4 +1,4 @@
-import type { ProductEvent } from '@meetyou/contracts';
+import { MEET_CHAT_NOTICE_ENABLED, type ProductEvent } from '@meetyou/contracts';
 
 import {
   parseBackgroundMessage,
@@ -466,8 +466,9 @@ async function startRecording(tabId: number | undefined, consent?: ConsentChoice
   track('recording_started', {
     video: result.video === 'recording',
     videoQuality,
-    consentMode: accountSettingsFrom(await chrome.storage.local.get(ACCOUNT_SETTINGS_KEY))
-      .consentMode,
+    consentMode: MEET_CHAT_NOTICE_ENABLED
+      ? accountSettingsFrom(await chrome.storage.local.get(ACCOUNT_SETTINGS_KEY)).consentMode
+      : 'off',
   });
   if (started.startedAt !== null) {
     const last: LastRecording = {
@@ -479,7 +480,9 @@ async function startRecording(tabId: number | undefined, consent?: ConsentChoice
       .set({ [LAST_RECORDING_KEY]: last })
       .catch((error: unknown) => logError('save last recording failed', error));
   }
-  void runConsentNotice(tabId, result.sessionId, session?.meetingId, recordVideo, consent);
+  if (MEET_CHAT_NOTICE_ENABLED) {
+    void runConsentNotice(tabId, result.sessionId, session?.meetingId, recordVideo, consent);
+  }
   // Usually recording starts inside the call; the adapter only reports state changes, so ask.
   if ((await readCallState(tabId)) === 'in_call') await applyCaptureEvent({ type: 'call_joined' });
   // Already muted in Meet when recording starts: the adapter reports only changes (FR-CAP-11).

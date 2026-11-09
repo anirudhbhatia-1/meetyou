@@ -1,3 +1,4 @@
+import { MEET_CHAT_NOTICE_ENABLED } from '@meetyou/contracts';
 import { Banner, Button, Icon, Segmented, Switch, TextArea } from '@meetyou/ui';
 import { useEffect, useState } from 'react';
 
@@ -118,7 +119,7 @@ export function ReadyView() {
         size="lg"
         disabled={API_URL !== '' && account === undefined}
         onClick={() => {
-          if (settings?.consentMode === 'one_click') setAsking(true);
+          if (MEET_CHAT_NOTICE_ENABLED && settings?.consentMode === 'one_click') setAsking(true);
           else sendStart();
         }}
       >

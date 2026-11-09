@@ -97,6 +97,9 @@ analytics; team workspaces, SSO, admin controls.
 8. **Audio retention is configurable** (delete immediately / N days). Stored audio is encrypted
    at rest.
 9. **Consent is built in.** Recording start triggers a visible notice and writes a consent log entry.
+   **Paused 2026-11-09 (Anirudh):** the Meet chat notice and consent log are switched off
+   (`MEET_CHAT_NOTICE_ENABLED = false` in `shared/contracts`) until Anirudh turns them back on; the
+   in-Meet prompt and recording pill still show that a recording runs.
 10. **Track cost per meeting** (STT minutes, LLM tokens) from the first working version.
 
 ---
@@ -296,6 +299,12 @@ Work like a careful senior engineer pairing with the developer.
   chat notice); Gaurav reviews. **Product analytics (S4-15) go to our own API** (`POST /v1/events`
   into Postgres; typed IDs/counts/enums only, opt-out honoured), no analytics vendor. Real
   Chrome/Meet checks are run by Anirudh from per-task checklists.
+
+- **2026-11-09 — Meet chat consent notice off for now (Anirudh):** nothing is posted in Meet chat;
+  the Settings rows (Tell people in Meet chat, Consent message), the onboarding preference, the
+  panel's "Let everyone know?" step, the prompt's "A note is posted" line and the meeting's Consent
+  log are hidden. The code stays behind `MEET_CHAT_NOTICE_ENABLED` in `shared/contracts`; Anirudh
+  will say when to bring it back. Users remain responsible for consent (onboarding acknowledgement).
 
 ### Open (do not assume an answer)
 - LLM for summaries (D-04): [ADR-0007](docs/adr/0007-llm-provider-and-prompt-versions.md)

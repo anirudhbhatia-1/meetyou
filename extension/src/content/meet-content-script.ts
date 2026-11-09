@@ -1,3 +1,4 @@
+import { MEET_CHAT_NOTICE_ENABLED } from '@meetyou/contracts';
 /**
  * Google Meet adapter content script.
  *
@@ -93,7 +94,7 @@ if (contextValid()) {
   const apply = (items: Record<string, unknown>) => {
     const account = accountSettingsFrom(items);
     promptChip.setOffered(account.offerPrompt);
-    promptChip.setPostsNotice(account.consentMode !== 'off');
+    promptChip.setPostsNotice(MEET_CHAT_NOTICE_ENABLED && account.consentMode !== 'off');
     promptChip.setRecordVideo(recordVideoFrom(items) && videoAllowed(account));
   };
   let latest: Record<string, unknown> = {};

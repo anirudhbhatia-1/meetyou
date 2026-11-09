@@ -3,7 +3,11 @@ import '@meetyou/design-tokens/tokens.css';
 import '@meetyou/ui/styles.css';
 import './onboarding.css';
 
-import { DEFAULT_USER_SETTINGS, type UserSettings } from '@meetyou/contracts';
+import {
+  DEFAULT_USER_SETTINGS,
+  MEET_CHAT_NOTICE_ENABLED,
+  type UserSettings,
+} from '@meetyou/contracts';
 import { Banner, Button, Checkbox, Icon, Segmented, initTheme } from '@meetyou/ui';
 import { StrictMode, useState, type ReactNode } from 'react';
 import { createRoot } from 'react-dom/client';
@@ -218,19 +222,21 @@ function Preferences({ onNext }: { onNext: () => void }) {
             ]}
           />
         </label>
-        <label className="ob-pref">
-          <span>Tell people in Meet chat</span>
-          <Segmented
-            label="Tell people in Meet chat"
-            value={prefs.consentMode}
-            onChange={set('consentMode')}
-            options={[
-              { value: 'one_click', label: 'One click' },
-              { value: 'automatic', label: 'Automatic' },
-              { value: 'off', label: 'Off' },
-            ]}
-          />
-        </label>
+        {MEET_CHAT_NOTICE_ENABLED && (
+          <label className="ob-pref">
+            <span>Tell people in Meet chat</span>
+            <Segmented
+              label="Tell people in Meet chat"
+              value={prefs.consentMode}
+              onChange={set('consentMode')}
+              options={[
+                { value: 'one_click', label: 'One click' },
+                { value: 'automatic', label: 'Automatic' },
+                { value: 'off', label: 'Off' },
+              ]}
+            />
+          </label>
+        )}
       </div>
       {failed && (
         <Banner tone="error">These didn&rsquo;t save. Try again, or use the defaults.</Banner>
