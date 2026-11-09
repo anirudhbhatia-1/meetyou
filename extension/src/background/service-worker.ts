@@ -3,6 +3,7 @@ import {
   parseMeetCallState,
   parseMeetStateReply,
   parseMeetMuteReply,
+  parseSidePanelMessage,
   parseSpeakerSignal,
   parseMeetTitle,
   senderTabId,
@@ -20,6 +21,7 @@ import {
   type StartedSession,
 } from '../messages.ts';
 import {
+  actionTitleFor,
   badgeFor,
   canStart,
   canStop,
@@ -41,6 +43,8 @@ import {
   recordVideoFrom,
   toAccountSettings,
   videoAllowed,
+  VIDEO_QUALITY_KEY,
+  videoQualityFrom,
 } from '../settings.ts';
 import { notesKey, parseStoredNotes } from '../sidepanel/notes.ts';
 import {
@@ -52,10 +56,20 @@ import {
   putApiNotes,
   startApiSession,
 } from '../api-client.ts';
-import { API_URL, GATEWAY_URL, GOOGLE_CLIENT_ID } from '../build-config.ts';
+import { API_URL, GATEWAY_URL, GOOGLE_CLIENT_ID, WEB_URL } from '../build-config.ts';
 import { deleteSessionData, openMinutesDb } from '../offscreen/idb.ts';
 import { IdbFragmentQueue, uploadableSession } from '../offscreen/video-uploader.ts';
 import { ExtensionAuth } from './auth.ts';
+import {
+  meetingFromNotificationId,
+  NOTES_ALARM,
+  NOTES_CHECK_MINUTES,
+  NOTES_WATCH_KEY,
+  NOTES_WATCH_MS,
+  notesNotice,
+  notesNotificationId,
+  parseNotesWatch,
+} from './notes-watch.ts';
 import { resumeVideoUploads } from './video-resume.ts';
 
 const OFFSCREEN_DOCUMENT_PATH = 'offscreen/index.html';
@@ -159,6 +173,7 @@ async function applyCaptureEvent(event: CaptureEvent): Promise<CaptureState> {
   await Promise.all([
     chrome.action.setBadgeText({ text: badge.text }),
     chrome.action.setBadgeBackgroundColor({ color: badge.color }),
+    chrome.action.setTitle({ title: actionTitleFor(next, Date.now()) }),
   ]).catch((error: unknown) => logError('badge update failed', error));
 
   const tabId = next.tabId ?? previous.tabId;
@@ -223,6 +238,7 @@ async function refreshAccountSettings(force = false): Promise<void> {
     const update: Record<string, unknown> = { [ACCOUNT_SETTINGS_KEY]: account };
     if (canStart(await loadCaptureState())) {
       update[RECORD_VIDEO_KEY] = account.recordVideo && videoAllowed(account);
+      update[VIDEO_QUALITY_KEY] = account.videoQuality;
     }
     await chrome.storage.local.set(update);
   } catch (error: unknown) {
@@ -357,6 +373,9 @@ async function startRecording(tabId: number | undefined, consent?: ConsentChoice
     at: Date.now(),
   });
   const recordVideo = await recordVideoSetting();
+  const videoQuality = videoQualityFrom(
+    await chrome.storage.local.get([VIDEO_QUALITY_KEY, ACCOUNT_SETTINGS_KEY]),
+  );
   const session = await startCloudSession(tabId, meetingCode, recordVideo);
   if (session === 'signed_out' || session === 'server_unreachable') {
     await applyCaptureEvent({ type: 'failed', error: session });
@@ -391,6 +410,7 @@ async function startRecording(tabId: number | undefined, consent?: ConsentChoice
       type: 'capture.start',
       streamId,
       recordVideo,
+      videoQuality,
       ...(session !== undefined ? { session } : {}),
     });
   } catch (error: unknown) {
@@ -410,6 +430,7 @@ async function startRecording(tabId: number | undefined, consent?: ConsentChoice
     link: result.link,
     video: result.video,
   });
+  await applyCaptureEvent({ type: 'video_quality_changed', quality: videoQuality, auto: false });
   if (started.startedAt !== null) {
     const last: LastRecording = {
       sessionId: result.sessionId,
@@ -484,8 +505,79 @@ async function stopRecording(): Promise<void> {
   }
   // Video keeps uploading after the meeting (ADR-0011 §3.3); `capture.upload_idle` closes it later.
   if (!uploading) await closeOffscreenQuietly();
-  await applyCaptureEvent({ type: 'stopped' });
+  const next = await applyCaptureEvent({ type: 'stopped' });
+  if (next.status === 'processing') {
+    await watchNotes().catch((error: unknown) => logError('notes watch failed', error));
+  }
 }
+
+/** Starts following the last recording's notes for the "Notes ready" notification. */
+async function watchNotes(): Promise<void> {
+  const last = parseLastRecording(
+    (await chrome.storage.local.get(LAST_RECORDING_KEY))[LAST_RECORDING_KEY],
+  );
+  if (auth === null || last?.meetingId === undefined) return;
+  await chrome.storage.local.set({
+    [NOTES_WATCH_KEY]: { meetingId: last.meetingId, since: Date.now() },
+  });
+  await chrome.alarms.create(NOTES_ALARM, {
+    delayInMinutes: NOTES_CHECK_MINUTES,
+    periodInMinutes: NOTES_CHECK_MINUTES,
+  });
+}
+
+async function stopWatchingNotes(): Promise<void> {
+  await Promise.all([
+    chrome.alarms.clear(NOTES_ALARM),
+    chrome.storage.local.remove(NOTES_WATCH_KEY),
+  ]);
+}
+
+async function sidePanelOpen(): Promise<boolean> {
+  const contexts = await chrome.runtime.getContexts({ contextTypes: ['SIDE_PANEL'] });
+  return contexts.length > 0;
+}
+
+/** One alarm tick: notify and stop once the notes settle; a failed check waits for the next. */
+async function checkNotes(): Promise<void> {
+  const watch = parseNotesWatch((await chrome.storage.local.get(NOTES_WATCH_KEY))[NOTES_WATCH_KEY]);
+  if (watch === null || auth === null || Date.now() - watch.since > NOTES_WATCH_MS) {
+    await stopWatchingNotes();
+    return;
+  }
+  const token = await auth.accessToken();
+  if (token === null) {
+    await stopWatchingNotes();
+    return;
+  }
+  const progress = await fetchApiMeetingProgress(API_URL, token, watch.meetingId);
+  const notice = notesNotice(progress.status, progress.title);
+  if (notice === null) return;
+  await stopWatchingNotes();
+  // The open panel shows Ready itself (§8.7); the notification is for when the user has left it.
+  if (await sidePanelOpen()) return;
+  await chrome.notifications.create(notesNotificationId(watch.meetingId), {
+    type: 'basic',
+    iconUrl: chrome.runtime.getURL('icons/notification.png'),
+    title: notice.title,
+    message: notice.message,
+  });
+}
+
+chrome.alarms.onAlarm.addListener((alarm) => {
+  if (alarm.name !== NOTES_ALARM) return;
+  checkNotes().catch((error: unknown) => logError('notes check failed', error));
+});
+
+chrome.notifications.onClicked.addListener((notificationId) => {
+  const meetingId = meetingFromNotificationId(notificationId);
+  if (meetingId === null) return;
+  chrome.notifications.clear(notificationId).catch(() => undefined);
+  if (WEB_URL === '') return;
+  chrome.tabs
+    .create({ url: `${WEB_URL}#/meetings/${encodeURIComponent(meetingId)}` })
+    .catch((error: unknown) => logError('open notes failed', error));
+});
 
 /**
  * DESIGN §9 "Stop and delete" (FR-CON-04), for when someone does not want to be recorded: capture
@@ -525,7 +617,7 @@ async function stopAndDelete(): Promise<void> {
     }
   }
   await chrome.storage.local
-    .remove([notesKey(sessionId), CONSENT_RESULT_KEY, LAST_RECORDING_KEY])
+    .remove([notesKey(sessionId), CONSENT_RESULT_KEY, LAST_RECORDING_KEY, NOTES_WATCH_KEY])
     .catch((error: unknown) => logError('local cleanup failed', error));
   await applyCaptureEvent({ type: 'stopped' });
   await applyCaptureEvent({ type: 'dismissed' });
@@ -793,7 +885,30 @@ chrome.commands.onCommand.addListener((command, tab) => {
   }
 });
 
+let titleTickAt = 0;
+
+/**
+ * DESIGN §8.3 tooltip timer. The offscreen document broadcasts level samples 4× a second while it
+ * captures, and every extension context receives them, so they double as a clock here: the title
+ * is refreshed once a second without a timer keeping the worker awake.
+ */
+function tickActionTitle(): void {
+  const now = Date.now();
+  if (now - titleTickAt < 1_000) return;
+  titleTickAt = now;
+  void loadCaptureState().then((state) => {
+    if (state.status !== 'recording') return;
+    chrome.action
+      .setTitle({ title: actionTitleFor(state, Date.now()) })
+      .catch((error: unknown) => logError('title update failed', error));
+  });
+}
+
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+  if (parseSidePanelMessage(message)?.type === 'capture.levels') {
+    tickActionTitle();
+    return false;
+  }
   const callState = parseMeetCallState(message);
   const fromTab = senderTabId(sender);
   if (callState !== null && fromTab !== null) {
@@ -1027,6 +1142,13 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       const link = parsed.link;
       enqueueCapture(async () => {
         await applyCaptureEvent({ type: 'link_changed', link });
+      });
+      break;
+    }
+    case 'capture.video_quality': {
+      const { quality, auto } = parsed;
+      enqueueCapture(async () => {
+        await applyCaptureEvent({ type: 'video_quality_changed', quality, auto });
       });
       break;
     }

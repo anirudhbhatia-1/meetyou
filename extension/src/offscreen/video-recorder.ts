@@ -1,5 +1,6 @@
 import { newUlid } from '@meetyou/contracts';
 
+import type { VideoQuality } from '../messages.ts';
 import { idbDone, VIDEO_STORE } from './idb.ts';
 
 /** ADR-0011 §3.2: MP4/H.264 when supported, else WebM/VP9; both with Opus for the mixed audio. */
@@ -7,7 +8,7 @@ export const VIDEO_MIME_TYPES = ['video/mp4;codecs=avc1,opus', 'video/webm;codec
 export const FRAGMENT_MS = 10_000;
 export const MIXED_AUDIO_BPS = 48_000;
 
-export type VideoQuality = 'standard' | 'data_saver';
+export type { VideoQuality };
 
 /** ADR-0011 §3.2 bitrate table. */
 export const VIDEO_QUALITY: Record<
@@ -21,8 +22,16 @@ export const VIDEO_QUALITY: Record<
 /** ADR-0011 §3.2: data saver once the upload backlog exceeds 2 minutes of video (12 fragments). */
 export const DATA_SAVER_BACKLOG_FRAGMENTS = (2 * 60_000) / FRAGMENT_MS;
 
-/** Switch to data saver above the backlog limit; back to standard once the backlog has cleared. */
-export function nextVideoQuality(current: VideoQuality, backlogFragments: number): VideoQuality {
+/**
+ * Switch to data saver above the backlog limit; back to standard once the backlog has cleared. A
+ * meeting started on data saver (DESIGN §8.5 choice) stays there.
+ */
+export function nextVideoQuality(
+  current: VideoQuality,
+  backlogFragments: number,
+  chosen: VideoQuality = 'standard',
+): VideoQuality {
+  if (chosen === 'data_saver') return 'data_saver';
   if (current === 'standard' && backlogFragments > DATA_SAVER_BACKLOG_FRAGMENTS)
     return 'data_saver';
   if (current === 'data_saver' && backlogFragments === 0) return 'standard';

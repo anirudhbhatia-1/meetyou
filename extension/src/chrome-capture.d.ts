@@ -12,6 +12,29 @@ declare namespace chrome {
     const onClicked: { addListener(callback: (tab: tabs.Tab) => void): void };
     function setBadgeText(details: { text: string }): Promise<void>;
     function setBadgeBackgroundColor(details: { color: string }): Promise<void>;
+    /** Toolbar tooltip (DESIGN §8.3); added 2026-11-09 from the same chrome.action reference. */
+    function setTitle(details: { title: string; tabId?: number }): Promise<void>;
+  }
+  // Verified against developer.chrome.com/docs/extensions/reference/api/{alarms,notifications}
+  // on 2026-11-09: both return promises in MV3 (Chrome 116 is our minimum).
+  namespace alarms {
+    interface Alarm {
+      name: string;
+    }
+    function create(
+      name: string,
+      info: { delayInMinutes?: number; periodInMinutes?: number },
+    ): Promise<void>;
+    function clear(name: string): Promise<boolean>;
+    const onAlarm: { addListener(callback: (alarm: Alarm) => void): void };
+  }
+  namespace notifications {
+    function create(
+      notificationId: string,
+      options: { type: 'basic'; iconUrl: string; title: string; message: string },
+    ): Promise<string>;
+    function clear(notificationId: string): Promise<boolean>;
+    const onClicked: { addListener(callback: (notificationId: string) => void): void };
   }
   namespace sidePanel {
     function open(options: { tabId: number }): Promise<void>;

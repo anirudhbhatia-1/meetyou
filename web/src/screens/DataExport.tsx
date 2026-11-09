@@ -7,6 +7,23 @@ import { useApi } from '../lib/api-context.ts';
 /** How often Settings checks an export that is still preparing. */
 const POLL_MS = 4_000;
 
+function askToNotify(): void {
+  if (typeof Notification === 'undefined' || Notification.permission !== 'default') return;
+  Notification.requestPermission().catch(() => undefined); // A refusal leaves the toast and row.
+}
+
+function notifyExportReady(): void {
+  if (typeof Notification === 'undefined' || Notification.permission !== 'granted') return;
+  if (document.visibilityState === 'visible') return; // The toast covers it.
+  const note = new Notification('Your export is ready', {
+    body: 'Download it from Settings within 24 hours.',
+  });
+  note.onclick = () => {
+    window.focus();
+    note.close();
+  };
+}
+
 function readyUntil(expiresAt: string): string {
   return new Date(expiresAt).toLocaleString('en-GB', {
     weekday: 'short',
@@ -18,8 +35,8 @@ function readyUntil(expiresAt: string): string {
 /**
  * DESIGN §13.2 "Download all my data" (S3-11, FR-SET-04): starts the export job, tells the user
  * when it is ready, and offers the download for 24 hours. Each click asks for a fresh link, since
- * signed links are short-lived.
- * TODO(S4-12): a browser notification when the page is in the background.
+ * signed links are short-lived. "We'll let you know" is a browser notification when the page is in
+ * the background: permission is asked on that click, the one moment it is clearly wanted.
  */
 export function DataExport() {
   const api = useApi();
@@ -47,7 +64,10 @@ export function DataExport() {
         (next) => {
           if (next === null || next.status === 'preparing') return;
           setCurrent(next);
-          if (next.status === 'ready') toast({ message: 'Your export is ready' });
+          if (next.status === 'ready') {
+            toast({ message: 'Your export is ready' });
+            notifyExportReady();
+          }
         },
         () => undefined, // Try again on the next tick.
       );
@@ -56,6 +76,7 @@ export function DataExport() {
   }, [api, toast, preparing, current]);
 
   const start = async () => {
+    askToNotify();
     setBusy(true);
     try {
       const next = await api.startExport();

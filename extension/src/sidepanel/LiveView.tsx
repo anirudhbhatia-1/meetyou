@@ -213,12 +213,17 @@ function LevelMeter({ label, dbfs }: { label: string; dbfs: number | null }) {
   );
 }
 
-/**
- * TODO(S4-17): " · Data saver" (and the one-time toast when it switches on by itself) needs the
- * offscreen recorder to report its current quality.
- */
+/** §8.6 video status line, with the one-time toast when a slow upload turns data saver on. */
 function VideoLine({ state }: { state: CaptureState }) {
-  const line = videoLineFor(state.video);
+  const toast = useToast();
+  const wasAuto = useRef(state.dataSaverAuto);
+  useEffect(() => {
+    if (state.dataSaverAuto && !wasAuto.current) {
+      toast({ message: 'Switched to data saver to keep audio smooth.' });
+    }
+    wasAuto.current = state.dataSaverAuto;
+  }, [state.dataSaverAuto, toast]);
+  const line = videoLineFor(state.video, state.videoQuality, state.dataSaverAuto);
   return (
     <p className="video-line">
       <Icon name={line.recording ? 'video' : 'video-off'} size={14} />

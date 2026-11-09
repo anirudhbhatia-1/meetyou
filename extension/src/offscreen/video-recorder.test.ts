@@ -22,5 +22,7 @@ describe('nextVideoQuality (ADR-0011 §3.2 data saver)', () => {
     expect(nextVideoQuality('standard', 13)).toBe('data_saver');
     expect(nextVideoQuality('data_saver', 5)).toBe('data_saver');
     expect(nextVideoQuality('data_saver', 0)).toBe('standard');
+    // Chosen before the meeting: never switched back up.
+    expect(nextVideoQuality('data_saver', 0, 'data_saver')).toBe('data_saver');
   });
 });

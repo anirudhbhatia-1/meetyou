@@ -40,16 +40,24 @@ describe('message parsers', () => {
     ).toEqual({ target: 'background', type: 'capture.video', video: 'failed' });
   });
 
-  it('requires a stream ID and a video flag for capture.start', () => {
+  it('requires a stream ID, a video flag and a video quality for capture.start', () => {
     const base = { target: 'offscreen', type: 'capture.start' };
+    const q = { videoQuality: 'standard' };
     expect(parseOffscreenMessage(base)).toBeNull();
-    expect(parseOffscreenMessage({ ...base, streamId: '', recordVideo: true })).toBeNull();
-    expect(parseOffscreenMessage({ ...base, streamId: 'abc' })).toBeNull();
-    expect(parseOffscreenMessage({ ...base, streamId: 'abc', recordVideo: false })).toEqual({
-      ...base,
-      streamId: 'abc',
-      recordVideo: false,
-    });
+    expect(parseOffscreenMessage({ ...base, ...q, streamId: '', recordVideo: true })).toBeNull();
+    expect(parseOffscreenMessage({ ...base, ...q, streamId: 'abc' })).toBeNull();
+    expect(parseOffscreenMessage({ ...base, streamId: 'abc', recordVideo: false })).toBeNull();
+    expect(
+      parseOffscreenMessage({ ...base, streamId: 'abc', recordVideo: false, videoQuality: 'hd' }),
+    ).toBeNull();
+    expect(
+      parseOffscreenMessage({
+        ...base,
+        streamId: 'abc',
+        recordVideo: false,
+        videoQuality: 'data_saver',
+      }),
+    ).toEqual({ ...base, streamId: 'abc', recordVideo: false, videoQuality: 'data_saver' });
     expect(parseOffscreenMessage({ target: 'offscreen', type: 'capture.pause' })).toEqual({
       target: 'offscreen',
       type: 'capture.pause',
@@ -237,6 +245,13 @@ describe('side panel failure states (S4-08)', () => {
         parseBackgroundMessage({ target: 'background', type: 'recording.mic', deviceId }),
       ).toBeNull();
     }
+  });
+
+  it('parses a video quality report from the recorder', () => {
+    const msg = { target: 'background', type: 'capture.video_quality', quality: 'data_saver' };
+    expect(parseBackgroundMessage({ ...msg, auto: true })).toEqual({ ...msg, auto: true });
+    expect(parseBackgroundMessage(msg)).toBeNull();
+    expect(parseBackgroundMessage({ ...msg, quality: 'hd', auto: true })).toBeNull();
   });
 
   it('parses the switch, the session limit and its warning', () => {

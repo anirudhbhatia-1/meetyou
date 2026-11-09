@@ -19,6 +19,7 @@ import { PILL_LAYOUT_KEY } from './pill-model.ts';
 import { PromptChip } from './prompt-chip.ts';
 import { RecordingPill, type RecordingSnapshot } from './recording-pill.ts';
 import { postChatMessage } from '../adapters/meet/chat.ts';
+import { rightPanelInset } from '../adapters/meet/side-panel.ts';
 import {
   ACCOUNT_SETTINGS_KEY,
   accountSettingsFrom,
@@ -70,6 +71,7 @@ const promptChip = new PromptChip(document, {
   onDismiss: () => {
     console.log('[MeetYou] Prompt chip: dismissed by user');
   },
+  rightInset: () => rightPanelInset(document),
 });
 
 const recordingPill = new RecordingPill(document, {

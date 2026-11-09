@@ -1,3 +1,4 @@
+import { isVideoQuality, type VideoQuality } from './messages.ts';
 import {
   CONSENT_MESSAGE_AUDIO_ONLY,
   DEFAULT_USER_SETTINGS,
@@ -14,9 +15,16 @@ import {
  */
 export const RECORD_VIDEO_KEY = 'settings.recordVideo';
 export const ACCOUNT_SETTINGS_KEY = 'settings.account';
+/** The panel's video quality for the next recording (DESIGN §8.5), reset like `recordVideo`. */
+export const VIDEO_QUALITY_KEY = 'settings.videoQuality';
 
 export function recordVideoFrom(items: Record<string, unknown>): boolean {
   return items[RECORD_VIDEO_KEY] !== false;
+}
+
+export function videoQualityFrom(items: Record<string, unknown>): VideoQuality {
+  const value = items[VIDEO_QUALITY_KEY];
+  return isVideoQuality(value) ? value : accountSettingsFrom(items).videoQuality;
 }
 
 /** The account settings the extension acts on (no content, safe to keep locally). */

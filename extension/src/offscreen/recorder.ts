@@ -31,6 +31,8 @@ export interface RecorderEvents {
   onLevels(me: number | null, them: number): void;
   onLink(link: StreamLink): void;
   onVideo(video: VideoStatus): void;
+  /** Video quality now in use; `auto` when the backlog switched it, not the user (§8.6). */
+  onVideoQuality(quality: VideoQuality, auto: boolean): void;
   onTranscript(message: ServerMessage): void;
   /** A video fragment reached IndexedDB. */
   onVideoFragment(): void;
@@ -90,6 +92,8 @@ export interface SessionSource {
 export async function startRecorder(options: {
   streamId: string;
   recordVideo: boolean;
+  /** The meeting's video quality (DESIGN §8.5); the backlog may still lower it. */
+  videoQuality: VideoQuality;
   /** Null: no gateway, local-only recording. */
   session: SessionSource | null;
   workletUrl: string;
@@ -231,7 +235,7 @@ export async function startRecorder(options: {
   let part: VideoPart | null = null;
   /** Video part timing for the gateway (finalize follows the session clock, ADR-0011 §3.4). */
   const emit = (event: CaptureEvent): void => client?.event(event);
-  let quality: VideoQuality = 'standard';
+  let quality: VideoQuality = options.videoQuality;
   /** Names already sent, by Meet participant ID (per recording; never logged, AGENTS §7). */
   const speakerNames = new Map<string, string>();
   let switching: Promise<void> = Promise.resolve();
@@ -322,9 +326,10 @@ export async function startRecorder(options: {
       return link === 'online' && client.backlogMs() <= AUDIO_BACKLOG_LIMIT_MS;
     },
     setUploadBacklog(fragments) {
-      const next = nextVideoQuality(quality, fragments);
+      const next = nextVideoQuality(quality, fragments, options.videoQuality);
       if (next === quality) return;
       quality = next;
+      events.onVideoQuality(next, next !== options.videoQuality);
       switching = switching.then(() => switchQuality(next));
     },
     async pause() {

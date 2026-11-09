@@ -1,5 +1,5 @@
 import type { CaptureError, CaptureState } from '../background/capture-state.ts';
-import type { StreamLink, VideoStatus } from '../messages.ts';
+import type { StreamLink, VideoQuality, VideoStatus } from '../messages.ts';
 
 export { formatClock } from '../format.ts';
 
@@ -87,10 +87,20 @@ export function connectionFor(link: StreamLink): { text: string; tone: 'ok' | 'w
 }
 
 /** Video status line (§8.6, §9 "Video stopped"). */
-export function videoLineFor(video: VideoStatus): { recording: boolean; text: string } {
+export function videoLineFor(
+  video: VideoStatus,
+  quality: VideoQuality = 'standard',
+  auto = false,
+): { recording: boolean; text: string } {
   switch (video) {
     case 'recording':
-      return { recording: true, text: 'Recording screen' };
+      return {
+        recording: true,
+        text:
+          quality === 'standard'
+            ? 'Recording screen'
+            : `Recording screen · Data saver${auto ? ' (slow connection)' : ''}`,
+      };
     case 'off':
       return { recording: false, text: 'Video off' };
     case 'unsupported':

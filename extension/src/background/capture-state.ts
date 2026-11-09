@@ -1,12 +1,15 @@
 import { lightColors } from '@meetyou/design-tokens';
 
+import { formatClock } from '../format.ts';
 import {
   isLaneFlags,
+  isVideoQuality,
   type CaptureFailure,
   type LaneFlags,
   type MeetCallState,
   type StreamLink,
   type SttHealth,
+  type VideoQuality,
   type VideoStatus,
 } from '../messages.ts';
 
@@ -65,6 +68,9 @@ export interface CaptureState {
   micError: string | null;
   link: StreamLink;
   video: VideoStatus;
+  /** Video quality in use (DESIGN §8.6 video line); `dataSaverAuto` when a slow upload chose it. */
+  videoQuality: VideoQuality;
+  dataSaverAuto: boolean;
   /** Live transcript health; `degraded`/`down` = transcript delayed (DESIGN §9). */
   stt: SttHealth;
   error: CaptureError | null;
@@ -86,6 +92,7 @@ export type CaptureEvent =
   | { type: 'resumed'; at: number }
   | { type: 'link_changed'; link: StreamLink }
   | { type: 'video_changed'; video: VideoStatus }
+  | { type: 'video_quality_changed'; quality: VideoQuality; auto: boolean }
   | { type: 'stt_changed'; stt: SttHealth }
   | { type: 'mic_lost' }
   /** Another microphone was opened for the `me` lane (§9 "Choose microphone"). */
@@ -113,6 +120,8 @@ export const IDLE_CAPTURE: CaptureState = {
   micError: null,
   link: 'off',
   video: 'off',
+  videoQuality: 'standard',
+  dataSaverAuto: false,
   stt: 'ok',
   error: null,
   stoppedAfterMs: null,
@@ -196,6 +205,13 @@ export function nextCaptureState(state: CaptureState, event: CaptureEvent): Capt
     case 'video_changed':
       if (!CAPTURING.has(state.status)) return state;
       return { ...state, video: event.video };
+    case 'video_quality_changed':
+      if (!CAPTURING.has(state.status)) return state;
+      return {
+        ...state,
+        videoQuality: event.quality,
+        dataSaverAuto: event.quality === 'data_saver' && event.auto,
+      };
     case 'stt_changed':
       if (!CAPTURING.has(state.status) || state.stt === event.stt) return state;
       return { ...state, stt: event.stt };
@@ -289,6 +305,8 @@ export function parseCaptureState(raw: unknown): CaptureState {
     micError: typeof r.micError === 'string' ? r.micError : null,
     link: typeof r.link === 'string' && LINKS.has(r.link) ? (r.link as StreamLink) : 'off',
     video: typeof r.video === 'string' && VIDEO.has(r.video) ? (r.video as VideoStatus) : 'off',
+    videoQuality: isVideoQuality(r.videoQuality) ? r.videoQuality : 'standard',
+    dataSaverAuto: r.dataSaverAuto === true,
     stt: typeof r.stt === 'string' && STT.has(r.stt) ? (r.stt as SttHealth) : 'ok',
     error: typeof r.error === 'string' && ERRORS.has(r.error) ? (r.error as CaptureError) : null,
     stoppedAfterMs:
@@ -308,19 +326,41 @@ export interface Badge {
   color: string;
 }
 
-/** Toolbar badge per status (ARCHITECTURE §16.1 "badge REC"), coloured from the design tokens. */
+/**
+ * Toolbar badge per status (DESIGN §8.3), coloured from the design tokens. Recording is a plain
+ * ember dot: a badge with a blank text draws just its colour.
+ */
 export function badgeFor(state: CaptureState): Badge {
   switch (state.status) {
     case 'recording':
-      return { text: 'REC', color: lightColors.ember };
+      return { text: ' ', color: lightColors.ember };
     case 'paused':
-      return { text: '❚❚', color: lightColors.muted };
+      return { text: 'II', color: lightColors.muted };
     case 'reconnecting':
-      return { text: '…', color: lightColors.amberDot };
+      return { text: '!', color: lightColors.amberDot };
     case 'error':
       return { text: '!', color: lightColors.danger };
     default:
       return { text: '', color: lightColors.muted };
+  }
+}
+
+/** Product name as the manifest and the Meet prompt show it (DESIGN §8.3 says "Minutes"). */
+const ACTION_NAME = 'MeetYou';
+
+/** Toolbar tooltip (DESIGN §8.3); the recording time is refreshed while it runs. */
+export function actionTitleFor(state: CaptureState, now: number): string {
+  switch (state.status) {
+    case 'recording':
+      return `${ACTION_NAME} — ${state.video === 'recording' ? 'recording audio and screen' : 'taking notes'} ${formatClock(elapsedMs(state, now))}`;
+    case 'paused':
+      return `${ACTION_NAME} — paused`;
+    case 'reconnecting':
+      return `${ACTION_NAME} — reconnecting, audio is being saved`;
+    case 'error':
+      return `${ACTION_NAME} — recording stopped`;
+    default:
+      return `Open ${ACTION_NAME}`;
   }
 }
 

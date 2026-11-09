@@ -826,7 +826,8 @@ Store review. **[Verify]** final list during M1.
 | `identity` | Google sign-in via `chrome.identity.launchWebAuthFlow` with PKCE ([ADR-0004](adr/0004-auth-and-token-model.md), proposed) |
 | Host permission `https://meet.google.com/*` | Content script for call detection, metadata, active speaker, chat notice |
 | Host permission for our API domain | Backend communication |
-| `notifications` | "Notes ready" and "Your export is ready" alerts when the user has left the side panel (O1, DESIGN §8.7) |
+| `notifications` | "Notes ready" alert when the user has left the side panel (O1, DESIGN §8.7); "Your export is ready" comes from the web app, which asks for browser notifications when an export starts |
+| `alarms` | After Stop, checks every 30 s (for up to 30 minutes) whether the meeting's notes are ready, so the "Notes ready" alert arrives even after the service worker went to sleep (added 2026-11-09, S4-13; shows no install warning) |
 | `unlimitedStorage` | Local buffer for meeting video (up to ~1 hour, ~470 MB) until it is uploaded, so Chrome does not evict it (ADR-0011) |
 
 Keyboard shortcuts (`Alt+Shift+R`, `Alt+Shift+P`) use the manifest `commands` key, which is not a

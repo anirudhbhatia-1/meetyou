@@ -7,17 +7,25 @@ import { lightColors as c, fonts, radius } from '@meetyou/design-tokens';
  * so Google Meet styles cannot leak in or break its appearance. It has no Start button: Chrome
  * allows tab capture only after the toolbar icon or the keyboard shortcut (a click in the page
  * does not invoke the extension, verified 2026-11-06; ARCHITECTURE §26.2 Q1), so it says how to
- * start instead of offering a button that is refused.
- * TODO(S4-04): shift left of Meet's right-hand panel when it is open (§8.2) — needs a selector
- * for that panel in adapters/meet/selectors.ts, verified on real Meet.
+ * start instead of offering a button that is refused. While shown it keeps left of Meet's
+ * right-hand panel (§8.2) using the adapter's measurement (`rightInset`).
  */
 
 export interface PromptChipCallbacks {
   onDismiss: () => void;
+  /** Width of Meet's open right-hand panel in px (0 when closed); the chip stays left of it. */
+  rightInset?: () => number;
 }
 
-/** Recording statuses during which the chip must stay hidden (capture-state.ts CAPTURING). */
-/** `elsewhere`: another Meet tab is being recorded (FR-REC-07). */
+/** DESIGN §8.2: top 18 / right 18 of the Meet viewport. */
+const EDGE_PX = 18;
+/** Meet's panel opens and closes without an event we can rely on, so the chip re-measures. */
+const INSET_POLL_MS = 1_000;
+
+/**
+ * Recording statuses during which the chip must stay hidden (capture-state.ts CAPTURING), plus
+ * `elsewhere`: another Meet tab is being recorded (FR-REC-07).
+ */
 const ACTIVE_STATUSES = new Set([
   'starting',
   'recording',
@@ -60,6 +68,7 @@ export class PromptChip {
   private recordingActive = false;
   private meetingCode: string | null = null;
   private liveRegion: HTMLElement | null = null;
+  private insetTimer: ReturnType<typeof setInterval> | null = null;
   private reminderEl: HTMLElement | null = null;
   /** False when retention is "Delete after notes" too (the content script decides, ADR-0011 §3.5). */
   private recordVideo = true;
@@ -91,8 +100,8 @@ export class PromptChip {
     const host = this.doc.createElement('div');
     host.id = 'meetyou-prompt-root';
     host.style.position = 'fixed';
-    host.style.top = '18px';
-    host.style.right = '18px';
+    host.style.top = `${EDGE_PX}px`;
+    host.style.right = `${EDGE_PX}px`;
     host.style.zIndex = '2147483647';
     host.style.display = 'none';
 
@@ -119,6 +128,7 @@ export class PromptChip {
     if (this.host !== null) {
       this.host.style.display = 'block';
       this.isVisible = true;
+      this.followPanel(true);
       // Changing the live region's text (not toggling display) is what screen readers announce.
       if (this.liveRegion !== null) this.liveRegion.textContent = 'Take notes for this call?';
     }
@@ -128,10 +138,25 @@ export class PromptChip {
    * Hides the prompt chip without setting dismissed = true.
    */
   public hide(): void {
+    this.followPanel(false);
     if (this.host !== null) {
       this.host.style.display = 'none';
       this.isVisible = false;
     }
+  }
+
+  private followPanel(on: boolean): void {
+    const measure = this.callbacks.rightInset;
+    if (!on || measure === undefined) {
+      if (this.insetTimer !== null) clearInterval(this.insetTimer);
+      this.insetTimer = null;
+      return;
+    }
+    const place = () => {
+      if (this.host !== null) this.host.style.right = `${EDGE_PX + measure()}px`;
+    };
+    place();
+    this.insetTimer ??= setInterval(place, INSET_POLL_MS);
   }
 
   /**
@@ -147,6 +172,7 @@ export class PromptChip {
    * Unmounts the host and removes event listeners.
    */
   public unmount(): void {
+    this.followPanel(false);
     this.doc.removeEventListener('keydown', this.boundOnKeyDown);
     if (this.host !== null) {
       this.host.remove();

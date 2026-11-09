@@ -249,7 +249,7 @@ DOM text read from Meet is **untrusted input**: length-limited, sanitized, never
 rendered as HTML.
 
 ### 4.7 Permissions (see PRD §18)
-`tabCapture` (audio and video), `offscreen`, `sidePanel`, `storage`, `unlimitedStorage` (video buffer), `notifications`, `identity` (if used), host
+`tabCapture` (audio and video), `offscreen`, `sidePanel`, `storage`, `unlimitedStorage` (video buffer), `notifications`, `alarms` (the "Notes ready" check after Stop), `identity` (if used), host
 permissions for `https://meet.google.com/*` and our API domain; keyboard shortcuts via the
 `commands` manifest key. No `<all_urls>`. `externally_connectable` is not
 set, so web pages cannot message the extension.

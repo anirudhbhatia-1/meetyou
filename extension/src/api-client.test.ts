@@ -94,7 +94,13 @@ describe('API video signing', () => {
 
 describe('cloud messages', () => {
   it('keeps a valid API session on capture.start and drops a malformed one', () => {
-    const base = { target: 'offscreen', type: 'capture.start', streamId: 's', recordVideo: true };
+    const base = {
+      target: 'offscreen',
+      type: 'capture.start',
+      streamId: 's',
+      recordVideo: true,
+      videoQuality: 'standard',
+    };
     expect(parseOffscreenMessage({ ...base, session })).toEqual({ ...base, session });
     expect(
       parseOffscreenMessage({ ...base, session: { ...session, streamUrl: 'http://x' } }),

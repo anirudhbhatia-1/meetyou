@@ -1,4 +1,4 @@
-import { Banner, Button, Icon, Switch, TextArea } from '@meetyou/ui';
+import { Banner, Button, Icon, Segmented, Switch, TextArea } from '@meetyou/ui';
 import { useEffect, useState } from 'react';
 
 import type { CaptureState } from '../background/capture-state.ts';
@@ -12,6 +12,8 @@ import {
   RECORD_VIDEO_KEY,
   recordVideoFrom,
   videoAllowed,
+  VIDEO_QUALITY_KEY,
+  videoQualityFrom,
 } from '../settings.ts';
 import { AccountLine, SignInCard, useAccount } from './Account.tsx';
 import { send, sendStart, useLocalSetting } from './hooks.ts';
@@ -165,11 +167,18 @@ function CallVideo({ sessionId }: { sessionId: string | null }) {
  * needs a start-time quality in the offscreen recorder, and the retention "Delete after notes"
  * lock needs Settings (S4-12). "What to record: Whole screen" is P1 (FR-CAP-15).
  */
+const QUALITY_OPTIONS = [
+  { value: 'standard', label: 'Standard' },
+  { value: 'data_saver', label: 'Data saver' },
+] as const;
+
 function RecordingOptions() {
   const [recordVideo, setRecordVideo] = useLocalSetting(RECORD_VIDEO_KEY, recordVideoFrom);
   const [account] = useLocalSetting(ACCOUNT_SETTINGS_KEY, accountSettingsFrom);
+  const [quality, setQuality] = useLocalSetting(VIDEO_QUALITY_KEY, videoQualityFrom);
   // "Delete after notes" keeps nothing to replay: video is off for every meeting (DESIGN §8.5).
   const locked = account !== null && !videoAllowed(account);
+  const videoOn = !locked && (recordVideo ?? true);
   return (
     <div className="options">
       <div className="option-row">
@@ -177,7 +186,7 @@ function RecordingOptions() {
         <Switch
           compact
           label="Record video"
-          checked={!locked && (recordVideo ?? true)}
+          checked={videoOn}
           disabled={recordVideo === null || locked}
           onChange={setRecordVideo}
         />
@@ -187,6 +196,19 @@ function RecordingOptions() {
           ? 'Video is off because recordings are deleted as soon as your notes are ready. Change this in Settings.'
           : 'Records what the Meet tab shows — the video grid and anything people present. Just for this meeting; the default is in Settings.'}
       </p>
+      {videoOn && quality !== null && (
+        <>
+          <Segmented
+            label="Video quality"
+            options={QUALITY_OPTIONS}
+            value={quality}
+            onChange={setQuality}
+          />
+          <p className="option-help">
+            Data saver uses less upload — good for slow or mobile connections.
+          </p>
+        </>
+      )}
     </div>
   );
 }

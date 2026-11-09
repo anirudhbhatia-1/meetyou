@@ -7,7 +7,7 @@ declare namespace chrome {
     function getURL(path: string): string;
     function getContexts(filter: {
       contextTypes: readonly string[];
-      documentUrls: readonly string[];
+      documentUrls?: readonly string[];
     }): Promise<readonly unknown[]>;
     function sendMessage(message: unknown): Promise<unknown>;
     type MessageListener = (

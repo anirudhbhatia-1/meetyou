@@ -51,6 +51,8 @@ export type BackgroundMessage =
   | { target: 'background'; type: 'capture.mic_lost' }
   | { target: 'background'; type: 'capture.link'; link: StreamLink }
   | { target: 'background'; type: 'capture.video'; video: VideoStatus }
+  /** The recorder changed video quality on its own (backlog) or reports the chosen one. */
+  | { target: 'background'; type: 'capture.video_quality'; quality: VideoQuality; auto: boolean }
   | { target: 'background'; type: 'capture.stt'; stt: SttHealth }
   /** Every uploadable video fragment is uploaded; the offscreen document may close (ADR-0011). */
   | { target: 'background'; type: 'capture.upload_idle' }
@@ -70,6 +72,12 @@ export interface AuthReply {
 export interface MicReply {
   ok: boolean;
   error?: string;
+}
+
+export type VideoQuality = 'standard' | 'data_saver';
+
+export function isVideoQuality(value: unknown): value is VideoQuality {
+  return value === 'standard' || value === 'data_saver';
 }
 
 /** `enumerateDevices` IDs are opaque strings; bounded so a message cannot carry a huge one. */
@@ -95,6 +103,7 @@ export type OffscreenMessage =
       type: 'capture.start';
       streamId: string;
       recordVideo: boolean;
+      videoQuality: VideoQuality;
       /** Cloud mode: the API session to stream to (absent with the dev gateway). */
       session?: StartedSession;
     }
@@ -249,6 +258,18 @@ export function parseBackgroundMessage(message: unknown): BackgroundMessage | nu
   if (SIMPLE_BACKGROUND.has(message.type)) {
     return { target: 'background', type: message.type } as BackgroundMessage;
   }
+  if (
+    message.type === 'capture.video_quality' &&
+    isVideoQuality(message.quality) &&
+    typeof message.auto === 'boolean'
+  ) {
+    return {
+      target: 'background',
+      type: 'capture.video_quality',
+      quality: message.quality,
+      auto: message.auto,
+    };
+  }
   if (message.type === 'recording.mic' && isDeviceId(message.deviceId)) {
     return { target: 'background', type: 'recording.mic', deviceId: message.deviceId };
   }
@@ -315,7 +336,8 @@ export function parseOffscreenMessage(message: unknown): OffscreenMessage | null
     message.type === 'capture.start' &&
     typeof message.streamId === 'string' &&
     message.streamId.length > 0 &&
-    typeof message.recordVideo === 'boolean'
+    typeof message.recordVideo === 'boolean' &&
+    isVideoQuality(message.videoQuality)
   ) {
     const session = parseStartedSession(message.session);
     return {
@@ -323,6 +345,7 @@ export function parseOffscreenMessage(message: unknown): OffscreenMessage | null
       type: 'capture.start',
       streamId: message.streamId,
       recordVideo: message.recordVideo,
+      videoQuality: message.videoQuality,
       ...(session !== null ? { session } : {}),
     };
   }

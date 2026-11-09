@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  actionTitleFor,
   badgeFor,
   hasLeftCall,
   canStart,
@@ -158,6 +159,28 @@ describe('nextCaptureState', () => {
     expect(lost.lanes).toEqual({ me: false, them: true });
   });
 
+  it('marks data saver as automatic only when the backlog chose it', () => {
+    const auto = nextCaptureState(recording(), {
+      type: 'video_quality_changed',
+      quality: 'data_saver',
+      auto: true,
+    });
+    expect(auto).toMatchObject({ videoQuality: 'data_saver', dataSaverAuto: true });
+    const back = nextCaptureState(auto, {
+      type: 'video_quality_changed',
+      quality: 'standard',
+      auto: true,
+    });
+    expect(back).toMatchObject({ videoQuality: 'standard', dataSaverAuto: false });
+    expect(
+      nextCaptureState(IDLE_CAPTURE, {
+        type: 'video_quality_changed',
+        quality: 'data_saver',
+        auto: false,
+      }),
+    ).toBe(IDLE_CAPTURE);
+  });
+
   it('restores the mic lane after another microphone is chosen', () => {
     const lost = nextCaptureState(recording(), { type: 'mic_lost' });
     expect(nextCaptureState(lost, { type: 'mic_restored' })).toMatchObject({
@@ -233,10 +256,24 @@ describe('parseCaptureState', () => {
 });
 
 describe('badgeFor', () => {
-  it('shows REC only while recording and clears when idle', () => {
-    expect(badgeFor(recording()).text).toBe('REC');
-    expect(badgeFor(nextCaptureState(recording(), { type: 'paused', at: 0 })).text).toBe('❚❚');
+  it('follows DESIGN §8.3: ember dot, II, amber and red !', () => {
+    expect(badgeFor(recording())).toMatchObject({ text: ' ' });
+    expect(badgeFor(nextCaptureState(recording(), { type: 'paused', at: 0 })).text).toBe('II');
+    const lost = nextCaptureState(recording(), { type: 'link_changed', link: 'reconnecting' });
+    expect(badgeFor(lost).text).toBe('!');
+    expect(
+      badgeFor(nextCaptureState(recording(), { type: 'failed', error: 'capture_lost' })).text,
+    ).toBe('!');
     expect(badgeFor(IDLE_CAPTURE).text).toBe('');
+  });
+});
+
+describe('actionTitleFor', () => {
+  it('names the state and, while recording, the recorded time', () => {
+    expect(actionTitleFor(recording(), 66_000)).toBe('MeetYou — recording audio and screen 1:05');
+    const audioOnly = { ...recording(), video: 'off' as const };
+    expect(actionTitleFor(audioOnly, 66_000)).toBe('MeetYou — taking notes 1:05');
+    expect(actionTitleFor(IDLE_CAPTURE, 0)).toBe('Open MeetYou');
   });
 });
 

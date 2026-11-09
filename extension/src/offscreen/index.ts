@@ -17,6 +17,7 @@ import { CaptureStartError } from './capture.ts';
 import { devSessionSource, putFragment, signDevVideoFragments } from './dev-gateway.ts';
 import { openMinutesDb } from './idb.ts';
 import { startRecorder, type Recorder, type SessionSource } from './recorder.ts';
+import type { VideoQuality } from './video-recorder.ts';
 import {
   IdbFragmentQueue,
   pruneStaleFragments,
@@ -219,6 +220,7 @@ function armLimitTimers(): void {
 async function start(
   streamId: string,
   recordVideo: boolean,
+  videoQuality: VideoQuality,
   session: StartedSession | undefined,
 ): Promise<CaptureStartResult> {
   if (recorder !== null) {
@@ -230,6 +232,7 @@ async function start(
     recorder = await startRecorder({
       streamId,
       recordVideo,
+      videoQuality,
       session: sessionSource(session),
       preferredCodec: AUDIO_CODEC,
       workletUrl: chrome.runtime.getURL('offscreen/pcm-worklet.js'),
@@ -241,6 +244,8 @@ async function start(
         onLink: (link) => notifyBackground({ target: 'background', type: 'capture.link', link }),
         onVideo: (video) =>
           notifyBackground({ target: 'background', type: 'capture.video', video }),
+        onVideoQuality: (quality, auto) =>
+          notifyBackground({ target: 'background', type: 'capture.video_quality', quality, auto }),
         onTranscript: forwardTranscript,
         onVideoFragment: () => {
           onVideoFragment().catch((error: unknown) => logError('video upload wake failed', error));
@@ -301,7 +306,7 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
 
   switch (parsed.type) {
     case 'capture.start':
-      return reply(start(parsed.streamId, parsed.recordVideo, parsed.session));
+      return reply(start(parsed.streamId, parsed.recordVideo, parsed.videoQuality, parsed.session));
     case 'capture.stop':
       return reply(stop());
     case 'capture.pause':

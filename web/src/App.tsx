@@ -2,9 +2,8 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 
 import { CALLBACK_PATH, WebAuth } from './api/auth.ts';
 import { createHttpApi } from './api/http.ts';
-import { createMockApi } from './api/mock.ts';
 import type { LibraryApi } from './api/types.ts';
-import { Banner, SkeletonRows, ToastProvider } from '@meetyou/ui';
+import { Banner, Button, SkeletonRows, ToastProvider } from '@meetyou/ui';
 import { ApiContext } from './lib/api-context.ts';
 import { useOnline } from './lib/online.ts';
 import { useRoute } from './lib/router.ts';
@@ -21,12 +20,15 @@ import { SignIn } from './screens/SignIn.tsx';
 
 type Boot =
   | { state: 'loading' }
+  /** Production could not read `/config.json`: never fall back to the mock API there. */
+  | { state: 'unavailable' }
   | { state: 'signed-out'; clientId: string; failed: boolean }
   | { state: 'ready'; api: LibraryApi };
 
 /**
  * Sign-in gate (ADR-0004 §4.5): with `/config.json` the app talks to the API and needs a session
- * (refresh cookie, or the Google callback); without it, Vite dev runs on the mock API.
+ * (refresh cookie, or the Google callback); without it, Vite dev runs on the mock API. Production
+ * builds leave the mock out (S4-14) and show a reload message instead.
  */
 export function App() {
   const [boot, setBoot] = useState<Boot>({ state: 'loading' });
@@ -50,7 +52,12 @@ export function App() {
       const config = await loadRuntimeConfig();
       if (!current) return;
       if (config === null) {
-        setBoot({ state: 'ready', api: createMockApi() });
+        if (import.meta.env.DEV) {
+          const { createMockApi } = await import('./api/mock.ts');
+          if (current) setBoot({ state: 'ready', api: createMockApi() });
+        } else {
+          setBoot({ state: 'unavailable' });
+        }
         return;
       }
       setClientId(config.googleClientId);
@@ -84,6 +91,18 @@ export function App() {
     return (
       <main className="signin">
         <SkeletonRows rows={3} />
+      </main>
+    );
+  }
+  if (boot.state === 'unavailable') {
+    return (
+      <main className="signin">
+        <Banner tone="error">
+          Couldn&rsquo;t reach Minutes. Check your connection and reload.
+        </Banner>
+        <Button variant="primary" onClick={() => window.location.reload()}>
+          Reload
+        </Button>
       </main>
     );
   }
