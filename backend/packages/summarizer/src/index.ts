@@ -5,3 +5,5 @@ export * from './summarize.ts';
 export * from './templates.ts';
 export * from './generate.ts';
 export * from './ask.ts';
+export * from './due-date.ts';
+export * from './validate.ts';
