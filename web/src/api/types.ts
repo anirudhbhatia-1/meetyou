@@ -90,6 +90,11 @@ export interface LibraryApi {
   sendFeedback(summaryId: string, useful: boolean, comment?: string): Promise<void>;
   /** Processing progress until the notes are ready (S3-03); returns an unsubscribe function. */
   watchProgress(meetingId: string, onProgress: (progress: MeetingProgress) => void): () => void;
+  /** DESIGN §15.5 vocabulary: words the transcription should listen for (S3-10). */
+  getGlossary(): Promise<{ terms: string[]; maxTerms: number }>;
+  saveGlossary(
+    terms: string[],
+  ): Promise<{ ok: true; terms: string[] } | { ok: false; error: 'too_long' | 'invalid' }>;
   /** Ends the web session (clears the refresh cookie). */
   signOut(): Promise<void>;
   /** FR-SET-02: soft-deletes a meeting; the server removes it after a short grace period. */

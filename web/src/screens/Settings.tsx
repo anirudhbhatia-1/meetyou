@@ -4,8 +4,9 @@ import { useState } from 'react';
 import { useApi } from '../lib/api-context.ts';
 import { useAsync } from '../lib/useAsync.ts';
 import { ConfirmAlert } from './ConfirmAlert.tsx';
+import { Vocabulary } from './Vocabulary.tsx';
 
-/** DESIGN §15. TODO(S4-12): recording, language, the rest of privacy & data, templates, vocabulary. */
+/** DESIGN §15. TODO(S4-12): recording, language, the rest of privacy & data, templates. */
 export function Settings({ onSignOut }: { onSignOut: () => void }) {
   const api = useApi();
   const me = useAsync(() => api.me(), []);
@@ -33,6 +34,7 @@ export function Settings({ onSignOut }: { onSignOut: () => void }) {
           />
         </div>
       </Card>
+      <Vocabulary />
       <Card>
         <div className="setting-row">
           <div>

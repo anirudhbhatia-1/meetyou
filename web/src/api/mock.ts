@@ -20,6 +20,7 @@ export function createMockApi(options: { latencyMs?: number } = {}): LibraryApi 
 
   /** Soft-deleted in this session (undo brings them back). */
   const deleted = new Set<string>();
+  const glossary: string[] = ['Razorpay', 'Sameer'];
   /** Regenerated versions waiting for Keep / Go back (DESIGN §12.2). */
   const candidates = new Map<string, MeetingSummary>();
   /** Asked in this session, per meeting (DESIGN §12.7). */
@@ -126,6 +127,14 @@ export function createMockApi(options: { latencyMs?: number } = {}): LibraryApi 
       const m = meetings.find((x) => x.id === id);
       if (m !== undefined) onProgress({ status: m.status, processingStep: m.processingStep });
       return () => undefined;
+    },
+    getGlossary: () => wait({ terms: [...glossary], maxTerms: 50 }),
+    saveGlossary: (terms) => {
+      if (terms.length > 50 || terms.some((t) => t.includes(','))) {
+        return wait({ ok: false as const, error: 'invalid' as const });
+      }
+      glossary.splice(0, glossary.length, ...terms);
+      return wait({ ok: true as const, terms: [...glossary] });
     },
     listQuestions: (id) => wait({ items: asked.get(id) ?? [], usage: usage() }),
     askQuestion: (id, question) => {

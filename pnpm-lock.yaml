@@ -50,6 +50,9 @@ importers:
       '@meetyou/db':
         specifier: workspace:*
         version: link:../../packages/db
+      '@meetyou/hinglish':
+        specifier: workspace:*
+        version: link:../../../shared/hinglish
       '@meetyou/pipeline':
         specifier: workspace:*
         version: link:../../packages/pipeline

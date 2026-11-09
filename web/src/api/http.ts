@@ -1,6 +1,7 @@
 import {
   ActionItemList,
   AskQuestionResponse,
+  GlossaryResponse,
   MeResponse,
   Meeting,
   MeetingList,
@@ -264,6 +265,20 @@ export function createHttpApi(auth: WebAuth): LibraryApi {
       if (res.status === 409) return { ok: false, error: 'no_transcript' };
       if (res.status === 503) return { ok: false, error: 'unavailable' };
       return { ok: false, error: 'failed' };
+    },
+
+    async getGlossary() {
+      return GlossaryResponse.parse(await get('/v1/glossary'));
+    },
+
+    async saveGlossary(terms) {
+      const res = await auth.authorized('/v1/glossary', {
+        method: 'PUT',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ terms }),
+      });
+      if (res.ok) return { ok: true, terms: GlossaryResponse.parse(await res.json()).terms };
+      return { ok: false, error: res.status === 422 ? 'too_long' : 'invalid' };
     },
 
     signOut: () => auth.signOut(),

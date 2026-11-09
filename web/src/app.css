@@ -825,3 +825,54 @@
     transition: none;
   }
 }
+
+/* DESIGN §15.5 Vocabulary */
+.vocab {
+  display: grid;
+  gap: 12px;
+}
+.vocab-chips {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.vocab-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 30px;
+  padding: 0 4px 0 12px;
+  border-radius: 999px;
+  border: 1px solid var(--olive-line);
+  background: var(--olive-tint);
+  color: var(--olive-ink);
+  font-size: 13px;
+}
+.vocab-chip button {
+  all: unset;
+  display: inline-grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  cursor: pointer;
+}
+.vocab-chip button:focus-visible {
+  outline: 2px solid var(--olive-line);
+}
+.vocab-input {
+  height: 44px;
+  border-radius: var(--radius-row);
+  border: 1px solid var(--control-line);
+  background: var(--surface);
+  padding: 0 14px;
+  font: inherit;
+  color: var(--ink);
+}
+.vocab-input:focus-visible {
+  outline: 2px solid var(--olive-line);
+  outline-offset: 2px;
+}

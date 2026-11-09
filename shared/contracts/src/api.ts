@@ -207,6 +207,11 @@ export const GlossaryTerm = z
   .min(1)
   .max(100)
   .refine((t) => !t.includes(','), { message: 'Commas are not allowed' });
-export const GlossaryResponse = z.object({ terms: z.array(GlossaryTerm) });
+export const GlossaryResponse = z.object({
+  terms: z.array(GlossaryTerm),
+  /** The provider's term limit, for "{n} of {max}" near the limit (DESIGN §15.5). */
+  maxTerms: z.number().int().positive(),
+});
+export type GlossaryResponse = z.infer<typeof GlossaryResponse>;
 export const PutGlossaryRequest = z.object({ terms: z.array(GlossaryTerm).max(50) });
 export type PutGlossaryRequest = z.infer<typeof PutGlossaryRequest>;
