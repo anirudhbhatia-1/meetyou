@@ -19,6 +19,7 @@
     "@meetyou/auth": "workspace:*",
     "@meetyou/contracts": "workspace:*",
     "@meetyou/db": "workspace:*",
+    "@meetyou/hinglish": "workspace:*",
     "@meetyou/pipeline": "workspace:*",
     "@meetyou/providers": "workspace:*",
     "@meetyou/queue": "workspace:*",

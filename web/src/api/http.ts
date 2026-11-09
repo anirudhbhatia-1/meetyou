@@ -7,6 +7,7 @@ import {
   MeetingProgress,
   MeetingQuestionsResponse,
   MeetingSummaryResponse,
+  SearchResponse,
   Segment,
   VideoPlaybackResponse,
   type SummaryItem,
@@ -66,12 +67,20 @@ export function createHttpApi(auth: WebAuth): LibraryApi {
       const query = new URLSearchParams({ limit: '100' });
       if (filter.template !== 'all') query.set('template', filter.template);
       const items = MeetingList.parse(await get(`/v1/meetings?${query.toString()}`)).items;
-      // TODO(S3-09): server search (`q`, then /v1/search); until then title and people only.
-      const words = filter.query.trim().toLowerCase().split(/\s+/).filter(Boolean);
-      return items.filter((m) => {
-        const haystack = [m.title, ...m.participantNames].join(' ').toLowerCase();
-        return words.every((w) => haystack.includes(w));
-      });
+      const q = filter.query.trim();
+      if (q === '') return items;
+      // S3-09: transcripts, notes, summaries and titles on the server, best match first; people's
+      // names are matched here (they are not indexed).
+      const found = SearchResponse.parse(
+        await get(`/v1/search?q=${encodeURIComponent(q.slice(0, 200))}&limit=50`),
+      );
+      const rank = new Map(found.results.map((r, i) => [r.meeting.id, i]));
+      const words = q.toLowerCase().split(/\s+/).filter(Boolean);
+      const byPeople = (m: Meeting) =>
+        words.every((w) => m.participantNames.join(' ').toLowerCase().includes(w));
+      return items
+        .filter((m) => rank.has(m.id) || byPeople(m))
+        .sort((a, b) => (rank.get(a.id) ?? 1e9) - (rank.get(b.id) ?? 1e9));
     },
 
     async getMeeting(id) {

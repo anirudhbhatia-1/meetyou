@@ -64,3 +64,25 @@ export const MeetingProgress = z.object({
   processingStep: ProcessingStep.nullable(),
 });
 export type MeetingProgress = z.infer<typeof MeetingProgress>;
+
+// GET /v1/search?q=&limit= (S3-09, DESIGN §11 item 5): the caller's meetings, best match first.
+export const SearchQuery = z.object({
+  q: z.string().trim().min(1).max(200),
+  limit: z.coerce.number().int().min(1).max(50).default(20),
+});
+/** Snippets mark matched words with U+0001 … U+0002 so the UI can highlight without HTML. */
+export const SEARCH_MARK_START = '\u0001';
+export const SEARCH_MARK_END = '\u0002';
+export const SearchHit = z.object({
+  kind: z.enum(['title', 'segment', 'note', 'summary_item']),
+  id: z.string().min(1),
+  /** Session time of a transcript line or note; null for titles and summary items. */
+  startMs: z.number().int().nonnegative().nullable(),
+  snippet: z.string(),
+});
+export const SearchResult = z.object({
+  meeting: z.object({ id: z.string().min(1), title: z.string(), startedAt: IsoDateTime }),
+  hits: z.array(SearchHit).max(3),
+});
+export const SearchResponse = z.object({ results: z.array(SearchResult) });
+export type SearchResponse = z.infer<typeof SearchResponse>;
