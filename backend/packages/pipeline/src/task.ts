@@ -1,5 +1,5 @@
 import { TemplateId } from '@meetyou/contracts';
-import type { Db } from '@meetyou/db';
+import type { Db, WorkspaceTx } from '@meetyou/db';
 import { createLogger, errorCode } from '@meetyou/log';
 import { LlmHttpError, type LlmProvider } from '@meetyou/providers';
 import { DEFAULT_MAX_ATTEMPTS, defineTask, enqueue, jobKey } from '@meetyou/queue';
@@ -9,6 +9,7 @@ import { z } from 'zod';
 import { nameLiveClusters } from './batch/naming.ts';
 import { MIN_BATCH_MS, retranscribeJob, retranscribeJobKey } from './batch/task.ts';
 import { ensureSelfParticipant, loadMeeting } from './meeting-data.ts';
+import { scheduleAudioRetention } from './retention.ts';
 import { storeFailedSummary, storeSummary } from './store.ts';
 
 export const MEETING_SUMMARIZE = 'meeting.summarize';
@@ -60,29 +61,69 @@ export function summarizeTask(deps: {
     });
     if (meeting === null) return; // deleted meanwhile
     const template = payload.template ?? meeting.template;
-    const setStep = (
-      step: 'summarizing' | 'validating' | 'done' | null,
-      status?: 'processing' | 'ready' | 'updated' | 'failed' | 'too_short',
-    ) =>
+    const endedAt = meeting.endedAt ?? new Date();
+    const setStep = (step: 'summarizing' | 'validating' | 'done') =>
       deps.db.inWorkspace(workspaceId, (tx) =>
         tx
           .updateTable('meetings')
-          .set({ processingStep: step, ...(status !== undefined ? { status } : {}) })
+          .set({ processingStep: step })
           .where('id', '=', meetingId)
           .execute(),
       );
+    /**
+     * The meeting's outcome, in the same transaction as the jobs that follow it (a job that starts
+     * right after commit must see the new status). Only the first run decides `failed` or
+     * `too_short`: a batch or rewrite that goes wrong leaves the readable notes as they were.
+     */
+    const settle = async (
+      tx: WorkspaceTx,
+      outcome: 'ready' | 'too_short' | 'failed' | 'stored',
+    ): Promise<void> => {
+      if (reason === 'regenerate') return;
+      const status =
+        reason === 'batch'
+          ? outcome === 'stored'
+            ? 'updated'
+            : undefined
+          : outcome === 'stored'
+            ? 'ready'
+            : outcome;
+      await tx
+        .updateTable('meetings')
+        .set({
+          processingStep: outcome === 'failed' && reason === 'session_end' ? null : 'done',
+          ...(status !== undefined ? { status } : {}),
+        })
+        .where('id', '=', meetingId)
+        .execute();
+      if (reason !== 'session_end' || outcome === 'failed') return;
+      // §9.2 step 9: retention starts once the first run settled ("immediate" never on failure).
+      await scheduleAudioRetention(tx, workspaceId, meetingId, endedAt);
+      // The batch pass follows, if the audio is kept long enough to re-read it (D-02). It also
+      // covers a meeting whose live transcript failed (too_short), from the stored audio.
+      if (deps.batch !== true) return;
+      const settings = await tx
+        .selectFrom('userSettings')
+        .select('retentionPolicy')
+        .limit(1)
+        .executeTakeFirst();
+      const duration = endedAt.getTime() - meeting.startedAt.getTime();
+      if (duration >= MIN_BATCH_MS && settings?.retentionPolicy !== 'immediate') {
+        await enqueue(
+          tx,
+          retranscribeJob,
+          { workspaceId, meetingId },
+          { jobKey: retranscribeJobKey(meetingId) },
+        );
+      }
+    };
 
     // A regenerate leaves the meeting "ready": the old notes stay readable while the new run works.
     if (reason !== 'regenerate') await setStep('summarizing');
     const hasSpeech = meeting.data.segments.some((s) => !s.echo && s.text.trim() !== '');
-    if (!hasSpeech) {
-      await setStep('done', 'too_short');
-      log.log('summary.skipped', { meetingId, reason: 'no_transcript' });
-      return;
-    }
-    if (deps.llm === null) {
-      await setStep('done', 'ready');
-      log.log('summary.skipped', { meetingId, reason: 'no_llm' });
+    if (!hasSpeech || deps.llm === null) {
+      await deps.db.inWorkspace(workspaceId, (tx) => settle(tx, hasSpeech ? 'ready' : 'too_short'));
+      log.log('summary.skipped', { meetingId, reason: hasSpeech ? 'no_llm' : 'no_transcript' });
       return;
     }
 
@@ -97,16 +138,16 @@ export function summarizeTask(deps: {
         error instanceof GenerationFailedError ||
         (error instanceof LlmHttpError && !error.retryable);
       if (!final) throw error; // the queue retries outages with backoff
-      await deps.db.inWorkspace(workspaceId, (tx) =>
-        storeFailedSummary(tx, {
+      await deps.db.inWorkspace(workspaceId, async (tx) => {
+        await storeFailedSummary(tx, {
           workspaceId,
           meetingId,
           template,
           language: meeting.summaryLanguage,
           model: deps.llm?.model ?? 'unknown',
-        }),
-      );
-      if (reason !== 'regenerate') await setStep(null, 'failed');
+        });
+        await settle(tx, 'failed');
+      });
       log.error('summary.failed', { meetingId, code: errorCode(error) });
       return;
     }
@@ -119,33 +160,25 @@ export function summarizeTask(deps: {
       meetingDate: meeting.data.meeting.date,
     });
     const stored = await deps.db.inWorkspace(workspaceId, async (tx) => {
+      // A rewrite after a failed first run has nothing to compare with: it becomes the notes.
+      const hasNotes =
+        (await tx
+          .selectFrom('summaries')
+          .select('id')
+          .where('meetingId', '=', meetingId)
+          .where('accepted', '=', true)
+          .executeTakeFirst()) !== undefined;
+      const firstNotes = reason === 'regenerate' && !hasNotes;
       const result = await storeSummary(tx, {
         workspaceId,
         meetingId,
         template,
         language: run.language,
         model: run.model,
-        accepted: reason !== 'regenerate',
+        accepted: reason !== 'regenerate' || firstNotes,
         summary: validated,
         usage: run.usage,
       });
-      // The batch pass follows the first notes, if audio is kept long enough to re-read it (D-02).
-      if (reason === 'session_end' && deps.batch === true) {
-        const duration = (meeting.endedAt?.getTime() ?? 0) - meeting.startedAt.getTime();
-        const settings = await tx
-          .selectFrom('userSettings')
-          .select('retentionPolicy')
-          .limit(1)
-          .executeTakeFirst();
-        if (duration >= MIN_BATCH_MS && settings?.retentionPolicy !== 'immediate') {
-          await enqueue(
-            tx,
-            retranscribeJob,
-            { workspaceId, meetingId },
-            { jobKey: retranscribeJobKey(meetingId) },
-          );
-        }
-      }
       // An untitled meeting takes the summary's title; a name the user gave is never replaced.
       if (meeting.title === '' && validated.title !== '') {
         await tx
@@ -154,9 +187,17 @@ export function summarizeTask(deps: {
           .where('id', '=', meetingId)
           .execute();
       }
+      await settle(tx, 'stored');
+      if (firstNotes) {
+        await tx
+          .updateTable('meetings')
+          .set({ status: 'ready', processingStep: 'done' })
+          .where('id', '=', meetingId)
+          .where('status', '=', 'failed')
+          .execute();
+      }
       return result;
     });
-    if (reason !== 'regenerate') await setStep('done', reason === 'batch' ? 'updated' : 'ready');
     log.log('summary.stored', {
       meetingId,
       summaryId: stored.summaryId,

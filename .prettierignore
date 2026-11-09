@@ -3,3 +3,5 @@ docs/
 *.md
 ai_meeting_recorders_master_architecture_blueprint.md
 shared/design-tokens/src/tokens.css
+# Written by `eval:live` (S3-05); the regression gate reads them as data.
+tools/summary-eval/recorded/

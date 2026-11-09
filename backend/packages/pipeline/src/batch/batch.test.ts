@@ -272,9 +272,11 @@ describe('meeting.retranscribe', () => {
         .executeTakeFirstOrThrow(),
       usage: await tx
         .selectFrom('usageRecords')
-        .select(['sttProvider', 'sttSecondsThem'])
-        .where('id', '=', `use_batch_${meetingId}`)
-        .executeTakeFirst(),
+        .select(['sttProvider', 'sttSecondsMe', 'sttSecondsThem'])
+        .where('meetingId', '=', meetingId)
+        .where('sttProvider', '=', 'fake:batch')
+        .orderBy('sttSecondsThem')
+        .execute(),
     }));
 
   it('replaces a materially different transcript, keeps citations, names speakers and rewrites the notes', async () => {
@@ -322,7 +324,11 @@ describe('meeting.retranscribe', () => {
       expect.objectContaining({ providerLabel: 'batch_spk_1', displayName: 'Neha Kapoor' }),
     ]);
     expect(after.segments[0]?.speakerClusterId).toBe(after.clusters[0]?.id);
-    expect(after.usage).toMatchObject({ sttProvider: 'fake:batch', sttSecondsThem: '10.000' });
+    // One usage row per billed call.
+    expect(after.usage.map((u) => [u.sttSecondsMe, u.sttSecondsThem])).toEqual([
+      ['10.000', '0.000'],
+      ['0.000', '10.000'],
+    ]);
     const jobs = await env.pool.query<{ key: string }>(
       `select key from graphile_worker.jobs where key = $1`,
       [`meeting.summarize:${meetingId}:batch`],
@@ -365,6 +371,47 @@ describe('meeting.retranscribe', () => {
       `meeting.summarize:${meetingId}:batch`,
     ]);
     expect(jobs.rows).toHaveLength(0);
+  });
+
+  it('replaces only the lanes it re-read: a failed lane keeps its live transcript', async () => {
+    const bucket = new MemoryBucket();
+    const { meetingId, live } = await finished(bucket);
+    const failing: SttBatchProvider = {
+      name: 'fake',
+      usdPerMinute: 0.01,
+      async transcribe(_audio, options) {
+        if (options?.diarize !== true) {
+          throw Object.assign(new Error('bad audio'), { status: 400 });
+        }
+        return {
+          segments: [
+            {
+              startMs: 0,
+              endMs: 4_100,
+              speaker: 0,
+              text: 'Razorpay ka payment flow mein do bugs hain.',
+              words: [],
+            },
+          ],
+          durationMs: 10_000,
+          provider: 'fake',
+          model: 'fake-batch',
+          requestId: null,
+        };
+      },
+    };
+    await retranscribeTask({ db: env.db, bucket, stt: failing }).handle(
+      { workspaceId, meetingId },
+      helpers,
+    );
+    const after = await state(meetingId);
+    expect(after.segments.map((s) => [s.lane, s.source])).toEqual([
+      ['them', 'batch'],
+      ['me', 'live'],
+    ]);
+    // The `me` line is still cited: only `them` citations moved.
+    expect(after.citations.map((c) => c.segmentId)).toContain(live[1]?.id);
+    expect(after.usage).toHaveLength(1);
   });
 
   it('carries done action items over to the rewritten notes', async () => {

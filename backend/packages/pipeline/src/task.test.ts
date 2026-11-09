@@ -186,6 +186,59 @@ describe('meeting.summarize', () => {
     expect(r.summaries).toMatchObject([{ status: 'failed', accepted: false }]);
   });
 
+  it('leaves readable notes alone when the batch re-summary fails or finds no speech', async () => {
+    const { meetingId } = await recorded(['Kuch baat hui.']);
+    await env.db.inWorkspace(workspaceId, (tx) =>
+      tx.updateTable('meetings').set({ status: 'ready' }).where('id', '=', meetingId).execute(),
+    );
+    const refusing = summarizeTask({ db: env.db, llm: llm(() => new LlmRefusedError('SAFETY')) });
+    await refusing.handle({ workspaceId, meetingId, reason: 'batch' }, helpers);
+    expect((await row(meetingId)).meeting).toMatchObject({
+      status: 'ready',
+      processingStep: 'done',
+    });
+    const silent = await recorded([]);
+    await env.db.inWorkspace(workspaceId, (tx) =>
+      tx
+        .updateTable('meetings')
+        .set({ status: 'ready' })
+        .where('id', '=', silent.meetingId)
+        .execute(),
+    );
+    await summarizeTask({ db: env.db, llm: null }).handle(
+      { workspaceId, meetingId: silent.meetingId, reason: 'batch' },
+      helpers,
+    );
+    expect((await row(silent.meetingId)).meeting.status).toBe('ready');
+  });
+
+  it('turns a rewrite after a failed first run into the notes', async () => {
+    const { meetingId, segs } = await recorded([
+      'Decision: release Friday tak.',
+      'Main notes bhejunga.',
+    ]);
+    await summarizeTask({ db: env.db, llm: llm(() => new LlmRefusedError('SAFETY')) }).handle(
+      { workspaceId, meetingId, reason: 'session_end' },
+      helpers,
+    );
+    expect((await row(meetingId)).meeting.status).toBe('failed');
+    await summarizeTask({
+      db: env.db,
+      llm: llm(() => ({
+        title: 'Release',
+        overview: 'Release moves.',
+        anchored_sections: [],
+        decisions: [{ text: 'Release Friday', segment_ids: [segs[0]?.id ?? ''] }],
+        action_items: [],
+        open_questions: [],
+        topics: [],
+      })),
+    }).handle({ workspaceId, meetingId, reason: 'regenerate' }, helpers);
+    const r = await row(meetingId);
+    expect(r.meeting.status).toBe('ready');
+    expect(r.summaries.filter((s) => s.accepted)).toHaveLength(1);
+  });
+
   it('lets the queue retry vendor outages', async () => {
     const { meetingId } = await recorded(['Kuch baat hui.']);
     const task = summarizeTask({ db: env.db, llm: llm(() => new LlmHttpError(503)) });

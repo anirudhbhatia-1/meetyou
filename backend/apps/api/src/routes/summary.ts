@@ -15,8 +15,9 @@ import {
 import type { WorkspaceTx } from '@meetyou/db';
 import { acceptSummary, summarizeJob, summarizeJobKey } from '@meetyou/pipeline';
 import { enqueue } from '@meetyou/queue';
+import { sql } from 'kysely';
 
-import { BadRequestError, NotFoundError, UnauthorizedError } from '../errors.ts';
+import { BadRequestError, ConflictError, NotFoundError, UnauthorizedError } from '../errors.ts';
 import { decodeCursor, encodeCursor } from '../utils/pagination.ts';
 
 /**
@@ -218,7 +219,17 @@ export const summaryRoutes: FastifyPluginAsync<{ pollMs?: number; streamMs?: num
       const body = RegenerateSummaryRequest.safeParse(request.body ?? {});
       if (!body.success) throw new BadRequestError('unknown template', 'invalid_template');
       const ok = await inWorkspace(async (tx) => {
-        if (!(await meetingExists(tx, meetingId))) return false;
+        const meeting = await tx
+          .selectFrom('meetings')
+          .select('status')
+          .where('id', '=', meetingId)
+          .where('deletedAt', 'is', null)
+          .executeTakeFirst();
+        if (meeting === undefined) return false;
+        // Rewrites start from finished notes; the first run is still in charge until then.
+        if (!SETTLED.has(meeting.status)) {
+          throw new ConflictError('the notes are still being written', 'not_finished');
+        }
         await enqueue(
           tx,
           summarizeJob,
@@ -282,13 +293,22 @@ export const summaryRoutes: FastifyPluginAsync<{ pollMs?: number; streamMs?: num
       const patch = body.data;
       const item = await inWorkspace(async (tx) => {
         const row = await tx
-          .selectFrom('summaryItems')
-          .select(['id', 'meetingId', 'kind'])
-          .where('id', '=', itemId)
+          .selectFrom('summaryItems as i')
+          .innerJoin('meetings as m', 'm.id', 'i.meetingId')
+          .select(['i.id', 'i.meetingId', 'i.kind'])
+          .where('i.id', '=', itemId)
+          .where('m.deletedAt', 'is', null)
           .executeTakeFirst();
         if (row === undefined) return null;
-        if (patch.status !== undefined && row.kind !== 'action_item') {
-          throw new BadRequestError('only action items have a status', 'not_an_action_item');
+        const actionOnly =
+          patch.status !== undefined ||
+          patch.ownerParticipantId !== undefined ||
+          patch.dueDate !== undefined;
+        if (actionOnly && row.kind !== 'action_item') {
+          throw new BadRequestError(
+            'only action items have a status, owner or due date',
+            'not_an_action_item',
+          );
         }
         if (patch.ownerParticipantId !== undefined && patch.ownerParticipantId !== null) {
           // AGENTS §3 rule 7: owners come from the meeting's own participant list.
@@ -419,17 +439,20 @@ export const summaryRoutes: FastifyPluginAsync<{ pollMs?: number; streamMs?: num
           .where('m.deletedAt', 'is', null);
         if (status !== 'all') q = q.where('i.status', '=', status);
         if (owner === 'me') q = q.where('p.isSelf', '=', true);
+        // Postgres keeps microseconds, the cursor milliseconds: page on the millisecond value, or
+        // items stored in the same millisecond as the page's last one would be skipped.
+        const createdMs = sql<Date>`date_trunc('milliseconds', ${sql.ref('i.createdAt')})`;
         if (cursor?.createdAtMs !== undefined) {
           const at = new Date(cursor.createdAtMs);
           q = q.where((eb) =>
             eb.or([
-              eb('i.createdAt', '<', at),
-              eb.and([eb('i.createdAt', '=', at), eb('i.id', '<', cursor.id)]),
+              eb(createdMs, '<', at),
+              eb.and([eb(createdMs, '=', at), eb('i.id', '<', cursor.id)]),
             ]),
           );
         }
         const rows = await q
-          .orderBy('i.createdAt', 'desc')
+          .orderBy(createdMs, 'desc')
           .orderBy('i.id', 'desc')
           .limit(limit + 1)
           .execute();

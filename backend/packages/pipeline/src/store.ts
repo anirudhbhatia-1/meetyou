@@ -22,7 +22,22 @@ export interface StoreSummaryInput {
   usage: LlmUsage;
 }
 
+/**
+ * One writer per meeting at a time: a rewrite, the batch pass and its re-summary may finish
+ * together, and versions, citations and the self participant must not race (row lock until commit).
+ */
+export async function lockMeeting(tx: WorkspaceTx, meetingId: string): Promise<boolean> {
+  const row = await tx
+    .selectFrom('meetings')
+    .select('id')
+    .where('id', '=', meetingId)
+    .forUpdate()
+    .executeTakeFirst();
+  return row !== undefined;
+}
+
 async function nextVersion(tx: WorkspaceTx, meetingId: string): Promise<number> {
+  await lockMeeting(tx, meetingId);
   const row = await tx
     .selectFrom('summaries')
     .select((eb) => eb.fn.max('version').as('max'))
@@ -53,8 +68,23 @@ export async function storeSummary(
       accepted: false,
     })
     .execute();
+  // The batch pass may have replaced the segments since this run read them: cite only what exists.
+  const cited = [...new Set(input.summary.items.flatMap((i) => i.segmentIds))];
+  const existing = new Set(
+    cited.length === 0
+      ? []
+      : (
+          await tx
+            .selectFrom('transcriptSegments')
+            .select('id')
+            .where('meetingId', '=', input.meetingId)
+            .where('id', 'in', cited)
+            .execute()
+        ).map((r) => r.id),
+  );
   for (const item of input.summary.items) {
     const itemId = `sit_${newUlid()}`;
+    const segmentIds = item.segmentIds.filter((id) => existing.has(id));
     await tx
       .insertInto('summaryItems')
       .values({
@@ -69,11 +99,11 @@ export async function storeSummary(
         dueDate: item.dueDate,
         duePhrase: item.duePhrase,
         status: item.kind === 'action_item' ? 'open' : null,
-        flagged: item.flagged,
+        flagged: item.flagged || (item.segmentIds.length > 0 && segmentIds.length === 0),
         order: item.order,
       })
       .execute();
-    for (const segmentId of item.segmentIds) {
+    for (const segmentId of segmentIds) {
       await tx
         .insertInto('citations')
         .values({

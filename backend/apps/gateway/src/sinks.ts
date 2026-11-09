@@ -9,6 +9,7 @@ import {
 
 import { summarizeJob, summarizeJobKey } from '@meetyou/pipeline';
 import { enqueue } from '@meetyou/queue';
+import { audioPrefix } from '@meetyou/storage';
 import { traced } from '@meetyou/tracing';
 import { videoFinalizeJob, videoFinalizeJobKey } from '@meetyou/video';
 
@@ -119,8 +120,33 @@ export class DbSink implements SessionSink {
 
   async #saveUsage(target: SessionTarget, usage: SessionUsage): Promise<void> {
     await this.#store.putUsage(usage, target.meetingId);
-    await this.#db.inWorkspace(target.workspaceId, (tx) =>
-      upsertRealtimeUsage(tx, {
+    await this.#db.inWorkspace(target.workspaceId, async (tx) => {
+      // One audio asset per lane (the lane's chunk prefix): retention deletes it (D-02, S2-10); the
+      // pipeline sets `delete_after` once the notes exist.
+      for (const lane of ['me', 'them'] as const) {
+        if (usage.audioMs[lane] === 0) continue;
+        await tx
+          .insertInto('audioAssets')
+          .values({
+            id: `aud_${target.meetingId}_${lane}`,
+            workspaceId: target.workspaceId,
+            meetingId: target.meetingId,
+            lane,
+            storageKey: audioPrefix(target.workspaceId, target.meetingId, lane),
+            codec: usage.codec ?? 'opus',
+            bytes: usage.bytesByLane[lane],
+            durationMs: usage.audioMs[lane],
+            deleteAfter: null,
+          })
+          .onConflict((oc) =>
+            oc.column('id').doUpdateSet({
+              bytes: usage.bytesByLane[lane],
+              durationMs: usage.audioMs[lane],
+            }),
+          )
+          .execute();
+      }
+      await upsertRealtimeUsage(tx, {
         workspaceId: target.workspaceId,
         meetingId: target.meetingId,
         sttProvider: usage.stt.provider,
@@ -128,8 +154,8 @@ export class DbSink implements SessionSink {
         sttSecondsThem: usage.stt.audioMs.them / 1000,
         storageBytes: usage.bytesStored,
         estimatedCostUsd: usage.estimatedCostUsd,
-      }),
-    );
+      });
+    });
   }
 
   ended(target: SessionTarget, endedAt: Date): Promise<void> {

@@ -280,7 +280,8 @@ export function createHttpApi(auth: WebAuth): LibraryApi {
         body: JSON.stringify({ terms }),
       });
       if (res.ok) return { ok: true, terms: GlossaryResponse.parse(await res.json()).terms };
-      return { ok: false, error: res.status === 422 ? 'too_long' : 'invalid' };
+      if (res.status === 422) return { ok: false, error: 'too_long' };
+      return { ok: false, error: res.status === 400 ? 'invalid' : 'failed' };
     },
 
     async startExport() {

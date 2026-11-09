@@ -3,3 +3,4 @@ export * from './store.ts';
 export * from './task.ts';
 export * from './export/index.ts';
 export * from './batch/index.ts';
+export * from './retention.ts';

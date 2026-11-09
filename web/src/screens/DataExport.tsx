@@ -72,9 +72,20 @@ export function DataExport() {
 
   const download = async () => {
     if (current === null) return;
-    const fresh = await api.getExport(current.id).catch(() => null);
+    let fresh: ExportView | null;
+    try {
+      fresh = await api.getExport(current.id);
+    } catch {
+      // A network blip says nothing about the export: keep the row as it is.
+      toast({ message: 'Couldn’t get the download link. Try again.' });
+      return;
+    }
     if (fresh?.status === 'ready' && fresh.downloadUrl !== null) {
       window.location.assign(fresh.downloadUrl);
+      return;
+    }
+    if (fresh?.status === 'ready') {
+      toast({ message: 'The download link isn’t available right now. Try again later.' });
       return;
     }
     setCurrent(fresh);

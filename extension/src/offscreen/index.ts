@@ -283,7 +283,7 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
       sendResponse({ ok: true });
       return false;
     case 'capture.speaker':
-      recorder?.noteSpeaker(parsed.participantId, parsed.displayName);
+      recorder?.noteSpeaker(parsed.participantId, parsed.displayName, parsed.at);
       sendResponse({ ok: true });
       return false;
     case 'capture.resume':

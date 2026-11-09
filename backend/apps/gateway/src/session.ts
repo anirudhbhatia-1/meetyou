@@ -435,6 +435,10 @@ export class StreamSession {
    */
   #event(event: CaptureEvent): void {
     if (event.sessionId !== this.sessionId) return;
+    // After the end the meeting belongs to the pipeline; late signals would change what it read.
+    if (this.#ended && (event.type === 'speaker.active' || event.type === 'participant.joined')) {
+      return;
+    }
     if (event.type === 'video.part_started') {
       const { partId, mimeType, width, height, fps, at } = event;
       this.#toSink('video', (t) =>

@@ -384,7 +384,20 @@ describe('production stream path (JWT + Postgres, S2-04/S2-05/S2-07)', () => {
           .select(['displayName', 'externalId'])
           .execute(),
         signals: await tx.selectFrom('speakerSignals').select(['externalId', 'atMs']).execute(),
+        audio: await tx
+          .selectFrom('audioAssets')
+          .select(['lane', 'storageKey', 'durationMs', 'deleteAfter'])
+          .execute(),
       }));
+      // Retention (D-02) works on these rows; the pipeline sets delete_after after the notes.
+      expect(rows.audio).toEqual([
+        {
+          lane: 'them',
+          storageKey: `ws/${workspaceId}/meetings/${meetingId}/audio/them/`,
+          durationMs: expect.any(Number),
+          deleteAfter: null,
+        },
+      ]);
       expect(rows.participants).toEqual([{ displayName: 'Neha K', externalId: 'meet-1' }]);
       expect(rows.signals).toEqual([{ externalId: 'meet-1', atMs: 200 }]);
       expect(rows.segments).toEqual([

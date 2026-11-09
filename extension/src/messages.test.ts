@@ -163,18 +163,21 @@ describe('Meet speaker signal (S3-04)', () => {
         type: 'capture.speaker',
         participantId: ' spaces/abc/devices/7 ',
         displayName: `  ${'N'.repeat(250)}`,
+        at: 1_762_000_000_000,
       }),
     ).toEqual({
       target: 'offscreen',
       type: 'capture.speaker',
       participantId: 'spaces/abc/devices/7',
       displayName: 'N'.repeat(200),
+      at: 1_762_000_000_000,
     });
     for (const bad of [
       { participantId: '', displayName: 'Neha' },
       { participantId: 'x'.repeat(201), displayName: 'Neha' },
       { participantId: 'p1', displayName: '   ' },
-      { participantId: 7, displayName: 'Neha' },
+      { participantId: 7, displayName: 'Neha', at: 1 },
+      { participantId: 'p1', displayName: 'Neha' },
     ]) {
       expect(
         parseOffscreenMessage({ target: 'offscreen', type: 'capture.speaker', ...bad }),

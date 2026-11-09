@@ -48,41 +48,52 @@ export function clockTime(ms: number): string {
 const shown = <T extends NotesDocItem>(items: T[]): T[] =>
   items.filter((i) => !i.flagged || i.userEdited);
 
+/**
+ * Meeting content is untrusted text (other people's speech): one line each (no injected headings or
+ * list items), and in Markdown the characters that would open a link, image or HTML tag escaped.
+ */
+function clean(text: string, md: boolean): string {
+  const line = text.replace(/\s+/g, ' ').trim();
+  // Only link and HTML characters: other escapes would show as backslashes in Slack or WhatsApp.
+  return md ? line.replace(/[[\]<>]/g, (c) => `\\${c}`) : line;
+}
+
 export function notesText(doc: NotesDoc, options: NotesTextOptions): string {
   const md = options.format === 'markdown';
+  const t = (text: string) => clean(text, md);
   const time = (item: NotesDocItem) =>
     options.includeTimes && item.atMs !== null ? ` [${clockTime(item.atMs)}]` : '';
-  const title = doc.title.trim() === '' ? 'Untitled meeting' : doc.title.trim();
+  const title = doc.title.trim() === '' ? 'Untitled meeting' : t(doc.title);
   const out: string[] = [md ? `# ${title}` : title.toUpperCase(), `${doc.when} · ${doc.length}`];
   const section = (heading: string, lines: string[]) => {
     if (lines.length === 0) return;
     out.push('', md ? `## ${heading}` : heading, ...lines);
   };
 
-  if (doc.overview.trim() !== '') section('Summary', [doc.overview.trim()]);
+  if (doc.overview.trim() !== '') section('Summary', [t(doc.overview)]);
   for (const s of doc.sections) {
     const items = shown(s.items);
     if (items.length === 0) continue;
     section(
-      s.heading ?? 'From the conversation',
-      items.map((i) => `- ${i.text}${time(i)}`),
+      s.heading === null ? 'From the conversation' : t(s.heading),
+      items.map((i) => `- ${t(i.text)}${time(i)}`),
     );
   }
   section(
     'Decisions',
-    shown(doc.decisions).map((i) => `- ${i.text}${time(i)}`),
+    shown(doc.decisions).map((i) => `- ${t(i.text)}${time(i)}`),
   );
   section(
     'Action items',
     shown(doc.actionItems).map((a) => {
       const box = md ? (a.done ? '- [x] ' : '- [ ] ') : '- ';
-      const who = [a.owner ?? 'Unassigned', ...(a.due !== null ? [a.due] : [])].join(', ');
-      return `${box}${a.text} — ${who}${time(a)}`;
+      const who = [a.owner ?? 'Unassigned', ...(a.due !== null ? [a.due] : [])].map(t).join(', ');
+      return `${box}${t(a.text)} — ${who}${time(a)}`;
     }),
   );
   section(
     'Open questions',
-    shown(doc.questions).map((i) => `- ${i.text}${time(i)}`),
+    shown(doc.questions).map((i) => `- ${t(i.text)}${time(i)}`),
   );
   return `${out.join('\n')}\n`;
 }

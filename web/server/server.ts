@@ -3,6 +3,7 @@ import { createServer, type IncomingMessage, type Server, type ServerResponse } 
 import { extname, join, normalize, resolve, sep } from 'node:path';
 import process from 'node:process';
 import { Readable } from 'node:stream';
+import { pipeline } from 'node:stream/promises';
 
 /**
  * Library web app server (Cloud Run, STAGING_SETUP §10): serves the Vite build and proxies `/v1`
@@ -82,10 +83,16 @@ export function createWebServer(options: WebServerOptions): Server {
     const forwardedFor = req.headers['x-forwarded-for'];
     if (typeof forwardedFor === 'string') headers.set('x-forwarded-for', forwardedFor);
     const hasBody = req.method !== 'GET' && req.method !== 'HEAD';
+    // A browser that goes away (closed tab, ended progress stream) cancels the API request too.
+    const abort = new AbortController();
+    res.on('close', () => {
+      if (!res.writableFinished) abort.abort();
+    });
     const upstream = await fetch(new URL(path, api), {
       method: req.method ?? 'GET',
       headers,
       redirect: 'manual',
+      signal: abort.signal,
       ...(hasBody ? { body: Readable.toWeb(req) as ReadableStream, duplex: 'half' } : {}),
     });
     res.statusCode = upstream.status;
@@ -99,7 +106,19 @@ export function createWebServer(options: WebServerOptions): Server {
       res.end();
       return;
     }
-    Readable.fromWeb(upstream.body as Parameters<typeof Readable.fromWeb>[0]).pipe(res);
+    // pipeline, not pipe: an API connection that drops mid-body must end this response, not
+    // throw an unhandled stream error that stops the server.
+    try {
+      await pipeline(
+        Readable.fromWeb(upstream.body as Parameters<typeof Readable.fromWeb>[0]),
+        res,
+      );
+    } catch (error: unknown) {
+      if (!abort.signal.aborted) {
+        log('proxy.stream_failed', { code: error instanceof Error ? error.name : 'unknown' });
+      }
+      res.destroy();
+    }
   }
 
   async function file(res: ServerResponse, pathname: string): Promise<void> {

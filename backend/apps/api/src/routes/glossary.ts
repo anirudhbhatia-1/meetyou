@@ -1,6 +1,7 @@
 import type { FastifyPluginAsync } from 'fastify';
 import { newUlid, PutGlossaryRequest } from '@meetyou/contracts';
 import { keytermsWithinBudget, MAX_KEYTERMS } from '@meetyou/providers';
+import { sql } from 'kysely';
 
 import { AppError, BadRequestError, UnauthorizedError } from '../errors.ts';
 
@@ -54,6 +55,8 @@ export const glossaryRoutes: FastifyPluginAsync = async (fastify) => {
         );
       }
       await inWorkspace(async (tx) => {
+        // Two saves at once would both insert after both deleted (unique term per workspace).
+        await sql`select pg_advisory_xact_lock(hashtext(${`glossary:${workspaceId}`}))`.execute(tx);
         await tx.deleteFrom('glossaryTerms').execute();
         // `now()` is one value per transaction: explicit, increasing times keep the user's order.
         const base = Date.now();

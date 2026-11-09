@@ -19,6 +19,7 @@ import { BadRequestError, UnauthorizedError } from '../errors.ts';
 const normalizer = new SpellingNormalizer();
 const MAX_WORDS = 8;
 const HITS_PER_MEETING = 3;
+const MIN_WORD_LENGTH = 2;
 
 /** `word:* & word:*` from letters and digits only, so the query cannot carry tsquery syntax. */
 export function toTsQuery(q: string): string | null {
@@ -26,8 +27,10 @@ export function toTsQuery(q: string): string | null {
     .normalize(q.normalize('NFKC'))
     .toLowerCase()
     .match(/[\p{L}\p{M}\p{N}]+/gu);
-  if (words === null) return null;
-  return words
+  // One-letter words match nearly everything as a prefix: they are left out.
+  const useful = words?.filter((w) => [...w].length >= MIN_WORD_LENGTH) ?? [];
+  if (useful.length === 0) return null;
+  return useful
     .slice(0, MAX_WORDS)
     .map((w) => `${w}:*`)
     .join(' & ');
@@ -61,32 +64,40 @@ export const searchRoutes: FastifyPluginAsync = async (fastify) => {
 
       const body = await inWorkspace(async (tx): Promise<SearchResponse> => {
         // Text never leaves the database unmatched: only headline snippets of matching rows.
+        // Rank and cut first: ts_headline is the expensive part, so only kept rows get a snippet.
         const rows = await sql<Row>`
-        with q as (select to_tsquery('simple', ${tsquery}) as query)
-        select 'segment' as kind, s.id, s.meeting_id, s.start_ms,
-               ts_headline('simple', s.text, q.query, ${HEADLINE}) as snippet,
-               ts_rank(to_tsvector('simple', s.text), q.query) as rank
-          from transcript_segments s, q
-         where to_tsvector('simple', s.text) @@ q.query
-        union all
-        select 'note', n.id, n.meeting_id, n.session_ms,
-               ts_headline('simple', n.text, q.query, ${HEADLINE}),
-               ts_rank(to_tsvector('simple', n.text), q.query) * 1.5
-          from notes n, q
-         where to_tsvector('simple', n.text) @@ q.query
-        union all
-        select 'summary_item', i.id, i.meeting_id, null,
-               ts_headline('simple', i.text, q.query, ${HEADLINE}),
-               ts_rank(to_tsvector('simple', i.text), q.query) * 1.2
-          from summary_items i
-          join summaries su on su.id = i.summary_id and su.accepted, q
-         where to_tsvector('simple', i.text) @@ q.query
-        union all
-        select 'title', m.id, m.id, null, m.title, 2.0
-          from meetings m
-         where m.title ilike ${like}
-        order by rank desc
-        limit 300
+        with q as (select to_tsquery('simple', ${tsquery}) as query),
+        hits as (
+          select 'segment' as kind, s.id, s.meeting_id, s.start_ms, s.text,
+                 ts_rank(to_tsvector('simple', s.text), q.query) as rank
+            from transcript_segments s
+            join meetings lm on lm.id = s.meeting_id and lm.deleted_at is null, q
+           where to_tsvector('simple', s.text) @@ q.query
+          union all
+          select 'note', n.id, n.meeting_id, n.session_ms, n.text,
+                 ts_rank(to_tsvector('simple', n.text), q.query) * 1.5
+            from notes n
+            join meetings lm on lm.id = n.meeting_id and lm.deleted_at is null, q
+           where to_tsvector('simple', n.text) @@ q.query
+          union all
+          select 'summary_item', i.id, i.meeting_id, null, i.text,
+                 ts_rank(to_tsvector('simple', i.text), q.query) * 1.2
+            from summary_items i
+            join summaries su on su.id = i.summary_id and su.accepted
+            join meetings lm on lm.id = i.meeting_id and lm.deleted_at is null, q
+           where to_tsvector('simple', i.text) @@ q.query
+          union all
+          select 'title', m.id, m.id, null, m.title, 2.0
+            from meetings m
+           where m.title ilike ${like} and m.deleted_at is null
+          order by rank desc
+          limit 300
+        )
+        select h.kind, h.id, h.meeting_id, h.start_ms, h.rank,
+               case when h.kind = 'title' then h.text
+                    else ts_headline('simple', h.text, q.query, ${HEADLINE}) end as snippet
+          from hits h, q
+         order by h.rank desc
       `.execute(tx);
 
         const meetingIds = [...new Set(rows.rows.map((r) => r.meetingId))];

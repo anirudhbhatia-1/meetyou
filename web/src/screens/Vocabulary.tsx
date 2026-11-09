@@ -1,5 +1,5 @@
 import { Banner, Card, Icon } from '@meetyou/ui';
-import { useState, type KeyboardEvent } from 'react';
+import { useRef, useState, type KeyboardEvent } from 'react';
 
 import { useApi } from '../lib/api-context.ts';
 import { useAsync } from '../lib/useAsync.ts';
@@ -19,34 +19,43 @@ export function Vocabulary() {
   const [error, setError] = useState<string | null>(null);
   const list = terms ?? loaded.data?.terms ?? [];
   const max = loaded.data?.maxTerms ?? 50;
+  // Each save replaces the whole list, so nothing is editable before the saved list is here.
+  const ready = loaded.data !== undefined;
+  // Saves run one after another, so an older response can never overwrite a newer list.
+  const chain = useRef<Promise<void>>(Promise.resolve());
 
-  const save = async (next: string[]) => {
+  const save = (next: string[]) => {
     const previous = list;
     setTerms(next);
     setError(null);
-    const result = await api
-      .saveGlossary(next)
-      .catch(() => ({ ok: false, error: 'invalid' }) as const);
-    if (result.ok) {
-      setTerms(result.terms);
-      return;
-    }
-    setTerms(previous);
-    setError(
-      result.error === 'too_long'
-        ? 'That’s more than we can send with each recording. Remove a few words first.'
-        : 'Words can’t contain commas and must be under 100 characters.',
-    );
+    chain.current = chain.current.then(async () => {
+      const result = await api
+        .saveGlossary(next)
+        .catch(() => ({ ok: false, error: 'failed' }) as const);
+      if (result.ok) {
+        setTerms(result.terms);
+        return;
+      }
+      setTerms(previous);
+      setError(
+        result.error === 'too_long'
+          ? 'That’s more than we can send with each recording. Remove a few words first.'
+          : result.error === 'invalid'
+            ? 'Words can’t contain commas and must be under 100 characters.'
+            : 'Couldn’t save your words. Try again.',
+      );
+    });
   };
 
   const add = () => {
+    if (!ready) return;
     const word = draft.replace(/,/g, ' ').trim();
     if (word === '' || list.some((t) => t.toLowerCase() === word.toLowerCase())) {
       setDraft('');
       return;
     }
     setDraft('');
-    void save([...list, word]);
+    save([...list, word]);
   };
 
   const onKeyDown = (e: KeyboardEvent<HTMLInputElement>) => {
@@ -70,7 +79,8 @@ export function Vocabulary() {
               <button
                 type="button"
                 aria-label={`Remove ${term}`}
-                onClick={() => void save(list.filter((t) => t !== term))}
+                disabled={!ready}
+                onClick={() => save(list.filter((t) => t !== term))}
               >
                 <Icon name="x" />
               </button>
@@ -83,7 +93,7 @@ export function Vocabulary() {
           placeholder="Names and words we should spell right (e.g. Razorpay, Sameer, INR)"
           value={draft}
           maxLength={100}
-          disabled={list.length >= max}
+          disabled={!ready || list.length >= max}
           onChange={(e) => setDraft(e.target.value)}
           onKeyDown={onKeyDown}
           onBlur={add}
@@ -94,6 +104,9 @@ export function Vocabulary() {
           </p>
         )}
         {error !== null && <Banner tone="error">{error}</Banner>}
+        {loaded.error && !ready && (
+          <Banner tone="error">Couldn’t load your words. Reload the page to try again.</Banner>
+        )}
       </div>
     </Card>
   );

@@ -6,6 +6,7 @@ import { defineTask, enqueue, jobKey } from '@meetyou/queue';
 import type { ObjectBucket } from '@meetyou/storage';
 import { z } from 'zod';
 
+import { lockMeeting } from '../store.ts';
 import { summarizeJob, summarizeJobKey } from '../task.ts';
 import { MATERIAL_CHANGE, mapSegmentIds, transcriptChange } from './align.ts';
 import { joinLaneAudio, type TimeMap } from './lane-audio.ts';
@@ -105,10 +106,12 @@ export function retranscribeTask(deps: {
           .executeTakeFirst(),
       );
       if (meeting === undefined || meeting.deletedAt !== null) return;
-      if (meeting.status !== 'ready' && meeting.status !== 'updated') return;
+      // `too_short`: the live transcript failed or was empty; the stored audio may still have speech.
+      if (!['ready', 'updated', 'too_short'].includes(meeting.status)) return;
 
       const fresh: NewSegment[] = [];
-      const seconds: Record<Lane, number> = { me: 0, them: 0 };
+      /** Lanes the batch model actually re-read: only their live segments are replaced. */
+      const lanes: Lane[] = [];
       for (const lane of LANES) {
         const audio = await joinLaneAudio(deps.bucket, workspaceId, meetingId, lane);
         if (audio === null) continue;
@@ -121,21 +124,40 @@ export function retranscribeTask(deps: {
         } catch (error) {
           if (!permanent(error)) throw error; // outage: the queue retries with backoff
           log.error('batch.failed', { meetingId, lane, code: errorCode(error) });
-          return;
+          continue; // this lane keeps its live transcript
         }
-        seconds[lane] = audio.timeMap.durationMs / 1000;
+        // Every call is billed, retries included (AGENTS §3 rule 10): one usage row per call.
+        const seconds = audio.timeMap.durationMs / 1000;
+        await deps.db.inWorkspace(workspaceId, (tx) =>
+          tx
+            .insertInto('usageRecords')
+            .values({
+              id: `use_batch_${newUlid()}`,
+              workspaceId,
+              meetingId,
+              sttProvider: `${deps.stt?.name ?? 'unknown'}:batch`,
+              sttSecondsMe: lane === 'me' ? seconds.toFixed(3) : '0',
+              sttSecondsThem: lane === 'them' ? seconds.toFixed(3) : '0',
+              estimatedCostUsd: ((seconds / 60) * (deps.stt?.usdPerMinute ?? 0)).toFixed(6),
+            })
+            .execute(),
+        );
+        lanes.push(lane);
         fresh.push(...toSegments(workspaceId, meetingId, lane, result.segments, audio.timeMap));
       }
-      if (fresh.length === 0) {
+      if (lanes.length === 0) {
         log.log('batch.skipped', { meetingId, reason: 'no_audio' });
         return;
       }
 
       const outcome = await deps.db.inWorkspace(workspaceId, async (tx) => {
+        // Serialized with summary writes; the meeting may have been deleted during the STT calls.
+        if (!(await lockMeeting(tx, meetingId))) return null;
         const live = await tx
           .selectFrom('transcriptSegments')
           .select(['id', 'lane', 'startMs', 'endMs', 'text', 'flags', 'speakerClusterId'])
           .where('meetingId', '=', meetingId)
+          .where('lane', 'in', lanes)
           .orderBy('startMs')
           .execute();
         const liveTimed = live.map((s) => ({
@@ -162,23 +184,6 @@ export function retranscribeTask(deps: {
           spoken(fresh.map((s) => ({ text: s.text, echo: s.flags.includes('echo') }))),
         );
 
-        await tx
-          .insertInto('usageRecords')
-          .values({
-            id: `use_batch_${meetingId}`,
-            workspaceId,
-            meetingId,
-            sttProvider: `${deps.stt?.name ?? 'unknown'}:batch`,
-            sttSecondsMe: seconds.me.toFixed(3),
-            sttSecondsThem: seconds.them.toFixed(3),
-            estimatedCostUsd: (
-              ((seconds.me + seconds.them) / 60) *
-              (deps.stt?.usdPerMinute ?? 0)
-            ).toFixed(6),
-          })
-          .onConflict((oc) => oc.column('id').doNothing())
-          .execute();
-
         if (change < MATERIAL_CHANGE) {
           // Same words: keep the live segments (and their IDs); only name the live clusters.
           return { replaced: false, change, named: await nameLiveClusters(tx, meetingId) };
@@ -192,8 +197,15 @@ export function retranscribeTask(deps: {
           .select(['id', 'summaryItemId', 'segmentId'])
           .where('meetingId', '=', meetingId)
           .execute();
-        const kept = new Set<string>();
+        const replaced = new Set(liveTimed.map((s) => s.id));
+        // Citations of lanes that were not re-read stay as they are.
+        const kept = new Set(
+          cites
+            .filter((c) => !replaced.has(c.segmentId))
+            .map((c) => `${c.summaryItemId}|${c.segmentId}`),
+        );
         for (const c of cites) {
+          if (!replaced.has(c.segmentId)) continue;
           const target = ids.get(c.segmentId);
           const key = `${c.summaryItemId}|${target}`;
           if (target === undefined || kept.has(key)) {
@@ -214,7 +226,11 @@ export function retranscribeTask(deps: {
           .execute();
         for (const q of questions) {
           const mapped = [
-            ...new Set(q.segmentIds.map((id) => ids.get(id)).filter((id) => id !== undefined)),
+            ...new Set(
+              q.segmentIds
+                .map((id) => (replaced.has(id) ? ids.get(id) : id))
+                .filter((id) => id !== undefined),
+            ),
           ];
           await tx
             .updateTable('meetingQuestions')
@@ -255,6 +271,7 @@ export function retranscribeTask(deps: {
         await tx
           .deleteFrom('speakerClusters')
           .where('meetingId', '=', meetingId)
+          .where('lane', 'in', lanes)
           .where('providerLabel', 'not like', 'batch_%')
           .execute();
         const clusters = await tx
@@ -288,10 +305,13 @@ export function retranscribeTask(deps: {
         );
         return { replaced: true, change, named: count };
       });
+      if (outcome === null) return;
       log.log('batch.done', {
         meetingId,
-        replaced: outcome.replaced,
-        changePct: Math.round(outcome.change * 1000) / 10,
+        status: outcome.replaced ? 'replaced' : 'kept',
+        // Per mille of words that changed (log fields are numbers and allow-listed names).
+        changeCount: Math.round(outcome.change * 1000),
+        laneCount: lanes.length,
         segmentCount: fresh.length,
         namedCount: outcome.named,
       });

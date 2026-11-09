@@ -254,4 +254,73 @@ describe('summary endpoints', () => {
     expect(res.headers['content-type']).toBe('text/event-stream');
     expect(res.body).toBe('event: progress\ndata: {"status":"ready","processingStep":"done"}\n\n');
   });
+  it('keeps action fields on action items, and rewrites only finished meetings', async () => {
+    const decision = (await summary()).body?.current?.items.find((i) => i.kind === 'decision');
+    const res = await app.inject({
+      method: 'PATCH',
+      url: `/v1/summary-items/${decision?.id}`,
+      headers: auth(),
+      payload: { dueDate: '2026-11-20' },
+    });
+    expect(res.statusCode).toBe(400);
+    await env.db.inWorkspace(people[0]?.workspaceId ?? '', (tx) =>
+      tx
+        .updateTable('meetings')
+        .set({ status: 'processing' })
+        .where('id', '=', meetingId)
+        .execute(),
+    );
+    const early = await app.inject({
+      method: 'POST',
+      url: `/v1/meetings/${meetingId}/summary:regenerate`,
+      headers: auth(),
+      payload: {},
+    });
+    expect(early.statusCode).toBe(409);
+    await env.db.inWorkspace(people[0]?.workspaceId ?? '', (tx) =>
+      tx.updateTable('meetings').set({ status: 'ready' }).where('id', '=', meetingId).execute(),
+    );
+  });
+
+  it('pages action items without skipping items stored in the same millisecond', async () => {
+    const workspaceId = people[0]?.workspaceId ?? '';
+    await env.db.inWorkspace(workspaceId, async (tx) => {
+      const current = await tx
+        .selectFrom('summaries')
+        .select('id')
+        .where('meetingId', '=', meetingId)
+        .where('accepted', '=', true)
+        .executeTakeFirstOrThrow();
+      for (const [i, micros] of ['123001', '123400', '123999'].entries()) {
+        await tx
+          .insertInto('summaryItems')
+          .values({
+            id: `sit_${newUlid()}`,
+            workspaceId,
+            meetingId,
+            summaryId: current.id,
+            kind: 'action_item',
+            text: `Task ${i}`,
+            status: 'open',
+            order: 10 + i,
+            createdAt: `2026-11-08T10:00:00.${micros}Z`,
+          })
+          .execute();
+      }
+    });
+    const seen: string[] = [];
+    let cursor: string | null = null;
+    do {
+      const query: string = `status=all&limit=1${cursor === null ? '' : `&cursor=${cursor}`}`;
+      const page = ActionItemList.parse(
+        (
+          await app.inject({ method: 'GET', url: `/v1/action-items?${query}`, headers: auth() })
+        ).json(),
+      );
+      seen.push(...page.items.map((i) => i.id));
+      cursor = page.nextCursor;
+    } while (cursor !== null && seen.length < 10);
+    expect(seen).toHaveLength(4);
+    expect(new Set(seen).size).toBe(4);
+  });
 });

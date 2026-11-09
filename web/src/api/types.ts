@@ -96,7 +96,9 @@ export interface LibraryApi {
   getGlossary(): Promise<{ terms: string[]; maxTerms: number }>;
   saveGlossary(
     terms: string[],
-  ): Promise<{ ok: true; terms: string[] } | { ok: false; error: 'too_long' | 'invalid' }>;
+  ): Promise<
+    { ok: true; terms: string[] } | { ok: false; error: 'too_long' | 'invalid' | 'failed' }
+  >;
   /** DESIGN §13.2 "Download all my data" (S3-11): starts or returns the export in progress. */
   startExport(): Promise<ExportView>;
   /** The latest export (for the Settings row), or one by ID with a fresh download link. */

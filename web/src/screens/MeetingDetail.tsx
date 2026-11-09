@@ -42,6 +42,9 @@ import {
 } from './SummaryControls.tsx';
 import { VideoPlayer, type PlayerHandle } from './VideoPlayer.tsx';
 
+/** Finished meetings: their notes can be rewritten (a failed run included). */
+const SETTLED: ReadonlySet<string> = new Set(['ready', 'updated', 'failed', 'too_short']);
+
 const TAB_LABEL: Record<DetailTab, string> = {
   notes: 'Notes',
   transcript: 'Transcript',
@@ -90,12 +93,16 @@ export function MeetingDetail({
     // Reload functions change identity each render; status and meeting decide when to follow.
   }, [status, meetingId]);
 
-  // Regenerate: look for the candidate every 3 s, give up after 2 minutes.
+  // Regenerate: look for the candidate every 3 s, give up after 2 minutes. After a failed first
+  // run there are no notes to compare with, so the rewrite arrives as the notes themselves.
   const candidate = summary.data?.candidate ?? null;
+  const shownVersion = summary.data?.version ?? null;
+  const [rewriteFrom, setRewriteFrom] = useState<number | null>(null);
   useEffect(() => {
     if (rewriting === null) return undefined;
-    if (candidate !== null) {
+    if (candidate !== null || (summary.data != null && shownVersion !== rewriteFrom)) {
       setRewriting(null);
+      if (candidate === null) meeting.reload();
       return undefined;
     }
     const started = Date.now();
@@ -108,7 +115,7 @@ export function MeetingDetail({
       summary.reload();
     }, 3_000);
     return () => clearInterval(timer);
-  }, [rewriting, candidate]);
+  }, [rewriting, candidate, shownVersion]);
 
   const m = meeting.data;
   if (meeting.loading && m === undefined) {
@@ -121,7 +128,16 @@ export function MeetingDetail({
   if (m === null || m === undefined) {
     return (
       <div className="page">
-        <Banner tone="error">This meeting was not found. It may have been deleted.</Banner>
+        <Banner tone="error">
+          {m === undefined && meeting.error
+            ? 'Couldn’t load this meeting. Check your connection and try again.'
+            : 'This meeting was not found. It may have been deleted.'}
+        </Banner>
+        {m === undefined && meeting.error && (
+          <Button variant="ghost" onClick={meeting.reload}>
+            Try again
+          </Button>
+        )}
         <Button variant="ghost" onClick={() => navigate({ screen: 'meetings' })}>
           Back to Meetings
         </Button>
@@ -141,11 +157,16 @@ export function MeetingDetail({
         <div className="toolbar-actions">
           <TemplateMenu
             current={summary.data?.template ?? m.template}
-            disabled={summary.data == null || rewriting !== null || candidate !== null}
+            disabled={
+              !SETTLED.has(m.status) || summary.loading || rewriting !== null || candidate !== null
+            }
             onPick={(template) => {
               void api
                 .regenerateSummary(meetingId, template)
-                .then(() => setRewriting(template))
+                .then(() => {
+                  setRewriteFrom(shownVersion);
+                  setRewriting(template);
+                })
                 .catch(() => toast({ message: 'Couldn’t rewrite the notes. Try again.' }));
             }}
           />
@@ -205,15 +226,21 @@ export function MeetingDetail({
           )}
           {candidate !== null && tab === 'notes' && (
             <CandidateBanner
-              onKeep={() => {
-                void api.keepSummary(meetingId, candidate.version).then(() => {
-                  summary.reload();
-                  toast({ message: `Rewritten as ${TEMPLATE_LABEL[candidate.template]} notes` });
-                });
-              }}
-              onGoBack={() => {
-                void api.discardSummary(meetingId, candidate.version).then(() => summary.reload());
-              }}
+              onKeep={() =>
+                api.keepSummary(meetingId, candidate.version).then(
+                  () => {
+                    summary.reload();
+                    toast({ message: `Rewritten as ${TEMPLATE_LABEL[candidate.template]} notes` });
+                  },
+                  () => toast({ message: 'Couldn’t keep the new version. Try again.' }),
+                )
+              }
+              onGoBack={() =>
+                api.discardSummary(meetingId, candidate.version).then(
+                  () => summary.reload(),
+                  () => toast({ message: 'Couldn’t go back. Try again.' }),
+                )
+              }
             />
           )}
           <div className="detail-grid">
@@ -568,11 +595,17 @@ function ActionItemsCard({
     const p = people.find((x) => x.id === id);
     return p === undefined ? 'Unassigned' : p.isSelf ? 'You' : p.displayName;
   };
-  const set = async (item: SummaryItem, status: 'open' | 'done') => {
-    await api.setActionItemStatus(item.id, status);
+  const set = async (item: SummaryItem, status: 'open' | 'done'): Promise<boolean> => {
+    try {
+      await api.setActionItemStatus(item.id, status);
+    } catch {
+      toast({ message: 'Couldn’t save that. Try again.' });
+      return false;
+    }
     item.status = status;
     force((n) => n + 1);
     onChanged();
+    return true;
   };
   return (
     <Card className="actions-card">
@@ -583,8 +616,11 @@ function ActionItemsCard({
             <Checkbox
               checked={item.status === 'done'}
               onChange={(checked) => {
-                void set(item, checked ? 'done' : 'open');
-                if (checked) toast({ message: 'Marked done', undo: () => void set(item, 'open') });
+                void set(item, checked ? 'done' : 'open').then((saved) => {
+                  if (saved && checked) {
+                    toast({ message: 'Marked done', undo: () => void set(item, 'open') });
+                  }
+                });
               }}
             />
             <span>

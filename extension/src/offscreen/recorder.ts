@@ -58,7 +58,7 @@ export interface Recorder {
    * Meet says this participant is talking now (S3-04): the gateway gets `participant.joined` the
    * first time (or when the name changes) and `speaker.active` each time, on the session clock.
    */
-  noteSpeaker(participantId: string, displayName: string): void;
+  noteSpeaker(participantId: string, displayName: string, shownAt: number): void;
   /**
    * Stops capture now. `drained` settles once the buffered audio reached the gateway (or the
    * deadline passed); the offscreen document stays open until then.
@@ -327,8 +327,12 @@ export async function startRecorder(options: {
       await switching;
       await stopPart('paused');
     },
-    noteSpeaker(participantId, displayName) {
-      const at = Math.max(0, Math.round(capture.nowMs()));
+    noteSpeaker(participantId, displayName, shownAt) {
+      // Nothing about the call is kept while the user paused the recording.
+      if (paused) return;
+      // Messages reach this document a little after Meet showed the change: date it back.
+      const delay = Math.min(Math.max(0, Date.now() - shownAt), MAX_SIGNAL_DELAY_MS);
+      const at = Math.max(0, Math.round(capture.nowMs() - delay));
       if (speakerNames.get(participantId) !== displayName) {
         speakerNames.set(participantId, displayName);
         emit({ type: 'participant.joined', sessionId, participantId, displayName, at });
@@ -378,6 +382,9 @@ export async function startRecorder(options: {
     },
   };
 }
+
+/** A signal older than this is dated as if it just happened (clock skew, a stuck queue). */
+const MAX_SIGNAL_DELAY_MS = 5_000;
 
 /** `video.part_started` within the contract's bounds (dimensions as the track reports them). */
 function partStartedEvent(

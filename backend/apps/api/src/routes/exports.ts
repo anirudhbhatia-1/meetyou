@@ -3,6 +3,7 @@ import { newUlid, type ExportView } from '@meetyou/contracts';
 import type { WorkspaceTx } from '@meetyou/db';
 import { exportJob } from '@meetyou/pipeline';
 import { enqueue } from '@meetyou/queue';
+import { sql } from 'kysely';
 
 import { NotFoundError, UnauthorizedError } from '../errors.ts';
 
@@ -85,6 +86,8 @@ export const exportRoutes: FastifyPluginAsync<ExportRoutesOptions> = async (fast
       if (!workspaceId || !userId || !inWorkspace) throw new UnauthorizedError('Unauthorized');
       const now = Date.now();
       const row = await inWorkspace(async (tx): Promise<Row> => {
+        // Two clicks or two tabs at once: one request per user at a time, so one export.
+        await sql`select pg_advisory_xact_lock(hashtext(${`export:${userId}`}))`.execute(tx);
         const last = await latest(tx, userId);
         const age = last === undefined ? Infinity : now - last.createdAt.getTime();
         if (last?.status === 'preparing' && age <= STALE_MS) return last;

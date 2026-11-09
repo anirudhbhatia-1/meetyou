@@ -76,3 +76,32 @@ describe('notesText', () => {
     expect(clockTime(59_999)).toBe('0:59');
   });
 });
+
+describe('notesText with hostile content', () => {
+  it('keeps each item on one line and escapes links and HTML in Markdown', () => {
+    const text = notesText(
+      {
+        ...doc,
+        title: '# Pwned',
+        decisions: [
+          {
+            text: 'Click [here](javascript:alert(1))\n## Fake heading <img src=x>',
+            atMs: null,
+            flagged: false,
+            userEdited: false,
+          },
+        ],
+      },
+      { format: 'markdown', includeTimes: false },
+    );
+    expect(text.startsWith('# # Pwned\n')).toBe(true);
+    expect(text).toContain(
+      '- Click \\[here\\](javascript:alert(1)) ## Fake heading \\<img src=x\\>\n',
+    );
+    const plain = notesText(
+      { ...doc, decisions: [{ text: 'a\nb', atMs: null, flagged: false, userEdited: false }] },
+      { format: 'text', includeTimes: false },
+    );
+    expect(plain).toContain('- a b\n');
+  });
+});

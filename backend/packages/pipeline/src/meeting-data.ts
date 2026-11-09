@@ -2,6 +2,8 @@ import { newUlid, type Note, type Segment } from '@meetyou/contracts';
 import type { WorkspaceTx } from '@meetyou/db';
 import { summarySegments, type MeetingData, type TemplateId } from '@meetyou/summarizer';
 
+import { lockMeeting } from './store.ts';
+
 /**
  * A meeting as the summarizer and "Ask this meeting" see it, read inside the caller's workspace
  * (forced RLS). Shared by the summarize job and the API so both feed the model the same data.
@@ -39,6 +41,8 @@ export async function ensureSelfParticipant(
   workspaceId: string,
   meetingId: string,
 ): Promise<void> {
+  // Serialized per meeting, so two jobs cannot both add "You".
+  await lockMeeting(tx, meetingId);
   const existing = await tx
     .selectFrom('participants')
     .select('id')

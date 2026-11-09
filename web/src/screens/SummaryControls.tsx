@@ -65,18 +65,24 @@ export function CandidateBanner({
   onKeep,
   onGoBack,
 }: {
-  onKeep: () => void;
-  onGoBack: () => void;
+  onKeep: () => Promise<void>;
+  onGoBack: () => Promise<void>;
 }) {
+  // One click at a time: a second Keep would find no candidate and fail.
+  const [busy, setBusy] = useState(false);
+  const run = (action: () => Promise<void>) => {
+    setBusy(true);
+    void action().finally(() => setBusy(false));
+  };
   return (
     <Banner
       tone="info"
       action={
         <span className="banner-actions">
-          <Button size="sm" variant="primary" onClick={onKeep}>
+          <Button size="sm" variant="primary" disabled={busy} onClick={() => run(onKeep)}>
             Keep
           </Button>
-          <Button size="sm" variant="ghost" onClick={onGoBack}>
+          <Button size="sm" variant="ghost" disabled={busy} onClick={() => run(onGoBack)}>
             Go back
           </Button>
         </span>

@@ -69,7 +69,14 @@ export type OffscreenMessage =
   /** Meet's mic mute on the recorded tab (FR-CAP-11, D-10). */
   | { target: 'offscreen'; type: 'capture.mic_muted'; muted: boolean }
   /** Another participant became the active speaker on the recorded tab (S3-04 speaker naming). */
-  | { target: 'offscreen'; type: 'capture.speaker'; participantId: string; displayName: string };
+  | {
+      target: 'offscreen';
+      type: 'capture.speaker';
+      participantId: string;
+      displayName: string;
+      /** When Meet showed the change (wall clock, ms): the recorder maps it to the session clock. */
+      at: number;
+    };
 
 export type SidePanelMessage =
   /** Per-lane RMS level in dBFS; `me` is null when the microphone lane is not captured. */
@@ -363,11 +370,13 @@ export function parseSpeakerSignal(
 ): Extract<OffscreenMessage, { type: 'capture.speaker' }> | null {
   const id = typeof message.participantId === 'string' ? message.participantId.trim() : '';
   const name = typeof message.displayName === 'string' ? message.displayName.trim() : '';
-  if (id === '' || id.length > 200 || name === '') return null;
+  const at = typeof message.at === 'number' && Number.isFinite(message.at) ? message.at : null;
+  if (id === '' || id.length > 200 || name === '' || at === null) return null;
   return {
     target: 'offscreen',
     type: 'capture.speaker',
     participantId: id,
     displayName: name.slice(0, 200),
+    at,
   };
 }

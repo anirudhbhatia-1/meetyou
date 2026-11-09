@@ -72,7 +72,19 @@ export async function storeSegments(
       ),
     );
   }
-  if (segments.length === 0) return;
+  // 13 parameters a row: chunks keep a long batch pass under Postgres's 65,535 bind limit.
+  for (let i = 0; i < segments.length; i += SEGMENT_INSERT_ROWS) {
+    await insertSegments(tx, segments.slice(i, i + SEGMENT_INSERT_ROWS), clusters);
+  }
+}
+
+const SEGMENT_INSERT_ROWS = 1000;
+
+async function insertSegments(
+  tx: WorkspaceTx,
+  segments: readonly Segment[],
+  clusters: ReadonlyMap<string, string>,
+): Promise<void> {
   await tx
     .insertInto('transcriptSegments')
     .values(

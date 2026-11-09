@@ -17,6 +17,8 @@ export interface SessionUsage {
   /** Audio durably stored, in ms; frames received again after a reconnect count once. */
   audioMs: Record<Lane, number>;
   bytesStored: number;
+  /** The same bytes per lane (one `audio_assets` row per lane, retention D-02). */
+  bytesByLane: Record<Lane, number>;
   chunksWritten: number;
   /** Final segments per lane and probable echo (§8.1 step 7; §26.2 Q2). */
   segments: {
@@ -59,6 +61,7 @@ export class UsageMeter {
       duplicateFrames: 0,
       audioMs: { me: 0, them: 0 },
       bytesStored: 0,
+      bytesByLane: { me: 0, them: 0 },
       chunksWritten: 0,
       segments: { me: 0, them: 0, echoFlagged: 0, echoLate: 0 },
       stt: {
@@ -87,6 +90,7 @@ export class UsageMeter {
   chunk(lane: Lane, bytes: number, durationMs: number): void {
     this.#usage.chunksWritten += 1;
     this.#usage.bytesStored += bytes;
+    this.#usage.bytesByLane[lane] += bytes;
     this.#usage.audioMs[lane] += durationMs;
   }
 

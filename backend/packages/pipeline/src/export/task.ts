@@ -61,8 +61,8 @@ export function exportTask(deps: { db: Db; bucket: ObjectBucket; now?: () => num
         await deps.bucket.save(key, data, 'application/zip');
         const readyAt = new Date(now());
         const expiresAt = new Date(readyAt.getTime() + EXPORT_KEEP_MS);
-        await deps.db.inWorkspace(workspaceId, async (tx) => {
-          await tx
+        const marked = await deps.db.inWorkspace(workspaceId, async (tx) => {
+          const result = await tx
             .updateTable('exports')
             .set({
               status: 'ready',
@@ -73,13 +73,22 @@ export function exportTask(deps: { db: Db; bucket: ObjectBucket; now?: () => num
               expiresAt,
             })
             .where('id', '=', exportId)
-            .execute();
+            .where('status', '=', 'preparing')
+            .executeTakeFirst();
+          if (Number(result.numUpdatedRows) === 0) return false;
           await enqueue(tx, expireJob, payload, {
             runAt: expiresAt,
             jobKey: `${EXPORT_EXPIRE}:${exportId}`,
           });
+          return true;
         });
-        log.log('export.ready', { exportId, meetingCount, bytes: data.length });
+        if (!marked) {
+          // The account (or the export) was deleted while the file was being written: no orphan.
+          await deps.bucket.delete(key);
+          log.log('export.discarded', { exportId });
+          return;
+        }
+        log.log('export.ready', { exportId, meetingCount, sizeBytes: data.length });
       } catch (error: unknown) {
         log.log('export.attempt_failed', { exportId, code: errorCode(error) });
         if (helpers.job.attempts >= helpers.job.max_attempts) {

@@ -70,6 +70,9 @@ const LANES: readonly Lane[] = ['me', 'them'];
  * `frameWritten` is called; the client sends them in order, prunes on ack, and after a reconnect
  * replays everything after the gateway's `durableUpTo`. Losing the socket never loses audio.
  */
+/** Queued messages while offline before speaker signals are dropped (controls never are). */
+const MAX_PENDING_WHILE_OFFLINE = 500;
+
 export class StreamClient {
   readonly #o: StreamClientOptions;
   readonly #timers: Timers;
@@ -126,6 +129,13 @@ export class StreamClient {
   event(event: CaptureEvent): void {
     const message: ClientMessage = { type: 'event', seq: this.#eventSeq++, event };
     if (!this.#online) {
+      // Speaker signals are many and only help naming: a long outage keeps the first ones.
+      if (
+        event.type === 'speaker.active' &&
+        this.#pendingControls.length >= MAX_PENDING_WHILE_OFFLINE
+      ) {
+        return;
+      }
       this.#pendingControls.push(message);
       return;
     }

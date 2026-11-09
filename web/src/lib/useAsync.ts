@@ -26,7 +26,8 @@ export function useAsync<T>(load: () => Promise<T>, deps: readonly unknown[]): A
     setState((s) => ({ ...s, loading: true, error: false }));
     loadRef.current().then(
       (data) => current && setState({ data, error: false, loading: false }),
-      () => current && setState({ data: undefined, error: true, loading: false }),
+      // A failed reload keeps what is on screen; only a first load has nothing to show.
+      () => current && setState((s) => ({ data: s.data, error: true, loading: false })),
     );
     return () => {
       current = false;
