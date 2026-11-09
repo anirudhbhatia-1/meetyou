@@ -1,0 +1,128 @@
+{
+  "id": "g03-interview-english",
+  "template": "interview",
+  "language": "english",
+  "tags": ["english", "interview"],
+  "meeting": {
+    "title": "Backend engineer interview",
+    "date": "2026-11-09",
+    "durationMs": 42880
+  },
+  "participants": [
+    {
+      "id": "p_self",
+      "name": "Aman",
+      "isSelf": true
+    },
+    {
+      "id": "p_kavya",
+      "name": "Kavya",
+      "isSelf": false
+    },
+    {
+      "id": "p_ritu",
+      "name": "Ritu",
+      "isSelf": false
+    }
+  ],
+  "notes": [],
+  "segments": [
+    {
+      "id": "seg_01JCM03S010000000000000000",
+      "speaker": "Aman",
+      "startMs": 0,
+      "endMs": 3120,
+      "text": "Kavya, tell us about a system you designed recently.",
+      "echo": false
+    },
+    {
+      "id": "seg_01JCM03S020000000000000000",
+      "speaker": "Kavya",
+      "startMs": 3520,
+      "endMs": 9400,
+      "text": "I built an event pipeline on Kafka that handled about two million events a day for order tracking.",
+      "echo": false
+    },
+    {
+      "id": "seg_01JCM03S030000000000000000",
+      "speaker": "Ritu",
+      "startMs": 9800,
+      "endMs": 12800,
+      "text": "How did you deal with duplicate events?",
+      "echo": false
+    },
+    {
+      "id": "seg_01JCM03S040000000000000000",
+      "speaker": "Kavya",
+      "startMs": 13200,
+      "endMs": 18540,
+      "text": "Every consumer was idempotent, keyed by order ID and event version, so replays were safe.",
+      "echo": false
+    },
+    {
+      "id": "seg_01JCM03S050000000000000000",
+      "speaker": "Aman",
+      "startMs": 18940,
+      "endMs": 21940,
+      "text": "What would you change if you built it again?",
+      "echo": false
+    },
+    {
+      "id": "seg_01JCM03S060000000000000000",
+      "speaker": "Kavya",
+      "startMs": 22340,
+      "endMs": 27320,
+      "text": "I would add a schema registry earlier. We broke consumers twice with field renames.",
+      "echo": false
+    },
+    {
+      "id": "seg_01JCM03S070000000000000000",
+      "speaker": "Ritu",
+      "startMs": 27720,
+      "endMs": 32040,
+      "text": "Strong answers. I think we should move Kavya to the system design round.",
+      "echo": false
+    },
+    {
+      "id": "seg_01JCM03S080000000000000000",
+      "speaker": "Aman",
+      "startMs": 32440,
+      "endMs": 35440,
+      "text": "Agreed, let's move her forward.",
+      "echo": false
+    },
+    {
+      "id": "seg_01JCM03S090000000000000000",
+      "speaker": "Ritu",
+      "startMs": 35840,
+      "endMs": 39080,
+      "text": "I will schedule the system design round for next week.",
+      "echo": false
+    },
+    {
+      "id": "seg_01JCM03S100000000000000000",
+      "speaker": "Aman",
+      "startMs": 39480,
+      "endMs": 42480,
+      "text": "I will write up my feedback by tomorrow.",
+      "echo": false
+    }
+  ],
+  "expected": {
+    "decisions": [
+      {
+        "keywords": ["system design|next round|move"]
+      }
+    ],
+    "actionItems": [
+      {
+        "keywords": ["schedule"],
+        "owner": "p_ritu"
+      },
+      {
+        "keywords": ["feedback"],
+        "owner": "p_self"
+      }
+    ]
+  }
+}

@@ -1,0 +1,68 @@
+{
+  "goldenId": "g06-client-call-hinglish",
+  "model": "gemini-3.6-flash",
+  "promptVersion": "summary-v1",
+  "templateVersion": 1,
+  "recordedAt": "2026-11-09T06:36:43.104Z",
+  "output": {
+    "title": "Razorpay Integration Call",
+    "overview": "Anita ne Razorpay integration requirement aur 5 lakh rupees budget ke baare mein baat ki. Integration ke liye annual plan select kiya gaya. Team member API documentation share karega aur quotation bhejega.",
+    "anchored_sections": [
+      {
+        "note_id": "n1",
+        "details": [
+          {
+            "text": "Aman 5 lakh rupees ka quote Thursday tak bhejega.",
+            "segment_ids": [
+              "seg_01JCM06S060000000000000000"
+            ]
+          }
+        ]
+      }
+    ],
+    "decisions": [
+      {
+        "text": "Razorpay integration ke liye annual plan final kiya gaya.",
+        "segment_ids": [
+          "seg_01JCM06S030000000000000000",
+          "seg_01JCM06S040000000000000000"
+        ]
+      }
+    ],
+    "action_items": [
+      {
+        "task": "API documentation share karna",
+        "owner_participant_id": "p_sameer",
+        "due_date": null,
+        "due_phrase": "kal tak",
+        "segment_ids": [
+          "seg_01JCM06S050000000000000000"
+        ]
+      },
+      {
+        "task": "5 lakh rupees ka quote bhejna",
+        "owner_participant_id": "p_self",
+        "due_date": null,
+        "due_phrase": "Thursday tak",
+        "segment_ids": [
+          "seg_01JCM06S060000000000000000"
+        ]
+      },
+      {
+        "task": "Client side se legal review karna",
+        "owner_participant_id": "p_anita",
+        "due_date": null,
+        "due_phrase": null,
+        "segment_ids": [
+          "seg_01JCM06S070000000000000000"
+        ]
+      }
+    ],
+    "open_questions": [],
+    "topics": [
+      "Razorpay integration",
+      "Annual plan selection",
+      "API documentation aur quote delivery"
+    ]
+  }
+}

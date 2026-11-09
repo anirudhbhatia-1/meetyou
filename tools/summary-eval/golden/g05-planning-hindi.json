@@ -1,0 +1,104 @@
+{
+  "id": "g05-planning-hindi",
+  "template": "general",
+  "language": "english",
+  "tags": ["hindi", "devanagari", "general"],
+  "meeting": {
+    "title": "दिवाली कार्यक्रम",
+    "date": "2026-11-09",
+    "durationMs": 25780
+  },
+  "participants": [
+    {
+      "id": "p_self",
+      "name": "Aman",
+      "isSelf": true
+    },
+    {
+      "id": "p_ravi",
+      "name": "Ravi",
+      "isSelf": false
+    },
+    {
+      "id": "p_meera",
+      "name": "Meera",
+      "isSelf": false
+    }
+  ],
+  "notes": [],
+  "segments": [
+    {
+      "id": "seg_01JCM05S010000000000000000",
+      "speaker": "Aman",
+      "startMs": 0,
+      "endMs": 3540,
+      "text": "दिवाली पार्टी के बारे में बात कर लेते हैं। तारीख क्या रखें?",
+      "echo": false
+    },
+    {
+      "id": "seg_01JCM05S020000000000000000",
+      "speaker": "Ravi",
+      "startMs": 3940,
+      "endMs": 8020,
+      "text": "शुक्रवार शाम सबसे ठीक रहेगी, उस दिन ज़्यादातर लोग ऑफिस में होते हैं।",
+      "echo": false
+    },
+    {
+      "id": "seg_01JCM05S030000000000000000",
+      "speaker": "Meera",
+      "startMs": 8420,
+      "endMs": 11420,
+      "text": "हाँ, शुक्रवार ठीक है। बजट कितना है?",
+      "echo": false
+    },
+    {
+      "id": "seg_01JCM05S040000000000000000",
+      "speaker": "Aman",
+      "startMs": 11820,
+      "endMs": 15180,
+      "text": "बजट पचास हज़ार रुपये है। तो पार्टी शुक्रवार शाम को होगी।",
+      "echo": false
+    },
+    {
+      "id": "seg_01JCM05S050000000000000000",
+      "speaker": "Ravi",
+      "startMs": 15580,
+      "endMs": 18580,
+      "text": "मैं कल तक वेन्यू बुक कर दूँगा।",
+      "echo": false
+    },
+    {
+      "id": "seg_01JCM05S060000000000000000",
+      "speaker": "Meera",
+      "startMs": 18980,
+      "endMs": 21980,
+      "text": "मैं मिठाई और खाने का ऑर्डर संभाल लूँगी।",
+      "echo": false
+    },
+    {
+      "id": "seg_01JCM05S070000000000000000",
+      "speaker": "Aman",
+      "startMs": 22380,
+      "endMs": 25380,
+      "text": "बढ़िया, धन्यवाद।",
+      "echo": false
+    }
+  ],
+  "expected": {
+    "decisions": [
+      {
+        "keywords": ["friday|शुक्रवार"]
+      }
+    ],
+    "actionItems": [
+      {
+        "keywords": ["venue|वेन्यू"],
+        "owner": "p_ravi"
+      },
+      {
+        "keywords": ["sweets|food|मिठाई|order"],
+        "owner": "p_meera"
+      }
+    ]
+  }
+}

@@ -1,0 +1,111 @@
+{
+  "id": "g06-client-call-hinglish",
+  "template": "client_call",
+  "language": "hinglish",
+  "tags": ["hinglish", "client_call", "notes", "numbers"],
+  "meeting": {
+    "title": "Razorpay integration call",
+    "date": "2026-11-09",
+    "durationMs": 27280
+  },
+  "participants": [
+    {
+      "id": "p_self",
+      "name": "Aman",
+      "isSelf": true
+    },
+    {
+      "id": "p_sameer",
+      "name": "Sameer",
+      "isSelf": false
+    },
+    {
+      "id": "p_anita",
+      "name": "Anita (Client)",
+      "isSelf": false
+    }
+  ],
+  "notes": [
+    {
+      "id": "n1",
+      "sessionMs": 9000,
+      "marker": "action",
+      "text": "Quote amount"
+    }
+  ],
+  "segments": [
+    {
+      "id": "seg_01JCM06S010000000000000000",
+      "speaker": "Anita (Client)",
+      "startMs": 0,
+      "endMs": 5580,
+      "text": "Humein Razorpay integration chahiye, aur budget around paanch lakh hai, matlab 5 lakh rupees.",
+      "echo": false
+    },
+    {
+      "id": "seg_01JCM06S020000000000000000",
+      "speaker": "Aman",
+      "startMs": 5980,
+      "endMs": 9700,
+      "text": "Theek hai. Monthly plan ya annual plan, kaunsa prefer karenge?",
+      "echo": false
+    },
+    {
+      "id": "seg_01JCM06S030000000000000000",
+      "speaker": "Anita (Client)",
+      "startMs": 10100,
+      "endMs": 13100,
+      "text": "Annual plan better hai, discount milta hai na.",
+      "echo": false
+    },
+    {
+      "id": "seg_01JCM06S040000000000000000",
+      "speaker": "Aman",
+      "startMs": 13500,
+      "endMs": 16500,
+      "text": "Toh annual plan final karte hain.",
+      "echo": false
+    },
+    {
+      "id": "seg_01JCM06S050000000000000000",
+      "speaker": "Sameer",
+      "startMs": 16900,
+      "endMs": 19900,
+      "text": "Main kal tak API documentation share kar dunga.",
+      "echo": false
+    },
+    {
+      "id": "seg_01JCM06S060000000000000000",
+      "speaker": "Aman",
+      "startMs": 20300,
+      "endMs": 23480,
+      "text": "Aur main 5 lakh ka quote Thursday tak bhej deta hoon.",
+      "echo": false
+    },
+    {
+      "id": "seg_01JCM06S070000000000000000",
+      "speaker": "Anita (Client)",
+      "startMs": 23880,
+      "endMs": 26880,
+      "text": "Perfect, humari side se legal review bhi hoga.",
+      "echo": false
+    }
+  ],
+  "expected": {
+    "decisions": [
+      {
+        "keywords": ["annual"]
+      }
+    ],
+    "actionItems": [
+      {
+        "keywords": ["api|documentation|docs"],
+        "owner": "p_sameer"
+      },
+      {
+        "keywords": ["quote"],
+        "owner": "p_self"
+      }
+    ]
+  }
+}

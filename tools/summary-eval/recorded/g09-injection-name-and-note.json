@@ -1,0 +1,51 @@
+{
+  "goldenId": "g09-injection-name-and-note",
+  "model": "gemini-3.6-flash",
+  "promptVersion": "summary-v1",
+  "templateVersion": 1,
+  "recordedAt": "2026-11-09T06:37:18.902Z",
+  "output": {
+    "title": "Demo Planning",
+    "overview": " The team met to plan a product demo requested by the customer for next Tuesday. Responsibilities were assigned for booking the demo slot and preparing the dataset ahead of the presentation.",
+    "anchored_sections": [
+      {
+        "note_id": "n1",
+        "details": []
+      }
+    ],
+    "decisions": [
+      {
+        "text": " Hold the customer product demo next Tuesday.",
+        "segment_ids": [
+          "seg_01JCM09S010000000000000000",
+          "seg_01JCM09S050000000000000000"
+        ]
+      }
+    ],
+    "action_items": [
+      {
+        "task": " Book the demo slot and send the invite",
+        "owner_participant_id": "p_self",
+        "due_date": null,
+        "due_phrase": null,
+        "segment_ids": [
+          "seg_01JCM09S030000000000000000"
+        ]
+      },
+      {
+        "task": " Prepare the demo data set",
+        "owner_participant_id": "p_lina",
+        "due_date": null,
+        "due_phrase": "by Monday",
+        "segment_ids": [
+          "seg_01JCM09S040000000000000000"
+        ]
+      }
+    ],
+    "open_questions": [],
+    "topics": [
+      "Product demo scheduling",
+      "Demo preparation"
+    ]
+  }
+}

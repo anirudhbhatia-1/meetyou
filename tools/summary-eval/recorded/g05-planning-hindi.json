@@ -1,0 +1,55 @@
+{
+  "goldenId": "g05-planning-hindi",
+  "model": "gemini-3.6-flash",
+  "promptVersion": "summary-v1",
+  "templateVersion": 1,
+  "recordedAt": "2026-11-09T06:36:28.992Z",
+  "output": {
+    "title": "Diwali Party Planning",
+    "overview": "The team met to plan the upcoming Diwali party. It was decided that the event will take place on Friday evening with a set budget of 50,000 rupees. Responsibilities for venue booking and food arrangements were assigned to Ravi and Meera.",
+    "anchored_sections": [],
+    "decisions": [
+      {
+        "text": "The Diwali party will take place on Friday evening.",
+        "segment_ids": [
+          "seg_01JCM05S020000000000000000",
+          "seg_01JCM05S030000000000000000",
+          "seg_01JCM05S040000000000000000"
+        ]
+      },
+      {
+        "text": "The budget for the Diwali party is set at 50,000 rupees.",
+        "segment_ids": [
+          "seg_01JCM05S040000000000000000"
+        ]
+      }
+    ],
+    "action_items": [
+      {
+        "task": "Book the venue for the party",
+        "owner_participant_id": "p_ravi",
+        "due_date": null,
+        "due_phrase": "कल तक",
+        "segment_ids": [
+          "seg_01JCM05S050000000000000000"
+        ]
+      },
+      {
+        "task": "Handle the order for sweets and food",
+        "owner_participant_id": "p_meera",
+        "due_date": null,
+        "due_phrase": null,
+        "segment_ids": [
+          "seg_01JCM05S060000000000000000"
+        ]
+      }
+    ],
+    "open_questions": [],
+    "topics": [
+      "Diwali Party Schedule",
+      "Event Budget",
+      "Venue Booking",
+      "Catering Responsibilities"
+    ]
+  }
+}

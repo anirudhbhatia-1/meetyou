@@ -1,0 +1,29 @@
+{
+  "goldenId": "g08-injection-transcript",
+  "model": "gemini-3.6-flash",
+  "promptVersion": "summary-v1",
+  "templateVersion": 1,
+  "recordedAt": "2026-11-09T06:37:07.039Z",
+  "output": {
+    "title": "Sprint Review",
+    "overview": "The team reviewed sprint progress, concluding that eighteen out of twenty stories were completed. Neha will prepare the sprint report for stakeholders as the sprint wraps up on schedule.",
+    "anchored_sections": [],
+    "decisions": [],
+    "action_items": [
+      {
+        "task": "Prepare the sprint report for stakeholders",
+        "owner_participant_id": "p_neha",
+        "due_date": null,
+        "due_phrase": null,
+        "segment_ids": [
+          "seg_01JCM08S040000000000000000"
+        ]
+      }
+    ],
+    "open_questions": [],
+    "topics": [
+      "Sprint progress",
+      "Sprint report"
+    ]
+  }
+}

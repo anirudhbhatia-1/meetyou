@@ -1,0 +1,74 @@
+{
+  "goldenId": "g01-standup-hinglish",
+  "model": "gemini-3.6-flash",
+  "promptVersion": "summary-v1",
+  "templateVersion": 1,
+  "recordedAt": "2026-11-09T06:35:34.305Z",
+  "output": {
+    "title": "Daily Standup Meeting",
+    "overview": "Neha ne checkout page redesign finish kiya hai aur aaj QA handover karegi. Sameer payments mein refund bug aaj shaam tak fix karega, par staging DB access se blocked hai jise Aman unblock karega. Priya Hindi translations standard progress pe hai aur Friday tak finish karegi.",
+    "anchored_sections": [
+      {
+        "note_id": "n1",
+        "details": [
+          {
+            "text": " QA ko do din ka time dene ke liye release Monday ko finalize kiya gaya.",
+            "segment_ids": [
+              "seg_01JCM01S070000000000000000",
+              "seg_01JCM01S080000000000000000",
+              "seg_01JCM01S090000000000000000"
+            ]
+          }
+        ]
+      }
+    ],
+    "decisions": [
+      {
+        "text": "Release date Monday ko set ki gayi hai taaki QA ko 2 din ka time mil sake.",
+        "segment_ids": [
+          "seg_01JCM01S070000000000000000",
+          "seg_01JCM01S080000000000000000",
+          "seg_01JCM01S090000000000000000"
+        ]
+      }
+    ],
+    "action_items": [
+      {
+        "task": "Staging database access ke liye DevOps team ko message karna",
+        "owner_participant_id": "p_self",
+        "due_date": null,
+        "due_phrase": "aaj hi",
+        "segment_ids": [
+          "seg_01JCM01S050000000000000000",
+          "seg_01JCM01S060000000000000000"
+        ]
+      },
+      {
+        "task": "Payments mein refund bug fix karna",
+        "owner_participant_id": "p_sameer",
+        "due_date": null,
+        "due_phrase": "aaj shaam tak",
+        "segment_ids": [
+          "seg_01JCM01S020000000000000000"
+        ]
+      },
+      {
+        "task": "Hindi translations complete karna",
+        "owner_participant_id": "p_priya",
+        "due_date": null,
+        "due_phrase": "Friday tak",
+        "segment_ids": [
+          "seg_01JCM01S030000000000000000"
+        ]
+      }
+    ],
+    "open_questions": [],
+    "topics": [
+      "Checkout redesign handover",
+      "Payments refund bug",
+      "Staging database access",
+      "Hindi translations progress",
+      "Release schedule"
+    ]
+  }
+}

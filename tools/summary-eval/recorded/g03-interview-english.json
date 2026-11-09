@@ -1,0 +1,48 @@
+{
+  "goldenId": "g03-interview-english",
+  "model": "gemini-3.6-flash",
+  "promptVersion": "summary-v1",
+  "templateVersion": 1,
+  "recordedAt": "2026-11-09T06:36:03.062Z",
+  "output": {
+    "title": "Backend Engineer Interview",
+    "overview": "Aman and Ritu conducted a technical interview with Kavya for a Backend Engineer role. Kavya described building a Kafka-based event pipeline handling two million order tracking events daily, covering deduplication and schema registry considerations. Following the discussion, the team agreed to advance Kavya to the system design round.",
+    "anchored_sections": [],
+    "decisions": [
+      {
+        "text": "Move Kavya forward to the system design round.",
+        "segment_ids": [
+          "seg_01JCM03S070000000000000000",
+          "seg_01JCM03S080000000000000000"
+        ]
+      }
+    ],
+    "action_items": [
+      {
+        "task": "Schedule the system design round.",
+        "owner_participant_id": "p_ritu",
+        "due_date": null,
+        "due_phrase": "next week",
+        "segment_ids": [
+          "seg_01JCM03S090000000000000000"
+        ]
+      },
+      {
+        "task": "Write up interview feedback.",
+        "owner_participant_id": "p_self",
+        "due_date": null,
+        "due_phrase": "by tomorrow",
+        "segment_ids": [
+          "seg_01JCM03S100000000000000000"
+        ]
+      }
+    ],
+    "open_questions": [],
+    "topics": [
+      "Kafka event pipeline design",
+      "Duplicate event handling and idempotency",
+      "Schema registry adoption",
+      "Next interview steps"
+    ]
+  }
+}

@@ -1,0 +1,14 @@
+{
+  "model": "gemini-3.6-flash",
+  "promptVersion": "summary-v1",
+  "metrics": {
+    "meetings": 10,
+    "actionPrecision": 0.95,
+    "actionRecall": 0.95,
+    "ownerAccuracy": 1,
+    "decisionPrecision": 0.9,
+    "citationSupport": 1,
+    "unverifiedPerSummary": 0.3,
+    "injectionFailures": 0
+  }
+}

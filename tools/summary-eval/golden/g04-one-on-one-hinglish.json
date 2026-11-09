@@ -1,0 +1,114 @@
+{
+  "id": "g04-one-on-one-hinglish",
+  "template": "one_on_one",
+  "language": "hinglish",
+  "tags": ["hinglish", "one_on_one", "notes"],
+  "meeting": {
+    "title": "Aman / Deepa 1:1",
+    "date": "2026-11-09",
+    "durationMs": 34340
+  },
+  "participants": [
+    {
+      "id": "p_self",
+      "name": "Aman",
+      "isSelf": true
+    },
+    {
+      "id": "p_deepa",
+      "name": "Deepa",
+      "isSelf": false
+    }
+  ],
+  "notes": [
+    {
+      "id": "n1",
+      "sessionMs": 25000,
+      "marker": null,
+      "text": "Promotion timeline"
+    }
+  ],
+  "segments": [
+    {
+      "id": "seg_01JCM04S010000000000000000",
+      "speaker": "Deepa",
+      "startMs": 0,
+      "endMs": 3000,
+      "text": "Aman, workload kaisa chal raha hai is sprint mein?",
+      "echo": false
+    },
+    {
+      "id": "seg_01JCM04S020000000000000000",
+      "speaker": "Aman",
+      "startMs": 3400,
+      "endMs": 9520,
+      "text": "Thoda zyada hai. Analytics side project aur payments dono saath mein handle karna mushkil ho raha hai.",
+      "echo": false
+    },
+    {
+      "id": "seg_01JCM04S030000000000000000",
+      "speaker": "Deepa",
+      "startMs": 9920,
+      "endMs": 14600,
+      "text": "Toh analytics wala side project abhi ke liye chhod do, payments pe focus karo.",
+      "echo": false
+    },
+    {
+      "id": "seg_01JCM04S040000000000000000",
+      "speaker": "Aman",
+      "startMs": 15000,
+      "endMs": 18180,
+      "text": "Theek hai, main analytics project drop kar deta hoon.",
+      "echo": false
+    },
+    {
+      "id": "seg_01JCM04S050000000000000000",
+      "speaker": "Aman",
+      "startMs": 18580,
+      "endMs": 21700,
+      "text": "Promotion ke timeline ke baare mein kuch update hai?",
+      "echo": false
+    },
+    {
+      "id": "seg_01JCM04S060000000000000000",
+      "speaker": "Deepa",
+      "startMs": 22100,
+      "endMs": 25820,
+      "text": "Main HR se baat karke is hafte tak timeline confirm kar dungi.",
+      "echo": false
+    },
+    {
+      "id": "seg_01JCM04S070000000000000000",
+      "speaker": "Deepa",
+      "startMs": 26220,
+      "endMs": 30540,
+      "text": "Tum apne payments project ka ek summary document likh lo, month end tak.",
+      "echo": false
+    },
+    {
+      "id": "seg_01JCM04S080000000000000000",
+      "speaker": "Aman",
+      "startMs": 30940,
+      "endMs": 33940,
+      "text": "Done, month end tak document ready hoga.",
+      "echo": false
+    }
+  ],
+  "expected": {
+    "decisions": [
+      {
+        "keywords": ["analytics"]
+      }
+    ],
+    "actionItems": [
+      {
+        "keywords": ["hr|promotion"],
+        "owner": "p_deepa"
+      },
+      {
+        "keywords": ["document|summary"],
+        "owner": "p_self"
+      }
+    ]
+  }
+}

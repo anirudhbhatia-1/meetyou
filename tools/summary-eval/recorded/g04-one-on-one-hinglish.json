@@ -1,0 +1,62 @@
+{
+  "goldenId": "g04-one-on-one-hinglish",
+  "model": "gemini-3.6-flash",
+  "promptVersion": "summary-v1",
+  "templateVersion": 1,
+  "recordedAt": "2026-11-09T06:36:16.859Z",
+  "output": {
+    "title": "Aman / Deepa 1:1",
+    "overview": "Yeh meeting Aman aur Deepa ke beech workload aur priority areas discuss karne ke liye hui. Meeting mein analytics side project ko drop karke payments project par focus karne ka decide kiya gaya, aur promotion timeline ke follow-up par baat hui.",
+    "anchored_sections": [
+      {
+        "note_id": "n1",
+        "details": [
+          {
+            "text": "Aman ne promotion timeline update ke baare mein pucha, jis par Deepa ne bataya ki woh HR se discuss karke is hafte tak confirm karegi.",
+            "segment_ids": [
+              "seg_01JCM04S050000000000000000",
+              "seg_01JCM04S060000000000000000"
+            ]
+          }
+        ]
+      }
+    ],
+    "decisions": [
+      {
+        "text": "Analytics side project ko abhi ke liye drop kiya jayega aur focus payments project par rahega.",
+        "segment_ids": [
+          "seg_01JCM04S030000000000000000",
+          "seg_01JCM04S040000000000000000"
+        ]
+      }
+    ],
+    "action_items": [
+      {
+        "task": "HR se baat karke promotion timeline confirm karna",
+        "owner_participant_id": "p_deepa",
+        "due_date": null,
+        "due_phrase": "is hafte tak",
+        "segment_ids": [
+          "seg_01JCM04S060000000000000000"
+        ]
+      },
+      {
+        "task": "Payments project ka summary document likhna",
+        "owner_participant_id": "p_self",
+        "due_date": null,
+        "due_phrase": "month end tak",
+        "segment_ids": [
+          "seg_01JCM04S070000000000000000",
+          "seg_01JCM04S080000000000000000"
+        ]
+      }
+    ],
+    "open_questions": [],
+    "topics": [
+      "Sprint Workload",
+      "Project Prioritization",
+      "Promotion Timeline",
+      "Payments Summary Document"
+    ]
+  }
+}

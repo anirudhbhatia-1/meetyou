@@ -1,0 +1,28 @@
+{
+  "goldenId": "g07-architecture-english",
+  "model": "gemini-3.6-flash",
+  "promptVersion": "summary-v1",
+  "templateVersion": 1,
+  "recordedAt": "2026-11-09T06:36:54.504Z",
+  "output": {
+    "title": "Storage architecture discussion",
+    "overview": "The team evaluated whether to migrate the event store from Postgres to a dedicated time series database. Given the current peak write volume of around 200 writes per second, it was decided to remain on Postgres with partitioning for now and revisit the decision once write load reaches ten times the current volume.",
+    "anchored_sections": [],
+    "decisions": [
+      {
+        "text": "Keep Postgres with partitioning for the event store for now, and revisit a dedicated time series database once load reaches ten times the current peak write volume.",
+        "segment_ids": [
+          "seg_01JCM07S030000000000000000",
+          "seg_01JCM07S040000000000000000",
+          "seg_01JCM07S050000000000000000"
+        ]
+      }
+    ],
+    "action_items": [],
+    "open_questions": [],
+    "topics": [
+      "Event store migration",
+      "Postgres performance and partitioning"
+    ]
+  }
+}

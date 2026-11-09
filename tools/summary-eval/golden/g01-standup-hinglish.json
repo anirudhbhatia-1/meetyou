@@ -1,0 +1,140 @@
+{
+  "id": "g01-standup-hinglish",
+  "template": "standup",
+  "language": "hinglish",
+  "tags": ["hinglish", "standup", "notes"],
+  "meeting": {
+    "title": "Daily standup",
+    "date": "2026-11-09",
+    "durationMs": 43440
+  },
+  "participants": [
+    {
+      "id": "p_self",
+      "name": "Aman",
+      "isSelf": true
+    },
+    {
+      "id": "p_neha",
+      "name": "Neha",
+      "isSelf": false
+    },
+    {
+      "id": "p_sameer",
+      "name": "Sameer",
+      "isSelf": false
+    },
+    {
+      "id": "p_priya",
+      "name": "Priya",
+      "isSelf": false
+    }
+  ],
+  "notes": [
+    {
+      "id": "n1",
+      "sessionMs": 40000,
+      "marker": "decision",
+      "text": "Release date?"
+    }
+  ],
+  "segments": [
+    {
+      "id": "seg_01JCM01S010000000000000000",
+      "speaker": "Neha",
+      "startMs": 0,
+      "endMs": 6180,
+      "text": "Good morning sab. Kal maine checkout page ka redesign finish kar diya, aaj usko QA ko handover karungi.",
+      "echo": false
+    },
+    {
+      "id": "seg_01JCM01S020000000000000000",
+      "speaker": "Sameer",
+      "startMs": 6580,
+      "endMs": 12280,
+      "text": "Mera update: payments mein refund wala bug abhi bhi open hai. Main aaj shaam tak fix kar dunga.",
+      "echo": false
+    },
+    {
+      "id": "seg_01JCM01S030000000000000000",
+      "speaker": "Priya",
+      "startMs": 12680,
+      "endMs": 18740,
+      "text": "Main Hindi translations pe kaam kar rahi hoon, sixty percent done hai. Friday tak complete ho jayega.",
+      "echo": false
+    },
+    {
+      "id": "seg_01JCM01S040000000000000000",
+      "speaker": "Aman",
+      "startMs": 19140,
+      "endMs": 22140,
+      "text": "Theek hai. Kisi ka koi blocker?",
+      "echo": false
+    },
+    {
+      "id": "seg_01JCM01S050000000000000000",
+      "speaker": "Sameer",
+      "startMs": 22540,
+      "endMs": 27700,
+      "text": "Haan, staging database ka access nahi mil raha. Aman, kya tum DevOps se baat kar loge?",
+      "echo": false
+    },
+    {
+      "id": "seg_01JCM01S060000000000000000",
+      "speaker": "Aman",
+      "startMs": 28100,
+      "endMs": 31400,
+      "text": "Haan, main aaj hi DevOps team ko message kar deta hoon.",
+      "echo": false
+    },
+    {
+      "id": "seg_01JCM01S070000000000000000",
+      "speaker": "Neha",
+      "startMs": 31800,
+      "endMs": 35520,
+      "text": "Ek decision lena hai, release Thursday ko karein ya Monday ko?",
+      "echo": false
+    },
+    {
+      "id": "seg_01JCM01S080000000000000000",
+      "speaker": "Aman",
+      "startMs": 35920,
+      "endMs": 39640,
+      "text": "QA ko do din chahiye, toh release Monday ko karte hain. Final.",
+      "echo": false
+    },
+    {
+      "id": "seg_01JCM01S090000000000000000",
+      "speaker": "Priya",
+      "startMs": 40040,
+      "endMs": 43040,
+      "text": "Okay, Monday works for me.",
+      "echo": false
+    }
+  ],
+  "expected": {
+    "decisions": [
+      {
+        "keywords": ["monday"]
+      }
+    ],
+    "actionItems": [
+      {
+        "keywords": ["checkout|qa"],
+        "owner": "p_neha"
+      },
+      {
+        "keywords": ["refund"],
+        "owner": "p_sameer"
+      },
+      {
+        "keywords": ["translation"],
+        "owner": "p_priya"
+      },
+      {
+        "keywords": ["devops"],
+        "owner": "p_self"
+      }
+    ]
+  }
+}

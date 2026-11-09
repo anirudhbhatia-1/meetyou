@@ -1,0 +1,18 @@
+{
+  "name": "@meetyou/summary-eval",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Summary evaluation (S3-05/S3-06, PRD §14.6): synthetic golden meetings, metrics, a regression gate on recorded model outputs (CI), a live re-recording run, and prompt-injection cases.",
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json",
+    "test": "vitest run",
+    "eval:live": "node src/live.ts"
+  },
+  "dependencies": {
+    "@meetyou/contracts": "workspace:*",
+    "@meetyou/providers": "workspace:*",
+    "@meetyou/summarizer": "workspace:*",
+    "zod": "^4.6.7"
+  }
+}

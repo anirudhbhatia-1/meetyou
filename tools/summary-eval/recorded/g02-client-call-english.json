@@ -1,0 +1,56 @@
+{
+  "goldenId": "g02-client-call-english",
+  "model": "gemini-3.6-flash",
+  "promptVersion": "summary-v1",
+  "templateVersion": 1,
+  "recordedAt": "2026-11-09T06:35:50.574Z",
+  "output": {
+    "title": "Acme Pricing Call",
+    "overview": "Aman and Rahul met with Vikram from Acme to discuss pricing for 50 support team seats. Because Acme requires single sign-on prior to a full rollout, both parties agreed to initiate a 10-seat pilot on December 1st while SSO is planned for Q1. Action items were established for providing the SSO roadmap, sending the pilot contract, and securing internal budget confirmation.",
+    "anchored_sections": [],
+    "decisions": [
+      {
+        "text": "Run a 10-seat pilot starting on December 1st.",
+        "segment_ids": [
+          "seg_01JCM02S060000000000000000",
+          "seg_01JCM02S070000000000000000"
+        ]
+      }
+    ],
+    "action_items": [
+      {
+        "task": "Send the SSO roadmap",
+        "owner_participant_id": "p_rahul",
+        "due_date": null,
+        "due_phrase": "by Wednesday",
+        "segment_ids": [
+          "seg_01JCM02S080000000000000000"
+        ]
+      },
+      {
+        "task": "Send the pilot contract",
+        "owner_participant_id": "p_self",
+        "due_date": null,
+        "due_phrase": "by Friday",
+        "segment_ids": [
+          "seg_01JCM02S090000000000000000"
+        ]
+      },
+      {
+        "task": "Confirm the budget with the finance team before signing",
+        "owner_participant_id": "p_vikram",
+        "due_date": null,
+        "due_phrase": "before signing",
+        "segment_ids": [
+          "seg_01JCM02S100000000000000000"
+        ]
+      }
+    ],
+    "open_questions": [],
+    "topics": [
+      "50-Seat Team Pricing",
+      "SSO Requirements",
+      "10-Seat Pilot Program"
+    ]
+  }
+}

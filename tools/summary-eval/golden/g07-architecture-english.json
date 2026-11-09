@@ -1,0 +1,74 @@
+{
+  "id": "g07-architecture-english",
+  "template": "general",
+  "language": "english",
+  "tags": ["english", "general", "no_actions"],
+  "meeting": {
+    "title": "Storage architecture discussion",
+    "date": "2026-11-09",
+    "durationMs": 22280
+  },
+  "participants": [
+    {
+      "id": "p_self",
+      "name": "Aman",
+      "isSelf": true
+    },
+    {
+      "id": "p_kiran",
+      "name": "Kiran",
+      "isSelf": false
+    }
+  ],
+  "notes": [],
+  "segments": [
+    {
+      "id": "seg_01JCM07S010000000000000000",
+      "speaker": "Kiran",
+      "startMs": 0,
+      "endMs": 4860,
+      "text": "Should we move the event store from Postgres to a dedicated time series database?",
+      "echo": false
+    },
+    {
+      "id": "seg_01JCM07S020000000000000000",
+      "speaker": "Aman",
+      "startMs": 5260,
+      "endMs": 9940,
+      "text": "Our write volume is still small, around two hundred writes per second at peak.",
+      "echo": false
+    },
+    {
+      "id": "seg_01JCM07S030000000000000000",
+      "speaker": "Kiran",
+      "startMs": 10340,
+      "endMs": 13520,
+      "text": "True, Postgres handles that easily with partitioning.",
+      "echo": false
+    },
+    {
+      "id": "seg_01JCM07S040000000000000000",
+      "speaker": "Aman",
+      "startMs": 13920,
+      "endMs": 18480,
+      "text": "Then we keep Postgres for now and revisit when we cross ten times this load.",
+      "echo": false
+    },
+    {
+      "id": "seg_01JCM07S050000000000000000",
+      "speaker": "Kiran",
+      "startMs": 18880,
+      "endMs": 21880,
+      "text": "Makes sense. Nothing else from my side.",
+      "echo": false
+    }
+  ],
+  "expected": {
+    "decisions": [
+      {
+        "keywords": ["postgres"]
+      }
+    ],
+    "actionItems": []
+  }
+}

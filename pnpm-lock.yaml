@@ -525,6 +525,21 @@ importers:
         specifier: ^8.18.2
         version: 8.18.2
 
+  tools/summary-eval:
+    dependencies:
+      '@meetyou/contracts':
+        specifier: workspace:*
+        version: link:../../shared/contracts
+      '@meetyou/providers':
+        specifier: workspace:*
+        version: link:../../backend/packages/providers
+      '@meetyou/summarizer':
+        specifier: workspace:*
+        version: link:../../backend/packages/summarizer
+      zod:
+        specifier: ^4.6.7
+        version: 4.6.7
+
   web:
     dependencies:
       '@meetyou/contracts':

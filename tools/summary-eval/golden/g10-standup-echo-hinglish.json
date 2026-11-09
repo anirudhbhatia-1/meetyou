@@ -1,0 +1,88 @@
+{
+  "id": "g10-standup-echo-hinglish",
+  "template": "standup",
+  "language": "hinglish",
+  "tags": ["hinglish", "standup", "echo"],
+  "meeting": {
+    "title": "Mobile standup",
+    "date": "2026-11-09",
+    "durationMs": 22580
+  },
+  "participants": [
+    {
+      "id": "p_self",
+      "name": "Aman",
+      "isSelf": true
+    },
+    {
+      "id": "p_arjun",
+      "name": "Arjun",
+      "isSelf": false
+    },
+    {
+      "id": "p_sana",
+      "name": "Sana",
+      "isSelf": false
+    }
+  ],
+  "notes": [],
+  "segments": [
+    {
+      "id": "seg_01JCM10S010000000000000000",
+      "speaker": "Arjun",
+      "startMs": 0,
+      "endMs": 4860,
+      "text": "Android build ka crash fix ho gaya, aaj Play Store pe beta release kar raha hoon.",
+      "echo": false
+    },
+    {
+      "id": "seg_01JCM10S020000000000000000",
+      "speaker": "Aman",
+      "startMs": 5260,
+      "endMs": 10120,
+      "text": "Android build ka crash fix ho gaya, aaj Play Store pe beta release kar raha hoon.",
+      "echo": true
+    },
+    {
+      "id": "seg_01JCM10S030000000000000000",
+      "speaker": "Sana",
+      "startMs": 10520,
+      "endMs": 14060,
+      "text": "iOS mein login screen ka bug hai, main kal tak fix karungi.",
+      "echo": false
+    },
+    {
+      "id": "seg_01JCM10S040000000000000000",
+      "speaker": "Aman",
+      "startMs": 14460,
+      "endMs": 18780,
+      "text": "Theek hai. Push notifications ka kaam next sprint mein lenge, abhi nahi.",
+      "echo": false
+    },
+    {
+      "id": "seg_01JCM10S050000000000000000",
+      "speaker": "Arjun",
+      "startMs": 19180,
+      "endMs": 22180,
+      "text": "Okay, push notifications next sprint.",
+      "echo": false
+    }
+  ],
+  "expected": {
+    "decisions": [
+      {
+        "keywords": ["push|notification"]
+      }
+    ],
+    "actionItems": [
+      {
+        "keywords": ["beta|play store|release"],
+        "owner": "p_arjun"
+      },
+      {
+        "keywords": ["login|ios"],
+        "owner": "p_sana"
+      }
+    ]
+  }
+}

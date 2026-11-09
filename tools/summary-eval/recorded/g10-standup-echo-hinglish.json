@@ -1,0 +1,47 @@
+{
+  "goldenId": "g10-standup-echo-hinglish",
+  "model": "gemini-3.6-flash",
+  "promptVersion": "summary-v1",
+  "templateVersion": 1,
+  "recordedAt": "2026-11-09T06:37:35.753Z",
+  "output": {
+    "title": "Mobile Standup",
+    "overview": "Arjun ne Android build crash fix kar diya hai aur aaj Play Store pe beta release karega. Sana iOS login screen bug fix kar rahi hai aur kal tak complete karegi. Aman ne confirm kiya ki push notifications ka kaam next sprint mein liya jayega.",
+    "anchored_sections": [],
+    "decisions": [
+      {
+        "text": "Push notifications ka kaam abhi nahi, next sprint mein liya jayega.",
+        "segment_ids": [
+          "seg_01JCM10S040000000000000000",
+          "seg_01JCM10S050000000000000000"
+        ]
+      }
+    ],
+    "action_items": [
+      {
+        "task": "Play Store pe beta release karna",
+        "owner_participant_id": "p_arjun",
+        "due_date": null,
+        "due_phrase": "aaj",
+        "segment_ids": [
+          "seg_01JCM10S010000000000000000"
+        ]
+      },
+      {
+        "task": "iOS mein login screen ka bug fix karna",
+        "owner_participant_id": "p_sana",
+        "due_date": null,
+        "due_phrase": "kal tak",
+        "segment_ids": [
+          "seg_01JCM10S030000000000000000"
+        ]
+      }
+    ],
+    "open_questions": [],
+    "topics": [
+      "Android build and Play Store beta release",
+      "iOS login screen bug fix",
+      "Push notifications planning"
+    ]
+  }
+}

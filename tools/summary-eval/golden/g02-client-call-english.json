@@ -1,0 +1,132 @@
+{
+  "id": "g02-client-call-english",
+  "template": "client_call",
+  "language": "english",
+  "tags": ["english", "client_call"],
+  "meeting": {
+    "title": "Acme pricing call",
+    "date": "2026-11-09",
+    "durationMs": 43660
+  },
+  "participants": [
+    {
+      "id": "p_self",
+      "name": "Aman",
+      "isSelf": true
+    },
+    {
+      "id": "p_vikram",
+      "name": "Vikram (Acme)",
+      "isSelf": false
+    },
+    {
+      "id": "p_rahul",
+      "name": "Rahul",
+      "isSelf": false
+    }
+  ],
+  "notes": [],
+  "segments": [
+    {
+      "id": "seg_01JCM02S010000000000000000",
+      "speaker": "Vikram (Acme)",
+      "startMs": 0,
+      "endMs": 4980,
+      "text": "Thanks for making time. We are looking at roughly fifty seats for the support team.",
+      "echo": false
+    },
+    {
+      "id": "seg_01JCM02S020000000000000000",
+      "speaker": "Aman",
+      "startMs": 5380,
+      "endMs": 10180,
+      "text": "For fifty seats our team plan comes to 40,000 rupees per month, billed annually.",
+      "echo": false
+    },
+    {
+      "id": "seg_01JCM02S030000000000000000",
+      "speaker": "Vikram (Acme)",
+      "startMs": 10580,
+      "endMs": 14840,
+      "text": "That works in principle, but we cannot roll out without single sign-on.",
+      "echo": false
+    },
+    {
+      "id": "seg_01JCM02S040000000000000000",
+      "speaker": "Rahul",
+      "startMs": 15240,
+      "endMs": 20220,
+      "text": "SSO with Okta and Google is planned for the first quarter. I can share the roadmap.",
+      "echo": false
+    },
+    {
+      "id": "seg_01JCM02S050000000000000000",
+      "speaker": "Vikram (Acme)",
+      "startMs": 20620,
+      "endMs": 23680,
+      "text": "Good. Could we start smaller while we wait for SSO?",
+      "echo": false
+    },
+    {
+      "id": "seg_01JCM02S060000000000000000",
+      "speaker": "Aman",
+      "startMs": 24080,
+      "endMs": 28700,
+      "text": "Yes. Let's agree on a pilot with ten seats starting on the first of December.",
+      "echo": false
+    },
+    {
+      "id": "seg_01JCM02S070000000000000000",
+      "speaker": "Vikram (Acme)",
+      "startMs": 29100,
+      "endMs": 32100,
+      "text": "Agreed, a ten seat pilot from December first.",
+      "echo": false
+    },
+    {
+      "id": "seg_01JCM02S080000000000000000",
+      "speaker": "Rahul",
+      "startMs": 32500,
+      "endMs": 35500,
+      "text": "I will send the SSO roadmap by Wednesday.",
+      "echo": false
+    },
+    {
+      "id": "seg_01JCM02S090000000000000000",
+      "speaker": "Aman",
+      "startMs": 35900,
+      "endMs": 38900,
+      "text": "And I will send the pilot contract by Friday.",
+      "echo": false
+    },
+    {
+      "id": "seg_01JCM02S100000000000000000",
+      "speaker": "Vikram (Acme)",
+      "startMs": 39300,
+      "endMs": 43260,
+      "text": "I need to confirm the budget with our finance team before signing.",
+      "echo": false
+    }
+  ],
+  "expected": {
+    "decisions": [
+      {
+        "keywords": ["pilot"]
+      }
+    ],
+    "actionItems": [
+      {
+        "keywords": ["roadmap"],
+        "owner": "p_rahul"
+      },
+      {
+        "keywords": ["contract"],
+        "owner": "p_self"
+      },
+      {
+        "keywords": ["budget|finance"],
+        "owner": "p_vikram"
+      }
+    ]
+  }
+}
