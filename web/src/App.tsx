@@ -10,6 +10,7 @@ import { useRoute } from './lib/router.ts';
 import { loadRuntimeConfig } from './lib/runtime-config.ts';
 import { useAsync } from './lib/useAsync.ts';
 import { ActionItems } from './screens/ActionItems.tsx';
+import { Catalogue } from './screens/Catalogue.tsx';
 import { Home } from './screens/Home.tsx';
 import { MeetingDetail } from './screens/MeetingDetail.tsx';
 import { Meetings } from './screens/Meetings.tsx';
@@ -133,6 +134,7 @@ function Library({ api, onSignOut }: { api: LibraryApi; onSignOut: () => void })
             )}
             {route.screen === 'actions' && <ActionItems onChanged={refreshCount} />}
             {route.screen === 'settings' && <Settings onSignOut={onSignOut} />}
+            {route.screen === 'catalogue' && import.meta.env.DEV && <Catalogue />}
           </main>
         </div>
       </ToastProvider>

@@ -1,5 +1,12 @@
 import type { Meeting } from '@meetyou/contracts';
-import type { ButtonHTMLAttributes, ReactNode } from 'react';
+import type {
+  ButtonHTMLAttributes,
+  InputHTMLAttributes,
+  KeyboardEvent,
+  ReactNode,
+  Ref,
+  TextareaHTMLAttributes,
+} from 'react';
 
 import { Icon } from './Icon.tsx';
 
@@ -12,6 +19,8 @@ export function Button({
 }: ButtonHTMLAttributes<HTMLButtonElement> & {
   variant?: 'primary' | 'secondary' | 'ghost' | 'danger';
   size?: 'sm' | 'md' | 'lg';
+  /** React 19 passes refs as props (focus management in dialogs and menus). */
+  ref?: Ref<HTMLButtonElement>;
 }) {
   return (
     <button type="button" className={`btn btn-${variant} btn-${size} ${className}`} {...rest} />
@@ -83,26 +92,55 @@ export function ChipGroup<T extends string>({
   );
 }
 
-/** DESIGN §6.2 */
+/**
+ * DESIGN §6.2 / §20: a radio group. One stop in the tab order (the selected option); arrow keys
+ * move the selection, as in a native radio group.
+ */
 export function Segmented<T extends string>({
   label,
   options,
   value,
   onChange,
+  disabled = false,
 }: {
   label: string;
   options: readonly { value: T; label: string }[];
   value: T;
   onChange: (value: T) => void;
+  disabled?: boolean;
 }) {
+  const onKeyDown = (e: KeyboardEvent<HTMLDivElement>) => {
+    const step =
+      e.key === 'ArrowRight' || e.key === 'ArrowDown'
+        ? 1
+        : e.key === 'ArrowLeft' || e.key === 'ArrowUp'
+          ? -1
+          : 0;
+    if (step === 0 || disabled) return;
+    e.preventDefault();
+    const at = options.findIndex((o) => o.value === value);
+    const next = options[(at + step + options.length) % options.length];
+    if (next === undefined) return;
+    onChange(next.value);
+    const buttons = e.currentTarget.querySelectorAll<HTMLButtonElement>('[role="radio"]');
+    buttons[options.indexOf(next)]?.focus();
+  };
   return (
-    <div className="segmented" role="radiogroup" aria-label={label}>
+    <div
+      className={`segmented ${disabled ? 'segmented-disabled' : ''}`}
+      role="radiogroup"
+      aria-label={label}
+      aria-disabled={disabled || undefined}
+      onKeyDown={onKeyDown}
+    >
       {options.map((o) => (
         <button
           key={o.value}
           type="button"
           role="radio"
           aria-checked={o.value === value}
+          tabIndex={o.value === value ? 0 : -1}
+          disabled={disabled}
           className={o.value === value ? 'on' : ''}
           onClick={() => onChange(o.value)}
         >
@@ -211,23 +249,51 @@ export function SkeletonRows({ rows = 3 }: { rows?: number }) {
   );
 }
 
-/** DESIGN §6.15 */
+/** DESIGN §6.15: icon, text, optional action and dismiss. */
 export function Banner({
   tone,
   children,
   action,
+  onDismiss,
 }: {
   tone: 'info' | 'warning' | 'error';
   children: ReactNode;
   action?: ReactNode;
+  onDismiss?: () => void;
 }) {
   return (
     <div className={`banner banner-${tone}`} role={tone === 'error' ? 'alert' : 'status'}>
       {tone !== 'info' && <Icon name="alert-triangle" />}
       <div className="banner-text">{children}</div>
       {action}
+      {onDismiss !== undefined && (
+        <button type="button" className="banner-dismiss" aria-label="Dismiss" onClick={onDismiss}>
+          <Icon name="x" size={14} />
+        </button>
+      )}
     </div>
   );
+}
+
+/** DESIGN §6.14: replaces the citation chip on an item the checks could not ground. */
+export function UnverifiedChip() {
+  return <span className="unverified-chip">⚠ Not found in the transcript</span>;
+}
+
+/** DESIGN §6.6: 44 px (36 compact), 1 px control-line border, focus ring as buttons. */
+export function TextInput({
+  compact = false,
+  className = '',
+  ...rest
+}: InputHTMLAttributes<HTMLInputElement> & { compact?: boolean; ref?: Ref<HTMLInputElement> }) {
+  return <input className={`input ${compact ? 'input-compact' : ''} ${className}`} {...rest} />;
+}
+
+export function TextArea({
+  className = '',
+  ...rest
+}: TextareaHTMLAttributes<HTMLTextAreaElement> & { ref?: Ref<HTMLTextAreaElement> }) {
+  return <textarea className={`input textarea ${className}`} {...rest} />;
 }
 
 /** DESIGN §6.13: numbered chip after AI text; min 24×24 hit area via CSS. */

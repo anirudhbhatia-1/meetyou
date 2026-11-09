@@ -146,10 +146,16 @@ Each journey follows PRD §8 and lists the screens involved.
 
 ### 5.1 Colour (light)
 
-> **Accent is orange (Anirudh, 2026-11-06).** The `olive*` tokens below keep their names so the
-> code does not change, but their values are now orange (`olive` = `#c2410c`), replacing the
-> original olive green everywhere: buttons, selection, links, focus ring, meters, citations.
-> `match-hl` is `#fed7aa`. Values live in `shared/design-tokens/src/tokens.ts` (contrast-tested).
+> **Brand colour is the Moonrise gradient `#dae2f8` → `#d6a4a4` (Anirudh, 2026-11-09; replaces
+> orange from 2026-11-06).** Both ends are too light for text, so: the page backdrop is Moonrise
+> softened 50% toward white (`backdrop-from` `#ecf0fc` → `backdrop-to` `#ead2d2`); the one
+> signature element is the full-strength band (`--moonrise`) behind the wordmark; the accent
+> (`olive*` tokens, names kept) is a deep rose of the same family: `olive` `#8c4a5c` (white text
+> 6.5:1), `olive-ink` `#6b3446`, `olive-line` `#a86b7c`, `olive-tint` `#f3e4ea`, `olive-wash`
+> `#f5eff6`, `match-hl` `#efd3da`; neutrals lean cool (`paper` `#f5f4fa`, `ink` `#14141c`,
+> `muted` `#585863`). Dark: deep blue to plum backdrop, `olive` `#e7b4bd` with dark text. The
+> recording ember and the amber/warn/danger signals keep their meanings. Values and contrast tests
+> live in `shared/design-tokens/src/tokens.ts`; the table below is the original reference.
 
 | Token | Hex | Use |
 |---|---|---|
@@ -301,7 +307,7 @@ bg, progress dots (4) at top. Target: under 60 seconds (FEATURES A3).
 - Card: mic icon, "Allow microphone", "Chrome can only ask on this page."
 - Primary **Allow microphone** → calls `getUserMedia` on this visible page (the offscreen document
   cannot prompt).
-- Granted: accent (orange) check + "Microphone ready" + auto-advance.
+- Granted: accent check + "Microphone ready" + auto-advance.
 - Denied: "Microphone blocked — you can still record the other side of the call." · link
   "How to turn it on" · secondary **Record 'them' only** (continues; Home setup step 2 stays open).
 

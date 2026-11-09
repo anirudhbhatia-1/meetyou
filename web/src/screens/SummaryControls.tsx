@@ -1,5 +1,5 @@
 import type { Meeting } from '@meetyou/contracts';
-import { Banner, Button, Icon } from '@meetyou/ui';
+import { Banner, Button, Icon, Menu } from '@meetyou/ui';
 import { useState } from 'react';
 
 import { TEMPLATE_LABEL } from '../lib/format.ts';
@@ -17,46 +17,24 @@ export function TemplateMenu({
   disabled: boolean;
   onPick: (template: TemplateId) => void;
 }) {
-  const [open, setOpen] = useState(false);
   return (
-    <div className="more">
-      <Button
-        disabled={disabled}
-        aria-haspopup="menu"
-        aria-expanded={open}
-        onClick={() => setOpen((v) => !v)}
-      >
-        <Icon name="refresh-cw" /> {TEMPLATE_LABEL[current]}
-      </Button>
-      {open && (
-        <div
-          className="menu"
-          role="menu"
-          onKeyDown={(e) => {
-            if (e.key === 'Escape') setOpen(false);
-          }}
-        >
-          <p className="menu-helper">Rewrite these notes as…</p>
-          {TEMPLATES.map((t, i) => (
-            <button
-              key={t}
-              type="button"
-              role="menuitemradio"
-              aria-checked={t === current}
-              className="menu-item"
-              autoFocus={i === 0}
-              onClick={() => {
-                setOpen(false);
-                if (t !== current) onPick(t);
-              }}
-            >
-              {TEMPLATE_LABEL[t]}
-              {t === current && <Icon name="check" />}
-            </button>
-          ))}
-        </div>
-      )}
-    </div>
+    <Menu
+      label={`Template: ${TEMPLATE_LABEL[current]}. Rewrite these notes`}
+      helper="Rewrite these notes as…"
+      disabled={disabled}
+      trigger={
+        <>
+          <Icon name="refresh-cw" /> {TEMPLATE_LABEL[current]}
+        </>
+      }
+      items={TEMPLATES.map((t) => ({
+        label: TEMPLATE_LABEL[t],
+        checked: t === current,
+        onSelect: () => {
+          if (t !== current) onPick(t);
+        },
+      }))}
+    />
   );
 }
 

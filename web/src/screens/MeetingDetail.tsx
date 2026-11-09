@@ -9,14 +9,15 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 
 import type { MeetingSummary, Participant } from '../api/types.ts';
 import {
-  Icon,
-  useToast,
   Banner,
   Button,
   Card,
   Checkbox,
   CitationChip,
+  Icon,
   SkeletonRows,
+  UnverifiedChip,
+  useToast,
 } from '@meetyou/ui';
 import { useApi } from '../lib/api-context.ts';
 import { numberCitations } from '../lib/citations.ts';
@@ -376,7 +377,7 @@ function NotesTab({
         <span>{item.text}</span>
         {item.flagged ? (
           // DESIGN §6.14: never a citation chip on an unverified item.
-          <span className="unverified-chip">⚠ Not found in the transcript</span>
+          <UnverifiedChip />
         ) : (
           n !== undefined && (
             <CitationChip

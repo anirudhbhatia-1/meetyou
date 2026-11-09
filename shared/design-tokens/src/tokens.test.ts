@@ -25,6 +25,12 @@ const pairs: Pair[] = [
   ['danger', 'dangerBg', 4.5, 'failed pill'],
   ['controlLine', 'surface', 3, 'input, checkbox, switch boundaries'],
   ['oliveLine', 'surface', 3, 'focus ring'],
+  ['ink', 'moonriseTo', 4.5, 'text on the Moonrise band'],
+  ['ink', 'moonriseFrom', 4.5, 'text on the Moonrise band'],
+  ['muted', 'backdropTo', 4.5, 'meta on the page backdrop'],
+  ['muted', 'backdropFrom', 4.5, 'meta on the page backdrop'],
+  ['olive', 'backdropTo', 4.5, 'links on the page backdrop'],
+  ['oliveInk', 'oliveWash', 4.5, 'info banners'],
 ];
 
 describe('contrast', () => {

@@ -282,7 +282,7 @@ const PROMPT_CSS = `
   }
   .prompt-tile-dot { width: 9px; height: 9px; border-radius: 50%; background: ${c.olive}; }
   .prompt-title { margin: 0; font-size: 14px; font-weight: 600; line-height: 1.3; }
-  .prompt-body { margin: 0; font-size: 13px; color: #3a3b35; }
+  .prompt-body { margin: 0; font-size: 13px; color: ${c.ink3}; }
   .prompt-kbd {
     padding: 1px 6px;
     border-radius: 6px;

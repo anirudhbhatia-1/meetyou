@@ -30,20 +30,22 @@ ${block(lightColors, '  ')}
   --font-serif: ${fonts.serif};
   --font-sans: ${fonts.sans};
 ${radii}
-  --glass-bg: rgba(251, 250, 246, 0.62);
-  --glass-sheet-bg: rgba(251, 250, 246, 0.78);
+  --glass-bg: rgba(250, 250, 253, 0.62);
+  --glass-sheet-bg: rgba(250, 250, 253, 0.8);
   --glass-blur: blur(22px) saturate(1.7);
   --glass-edge: rgba(255, 255, 255, 0.75);
-  --glass-shadow: 0 12px 40px rgba(17, 18, 14, 0.16), inset 0 1px 0 rgba(255, 255, 255, 0.7);
-  --scrim: rgba(17, 18, 14, 0.28);
+  --glass-shadow: 0 12px 40px rgba(20, 20, 28, 0.16), inset 0 1px 0 rgba(255, 255, 255, 0.7);
+  --scrim: rgba(20, 20, 28, 0.32);
   --focus-ring: 2px solid var(--olive-line);
+  --moonrise: linear-gradient(120deg, var(--moonrise-from), var(--moonrise-to));
+  --backdrop: linear-gradient(160deg, var(--backdrop-from) 0%, var(--backdrop-to) 100%);
 }
 
 :root[data-theme='dark'] {
   color-scheme: dark;
 ${block(darkColors, '  ')}
-  --glass-bg: rgba(31, 32, 27, 0.6);
-  --glass-sheet-bg: rgba(31, 32, 27, 0.78);
+  --glass-bg: rgba(29, 30, 38, 0.62);
+  --glass-sheet-bg: rgba(29, 30, 38, 0.82);
   --glass-edge: rgba(255, 255, 255, 0.08);
 }
 

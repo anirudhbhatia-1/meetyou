@@ -11,17 +11,26 @@
   min-height: 100vh;
 }
 .sidebar {
-  background: var(--paper-2);
-  border-right: 1px solid var(--hairline);
-  padding: 24px 14px;
+  position: sticky;
+  top: 0;
+  height: 100vh;
+  background: var(--glass-bg);
+  -webkit-backdrop-filter: var(--glass-blur);
+  backdrop-filter: var(--glass-blur);
+  border-right: 1px solid var(--glass-edge);
+  padding: 20px 14px;
 }
+/* The signature: the wordmark on full-strength Moonrise (the one bold element; ink on it ≥ 8:1). */
 .wordmark {
   display: block;
+  margin: 0 0 20px;
+  padding: 18px 14px;
+  border-radius: var(--radius-card);
+  background: var(--moonrise);
   font: 400 23px var(--font-serif);
   letter-spacing: -0.01em;
   color: var(--ink);
   text-decoration: none;
-  padding: 0 10px 24px;
 }
 .sidebar ul {
   list-style: none;
@@ -34,6 +43,7 @@
   display: flex;
   align-items: center;
   gap: 10px;
+  min-height: 40px;
   padding: 9px 10px;
   border-radius: var(--radius-row);
   color: var(--ink-2);
@@ -42,6 +52,10 @@
 }
 .nav-item:hover {
   background: var(--hairline-2);
+}
+.nav-item:focus-visible {
+  outline: 2px solid var(--olive-line);
+  outline-offset: 2px;
 }
 .nav-on {
   background: var(--olive-tint);
@@ -57,7 +71,7 @@
   min-width: 0;
 }
 .page {
-  padding: 48px 48px 96px;
+  padding: clamp(24px, 4vw, 48px) clamp(16px, 4vw, 48px) 96px;
   max-width: 1180px;
   display: grid;
   gap: 28px;
@@ -103,7 +117,7 @@
 }
 .row-button:hover,
 .table-row:hover {
-  background: #fafaf5;
+  background: var(--paper-2);
 }
 .row-main {
   display: grid;
@@ -352,7 +366,7 @@
   content: '–';
   position: absolute;
   left: 0;
-  color: #c1c1ba;
+  color: var(--control-line);
 }
 .decisions .ai-line::before {
   content: '✓';
@@ -455,21 +469,30 @@
   font-size: 21px;
 }
 
+/* Tablet: one sticky glass bar on top (wordmark + sections). */
 @media (max-width: 1099px) {
   .app {
     grid-template-columns: 1fr;
   }
   .sidebar {
+    z-index: 15;
+    height: auto;
+    display: flex;
+    align-items: center;
+    gap: 12px;
     border-right: 0;
-    border-bottom: 1px solid var(--hairline);
-    padding: 14px;
+    border-bottom: 1px solid var(--glass-edge);
+    padding: 10px 16px;
   }
   .sidebar ul {
     grid-auto-flow: column;
     overflow-x: auto;
   }
   .wordmark {
-    padding-bottom: 10px;
+    margin: 0;
+    padding: 8px 14px;
+    font-size: 19px;
+    border-radius: var(--radius-pill);
   }
   .nav-count {
     margin-left: 4px;
@@ -485,7 +508,56 @@
     left: 50%;
   }
 }
+/* Phone: sections move to a bottom tab bar within thumb reach (44 px targets, safe area). */
 @media (max-width: 640px) {
+  .sidebar {
+    position: fixed;
+    top: auto;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    padding: 6px 8px calc(6px + env(safe-area-inset-bottom));
+    border-bottom: 0;
+    border-top: 1px solid var(--glass-edge);
+  }
+  .sidebar .wordmark {
+    display: none;
+  }
+  .sidebar ul {
+    flex: 1;
+    grid-auto-flow: unset;
+    grid-template-columns: repeat(4, 1fr);
+    overflow: visible;
+  }
+  .nav-item {
+    position: relative;
+    flex-direction: column;
+    justify-content: center;
+    gap: 2px;
+    min-height: 52px;
+    padding: 4px;
+    font-size: 11px;
+    text-align: center;
+  }
+  .nav-count {
+    position: absolute;
+    top: 2px;
+    right: calc(50% - 22px);
+    margin: 0;
+    min-width: 18px;
+    padding: 0 5px;
+    border-radius: 999px;
+    background: var(--olive);
+    color: var(--on-olive);
+    font-size: 11px;
+    line-height: 18px;
+  }
+  .main {
+    padding-bottom: calc(72px + env(safe-area-inset-bottom));
+  }
+  .toast-slot {
+    bottom: calc(80px + env(safe-area-inset-bottom));
+  }
   .page {
     padding: 24px 16px 64px;
   }
@@ -615,82 +687,6 @@
   box-shadow: 0 0 0 3px var(--focus-ring);
 }
 
-/* DESIGN §6 alert (destructive confirm): scrim + centred card. */
-.scrim {
-  position: fixed;
-  inset: 0;
-  z-index: 20;
-  display: grid;
-  place-items: center;
-  padding: 16px;
-  background: var(--scrim);
-}
-.alert {
-  width: min(400px, 100%);
-  display: grid;
-  gap: 12px;
-  padding: 24px;
-  border-radius: var(--radius-alert);
-  background: var(--surface);
-  color: var(--ink);
-}
-.alert-title {
-  margin: 0;
-  font-size: 17px;
-  font-weight: 600;
-}
-.alert-body {
-  margin: 0;
-  color: var(--ink-2);
-  line-height: 1.5;
-}
-.alert-actions {
-  display: flex;
-  justify-content: flex-end;
-  gap: 8px;
-}
-
-/* DESIGN §12.1 More menu (round button, danger item last). */
-.more {
-  position: relative;
-}
-.icon-btn.round {
-  width: 36px;
-  height: 36px;
-  padding: 0;
-  border-radius: 50%;
-  justify-content: center;
-}
-.menu {
-  position: absolute;
-  right: 0;
-  top: calc(100% + 6px);
-  z-index: 10;
-  min-width: 200px;
-  padding: 6px;
-  border: 1px solid var(--hairline);
-  border-radius: var(--radius-menu);
-  background: var(--surface);
-  box-shadow: var(--glass-shadow);
-}
-.menu-item {
-  all: unset;
-  box-sizing: border-box;
-  display: block;
-  width: 100%;
-  padding: 8px 12px;
-  border-radius: var(--radius-menu-item);
-  font-size: 14px;
-  cursor: pointer;
-}
-.menu-item:hover,
-.menu-item:focus-visible {
-  background: var(--paper-2);
-}
-.menu-danger {
-  color: var(--danger);
-}
-
 /* Meetings list: the row opens the meeting; the ⋯ menu sits beside it (no nested buttons). */
 .table-line {
   display: grid;
@@ -784,24 +780,9 @@
   opacity: 0.35;
   transition: opacity 200ms;
 }
-.menu-helper {
-  margin: 4px 10px 6px;
-  font-size: 12px;
-  color: var(--muted);
-}
 .banner-actions {
   display: inline-flex;
   gap: 8px;
-}
-.unverified-chip {
-  margin-left: 6px;
-  padding: 0 7px;
-  border-radius: 999px;
-  font-size: 11px;
-  line-height: 18px;
-  white-space: nowrap;
-  background: var(--warn-bg);
-  color: var(--warn-ink);
 }
 .ai-line.unverified > span:first-child {
   font-style: italic;
@@ -909,4 +890,28 @@
 }
 .improved-close:focus-visible {
   outline: 2px solid var(--olive-line);
+}
+
+/* S4-02 component catalogue (dev only) */
+.catalogue-group {
+  display: grid;
+  gap: 16px;
+}
+.catalogue-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+}
+.catalogue-row .banner,
+.catalogue-row .input,
+.catalogue-row .search {
+  flex: 1 1 260px;
+}
+.catalogue-band {
+  padding: 28px 20px;
+  border-radius: var(--radius-card);
+  background: var(--moonrise);
+  font: 400 21px var(--font-serif);
+  color: var(--ink);
 }

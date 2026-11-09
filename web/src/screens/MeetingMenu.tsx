@@ -1,4 +1,4 @@
-import { Button, Icon, useToast } from '@meetyou/ui';
+import { Icon, Menu, useToast, type MenuEntry } from '@meetyou/ui';
 import { useState, type ReactNode } from 'react';
 
 import { useApi } from '../lib/api-context.ts';
@@ -44,65 +44,26 @@ export function useDeleteMeeting(after: {
   return { request: setPending, alert };
 }
 
-/** DESIGN §12.1 More menu. TODO(S4-10): Rename, Consent log. */
+/** DESIGN §12.1 More menu: Rename · Download as .md · Consent log · Delete meeting… */
 export function MoreMenu({
   onDelete,
   onDownload,
+  onRename,
+  onConsentLog,
   label = 'More actions',
 }: {
   onDelete: () => void;
   /** DESIGN §13.2 "Download as .md"; absent while there are no notes to download. */
   onDownload?: () => void;
+  onRename?: () => void;
+  onConsentLog?: () => void;
   label?: string;
 }) {
-  const [open, setOpen] = useState(false);
-  return (
-    <div className="more">
-      <Button
-        className="icon-btn round"
-        aria-label={label}
-        aria-haspopup="menu"
-        aria-expanded={open}
-        onClick={() => setOpen((v) => !v)}
-      >
-        <Icon name="more-horizontal" />
-      </Button>
-      {open && (
-        <div
-          className="menu"
-          role="menu"
-          onKeyDown={(e) => {
-            if (e.key === 'Escape') setOpen(false);
-          }}
-        >
-          {onDownload !== undefined && (
-            <button
-              type="button"
-              role="menuitem"
-              className="menu-item"
-              autoFocus
-              onClick={() => {
-                setOpen(false);
-                onDownload();
-              }}
-            >
-              Download as .md
-            </button>
-          )}
-          <button
-            type="button"
-            role="menuitem"
-            className="menu-item menu-danger"
-            autoFocus={onDownload === undefined}
-            onClick={() => {
-              setOpen(false);
-              onDelete();
-            }}
-          >
-            Delete meeting…
-          </button>
-        </div>
-      )}
-    </div>
-  );
+  const items: MenuEntry[] = [
+    ...(onRename !== undefined ? [{ label: 'Rename', onSelect: onRename }] : []),
+    ...(onDownload !== undefined ? [{ label: 'Download as .md', onSelect: onDownload }] : []),
+    ...(onConsentLog !== undefined ? [{ label: 'Consent log', onSelect: onConsentLog }] : []),
+    { label: 'Delete meeting…', onSelect: onDelete, danger: true, separated: true },
+  ];
+  return <Menu round label={label} trigger={<Icon name="more-horizontal" />} items={items} />;
 }

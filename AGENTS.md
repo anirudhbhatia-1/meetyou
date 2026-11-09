@@ -268,8 +268,10 @@ Work like a careful senior engineer pairing with the developer.
 
 - **2026-11-06 — Web app stack (Anirudh):** the library web app is **React + Vite** (`web/`),
   built against a mock API until the real endpoints exist. Hosting stays open (ADR-0006).
-- **2026-11-06 — UI look (Anirudh):** accent is **orange** (no green); **light theme by default**
-  with a Dark switch (Settings → Appearance, side panel menu); the system theme is not followed.
+- **2026-11-06 — UI look (Anirudh):** **light theme by default** with a Dark switch (Settings →
+  Appearance, side panel menu); the system theme is not followed. **Colour since 2026-11-09:** the
+  **Moonrise** gradient `#dae2f8` → `#d6a4a4` replaces orange (backdrop + one signature band; a deep
+  rose of the same family as the accent for AA contrast; DESIGN §5.1).
 - **2026-11-06 — S2 realtime choices (Anirudh):** gateway session state in Redis through
   **`ioredis`** (in-memory locally); `video.finalize` runs the **`ffmpeg` binary** in the worker;
   Hindi display text stays **as the STT provider returns it** for now (assembler display policy
@@ -290,6 +292,10 @@ Work like a careful senior engineer pairing with the developer.
   (D-04 stays open until the S3-05 evaluation and ADR-0007; paid tier for any user data, the free
   key only for synthetic/CI). **D-05:** consent notice default **One click**. **D-10:** the `me` lane
   **follows Meet mute** by default. Agents reply in **English**.
+- **2026-11-09 — Stage 4 (Anirudh):** Anirudh's agent builds **all of S4**, including S4-07 (consent
+  chat notice); Gaurav reviews. **Product analytics (S4-15) go to our own API** (`POST /v1/events`
+  into Postgres; typed IDs/counts/enums only, opt-out honoured), no analytics vendor. Real
+  Chrome/Meet checks are run by Anirudh from per-task checklists.
 
 ### Open (do not assume an answer)
 - LLM for summaries (D-04): [ADR-0007](docs/adr/0007-llm-provider-and-prompt-versions.md)

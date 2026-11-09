@@ -9,7 +9,9 @@ export type Route =
   | { screen: 'meetings' }
   | { screen: 'detail'; meetingId: string; tab: DetailTab }
   | { screen: 'actions' }
-  | { screen: 'settings' };
+  | { screen: 'settings' }
+  /** S4-02 component catalogue (DESIGN §6, §24 review); development builds only. */
+  | { screen: 'catalogue' };
 
 export function parseRoute(hash: string): Route {
   const parts = hash.replace(/^#\/?/, '').split('/').filter(Boolean);
@@ -27,6 +29,8 @@ export function parseRoute(hash: string): Route {
       return { screen: 'actions' };
     case 'settings':
       return { screen: 'settings' };
+    case 'catalogue':
+      return { screen: 'catalogue' };
     default:
       return { screen: 'home' };
   }
@@ -44,6 +48,8 @@ export function href(route: Route): string {
       return '#/action-items';
     case 'settings':
       return '#/settings';
+    case 'catalogue':
+      return '#/catalogue';
   }
 }
 
