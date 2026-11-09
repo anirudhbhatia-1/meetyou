@@ -6,7 +6,7 @@ import type { Meeting, MeetingSummary, Participant } from '../api/types.ts';
 import { useAnalytics } from '../lib/analytics.ts';
 import { useApi } from '../lib/api-context.ts';
 import { useMeetingAudio } from '../lib/audio.ts';
-import { formatClock, formatDue } from '../lib/format.ts';
+import { formatClock, formatDue, segmentLang } from '../lib/format.ts';
 import { VideoPlayer, type PlayerHandle } from './VideoPlayer.tsx';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -104,7 +104,7 @@ export function CitationCard({
       {cited.map((s) => (
         <blockquote key={s.id}>
           <span className="speaker">{s.lane === 'me' ? 'You' : (s.speakerName ?? 'Speaker')}</span>
-          <q>{s.text}</q>
+          <q lang={segmentLang(s.language, s.text)}>{s.text}</q>
         </blockquote>
       ))}
       <div className="cite-actions">

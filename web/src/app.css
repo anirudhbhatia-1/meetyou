@@ -1423,3 +1423,27 @@ mark.match-current {
     z-index: 2;
   }
 }
+
+/* WCAG 2.2 target size (2.5.8): small text controls keep their look and get a 24 px hit area. */
+.segment-time,
+.speaker-btn,
+.link,
+.link-muted {
+  position: relative;
+}
+.segment-time::after,
+.speaker-btn::after,
+.link::after,
+.link-muted::after {
+  content: '';
+  position: absolute;
+  inset: -4px -2px;
+}
+
+/* Each swatch stays beside its label when the legend wraps (phone width). */
+.legend-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
+}

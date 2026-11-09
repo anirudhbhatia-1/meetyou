@@ -6,10 +6,10 @@ pointer to where the full detail lives — the linked document stays the source 
 
 | Field | Value |
 |---|---|
-| Last updated | 2026-11-09 (Anirudh: Stage 3 complete in code — summaries, search, glossary, export, batch pass, evaluation) |
+| Last updated | 2026-11-09 (Anirudh: Stage 4 complete in code — every feature on its UI, Moonrise colour, analytics) |
 | Updated by | Anirudh (Claude Code) |
 | Repository | [anirudhbhatia-1/meetyou](https://github.com/anirudhbhatia-1/meetyou) — branches `main`, `anirudh`, `Gauravbro` |
-| Current stage | **Stage 3** complete in code (S3-01..S3-12, Anirudh); templates v2 parked, ADR-0007 proposed, staging checks pending (§7, §9 2026-11-09) |
+| Current stage | **Stage 4** complete in code (S4-01..S4-17, Anirudh) after Stage 3; real Chrome/Meet checks pending (§7, §9 2026-11-09) |
 
 ---
 
@@ -173,8 +173,13 @@ Facts learned so far that change how we build. Full sources in STT_PREFLIGHT.md 
 
 Stages 0–2 are complete in code and deployed to staging with CI/CD (every green `main` deploys
 and smoke-tests). **Stage 3 is complete in code (2026-11-09, Anirudh did all of S3, including
-Gaurav's S3-07..S3-11 — Gaurav should not start them).** Next:
+Gaurav's S3-07..S3-11 — Gaurav should not start them).** **Stage 4 is complete in code
+(2026-11-09, Anirudh did all of S4 by decision, including S4-07).** Next:
 
+0. **Anirudh:** after the push, confirm the staging deploy ran migration 0008 (`product_events`;
+   the deploy job migrates before rollout); run the real Chrome/Meet checklist (Meet chat notice, overlay layouts, notifications, mic picker, Stop
+   and delete, onboarding, 320–480 px panel, paste tests); decide the product name (MeetYou in the
+   extension vs Minutes in DESIGN and the web app).
 1. **Anirudh:** turn S3 on in staging (STAGING_SETUP §9.5) and test a call end to end; accept or
    amend ADR-0007; finish templates v2 from the stash once the Gemini quota allows; grow the
    golden set from 10 to 30+ meetings (PRD §14.6).
@@ -197,7 +202,36 @@ Gaurav's S3-07..S3-11 — Gaurav should not start them).** Next:
 
 Newest first. One entry per working session (either person).
 
-### 2026-11-09 (latest) — Anirudh (Claude Code): Stage 3 complete in code
+### 2026-11-09 (latest) — Anirudh (Claude Code): Stage 4 complete in code
+
+Anirudh asked for all of S4 (including S4-07), analytics in our own API, docs updated as tasks
+land, and the Moonrise colour (#dae2f8 → #d6a4a4) instead of orange, with every feature connected
+to its UI and a more responsive layout. Commits on `anirudh`:
+
+- **S4-02** shared Sheet / Alert / Menu / inputs, Moonrise tokens (accent `#8c4a5c`, contrast
+  tests), responsive web shell (glass sidebar, tablet top bar, phone tab bar), dev-only catalogue.
+- **S4-12** Settings on `GET/PATCH /v1/settings` (server sets `consentAcknowledgedAt`); the
+  extension caches account settings and follows them (prompt, mute, video, retention lock).
+- **S4-09/10/11** rename, inline edit, per-item feedback, transcript search, speaker rename
+  (`PATCH /v1/meetings/:id/speakers/:clusterId`), audio playback without video
+  (`GET /v1/meetings/:id/audio`), share and consent-log sheets, owner/due pickers, paging, offline.
+- **S4-03/07** React onboarding; consent step, Meet chat notice (`adapters/meet/chat.ts`, selectors
+  unverified on a real call), consent log.
+- **S4-05/06/08** notes sync before Stop, Processing → Ready from the API, paused-aware timers,
+  Choose microphone, 4-hour limit, second Meet tab, Stop and delete, "stopped at {mm:ss}".
+- **S4-04/13/14/17** prompt keeps left of Meet's panel, badge and tooltip per §8.3, "Notes ready"
+  Chrome notification (new `alarms` permission, PRD §18), export-ready browser notification, no mock
+  API in production builds, video quality choice and data-saver line, sticky player.
+- **S4-15** `POST /v1/events` → `product_events` (migration **0008**), strict typed events, opt-out.
+- **S4-16** accessibility pass (headings, 24 px targets, `lang` on transcript text, banner wrap).
+
+Not done / open: crash recovery banner, Get help (no help page), web upload %, interim Roman
+transliteration (conflicts with the 2026-11-06 "as provided" decision), the panel session-stream
+replayer (S4-01), theme saved to the account (needs a column). The ui-ux-pro-max and apple-design
+skills' reference files were missing in this install, so their built-in rules were applied.
+Gaurav: please review the S4 commits.
+
+### 2026-11-09 — Anirudh (Claude Code): Stage 3 complete in code
 Anirudh decided to finish **all of Stage 3 today himself**, including Gaurav's S3-07..S3-11 (Gaurav
 should not start them), and to change **no documents except this entry** (follow-ups listed
 below). Every task ships with its UI (DESIGN). `pnpm check` green; commits ef3d8c7..(this push).

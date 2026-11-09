@@ -6,7 +6,7 @@ import type { Participant } from '../api/types.ts';
 import { useAnalytics } from '../lib/analytics.ts';
 import { useApi } from '../lib/api-context.ts';
 import { useMeetingAudio } from '../lib/audio.ts';
-import { formatClock } from '../lib/format.ts';
+import { formatClock, segmentLang } from '../lib/format.ts';
 import { VideoPlayer, type PlayerHandle } from './VideoPlayer.tsx';
 
 /** A transcript search counts for analytics once the typing has paused this long. */
@@ -328,7 +328,7 @@ export function TranscriptTab({
                     onRenamed={onSpeakerRenamed}
                   />
                   {echo && <span className="echo-label">possible echo</span>}
-                  <span className="segment-text">
+                  <span className="segment-text" lang={segmentLang(s.language, s.text)}>
                     {highlight(s.text, q, s.id === currentMatch)}
                   </span>
                 </span>

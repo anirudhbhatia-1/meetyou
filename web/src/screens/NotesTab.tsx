@@ -14,7 +14,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import type { MeetingSummary } from '../api/types.ts';
 import { useApi } from '../lib/api-context.ts';
 import { numberCitations } from '../lib/citations.ts';
-import { formatClock } from '../lib/format.ts';
+import { formatClock, segmentLang } from '../lib/format.ts';
 import { NotesFeedback } from './SummaryControls.tsx';
 
 /** DESIGN §12.6: the popover appears within 200 ms of hover or focus. */
@@ -30,7 +30,9 @@ function CitePopover({ item, segments }: { item: SummaryItem; segments: Segment[
         {first.lane === 'me' ? 'You' : (first.speakerName ?? 'Speaker')} ·{' '}
         <span className="num">{formatClock(first.startMs)}</span>
       </span>
-      <span className="cite-popover-quote">“{first.text}”</span>
+      <span className="cite-popover-quote" lang={segmentLang(first.language, first.text)}>
+        “{first.text}”
+      </span>
     </span>
   );
 }
@@ -228,19 +230,25 @@ export function NotesTab({
   return (
     <Card className={`notes ${fading ? 'fading' : ''}`}>
       <p className="legend">
-        <span className="swatch swatch-ink" aria-hidden /> You wrote this
-        <span className="swatch swatch-muted" aria-hidden /> Added from the conversation
-        <span className="cite cite-static" aria-hidden>
-          1
-        </span>{' '}
-        Click to see who said it
+        <span className="legend-item">
+          <span className="swatch swatch-ink" aria-hidden /> You wrote this
+        </span>
+        <span className="legend-item">
+          <span className="swatch swatch-muted" aria-hidden /> Added from the conversation
+        </span>
+        <span className="legend-item">
+          <span className="cite cite-static" aria-hidden>
+            1
+          </span>{' '}
+          Click to see who said it
+        </span>
       </p>
       <p className="overview">{summary.overview}</p>
       {summary.sections.map((section, i) => (
         <section key={section.note?.id ?? `topic-${i}`} className="note-section">
-          <h3 className={section.note === null ? 'topic-heading' : 'note-heading'}>
+          <h2 className={section.note === null ? 'topic-heading' : 'note-heading'}>
             {section.note?.text ?? 'From the conversation'}
-          </h3>
+          </h2>
           <p className="meta small num">
             {section.note === null
               ? 'added from the conversation'
@@ -255,13 +263,13 @@ export function NotesTab({
       ))}
       {summary.decisions.length > 0 && (
         <section className="note-section">
-          <h3 className="note-heading">Decisions</h3>
+          <h2 className="note-heading">Decisions</h2>
           <ul className="bullets decisions">{summary.decisions.map(bullet)}</ul>
         </section>
       )}
       {summary.questions.length > 0 && (
         <section className="note-section">
-          <h3 className="note-heading">Open questions</h3>
+          <h2 className="note-heading">Open questions</h2>
           <ul className="bullets questions">{summary.questions.map(bullet)}</ul>
         </section>
       )}

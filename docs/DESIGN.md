@@ -1069,6 +1069,17 @@ Same shell and components; add sidebar items only when a feature ships.
 | O1 Notifications | Toast built; Chrome notification SPEC | §6.7, §8.7 |
 | Phase 2/3 features | SPEC (light) | §22 |
 
+**Product build status (Stage 4 code complete, 2026-11-09, Anirudh).** The table above describes the
+prototype. In the product (web app, side panel, Meet overlay, onboarding) every Phase 1 row is built
+against the real API, including the SPEC items: onboarding, consent step and chat notice, consent
+log, Stop and delete, lane health, §9 failure states (Choose microphone, 4-hour limit, second tab,
+"stopped at {mm:ss}"), speaker rename, transcript search, hover popover and unverified chip, inline
+edit and per-item feedback, audio playback without video, video player and states, data saver,
+Chrome "Notes ready" notification, Settings on the API. Not built: crash recovery banner (§9),
+**Get help** (no help page specified), "Video is still uploading — {N}%" on the web (the server does
+not know N), interim Roman transliteration (Hindi shows as the STT provider returns it, decision
+2026-11-06). [Verify] in real Chrome/Meet: overlay layouts, Meet chat posting, notifications.
+
 ---
 
 ## 24. Design QA checklist

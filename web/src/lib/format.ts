@@ -95,3 +95,15 @@ export function peopleLabel(others: number): string {
   const n = others + 1;
   return n === 1 ? '1 person' : `${n} people`;
 }
+
+const DEVANAGARI = /[ऀ-ॿ]/;
+
+/**
+ * DESIGN §20: `lang` for a line of transcript, so screen readers pronounce it sensibly. Hindi shown
+ * in Roman script (Hinglish) is `hi-Latn`; an unknown language inherits the page's.
+ */
+export function segmentLang(language: string, text: string): string | undefined {
+  if (language === 'und' || language === '') return undefined;
+  if (language === 'hi' && !DEVANAGARI.test(text)) return 'hi-Latn';
+  return language;
+}

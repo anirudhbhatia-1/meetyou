@@ -11,8 +11,8 @@ tasks owned by your developer unless they say otherwise.
 single source of truth for scope, architecture, and working style. If a rule here conflicts with an
 agent's default behavior, this file wins.
 
-> **Project status: Stage 3 (notes and summaries) complete in code (2026-11-09); staging
-> verification and templates v2 pending (HANDOFF §7).** Live S2 tests (gateway failover, worker
+> **Project status: Stage 4 (UI) complete in code (2026-11-09) after Stage 3; real Chrome/Meet
+> checks, staging verification and templates v2 pending (HANDOFF §7).** Live S2 tests (gateway failover, worker
 > crash, 60-min video sync) are still to run. Create other product code only for
 > IMPLEMENTATION_PLAN tasks your developer has started.
 

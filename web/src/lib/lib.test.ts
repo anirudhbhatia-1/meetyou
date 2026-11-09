@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { createMockApi } from '../api/mock.ts';
 import { numberCitations } from './citations.ts';
 import {
+  segmentLang,
   formatClock,
   formatDue,
   formatLength,
@@ -37,6 +38,15 @@ describe('format (DESIGN §10–§14)', () => {
     expect(formatDue({ dueDate: '2026-11-08', duePhrase: 'Thursday tak' })).toBe('Sun 8 Nov');
     expect(formatDue({ dueDate: null, duePhrase: 'this week' })).toBe('this week');
     expect(formatDue({ dueDate: null, duePhrase: null })).toBe('No due date');
+  });
+});
+
+describe('segmentLang (DESIGN §20)', () => {
+  it('marks Roman Hindi as hi-Latn and leaves unknown text to the page', () => {
+    expect(segmentLang('hi', 'Haan, Friday tak ho jayega')).toBe('hi-Latn');
+    expect(segmentLang('hi', 'हाँ, शुक्रवार तक')).toBe('hi');
+    expect(segmentLang('en', 'Sounds good')).toBe('en');
+    expect(segmentLang('und', 'hmm')).toBeUndefined();
   });
 });
 
