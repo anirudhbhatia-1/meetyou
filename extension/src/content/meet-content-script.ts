@@ -18,7 +18,13 @@ import { observeActiveSpeakers } from '../adapters/meet/speaker-signal.ts';
 import { PILL_LAYOUT_KEY } from './pill-model.ts';
 import { PromptChip } from './prompt-chip.ts';
 import { RecordingPill, type RecordingSnapshot } from './recording-pill.ts';
-import { RECORD_VIDEO_KEY, recordVideoFrom } from '../settings.ts';
+import {
+  ACCOUNT_SETTINGS_KEY,
+  accountSettingsFrom,
+  RECORD_VIDEO_KEY,
+  recordVideoFrom,
+  videoAllowed,
+} from '../settings.ts';
 
 let stopObserving: (() => void) | null = null;
 let stopMuteObserving: (() => void) | null = null;
@@ -78,16 +84,33 @@ const recordingPill = new RecordingPill(document, {
 });
 
 // The prompt's reminder line says whether the screen will be recorded (DESIGN §8.2).
+// The account settings (S4-12) decide whether the prompt is offered at all, and "Delete after
+// notes" means audio only.
 if (contextValid()) {
+  const apply = (items: Record<string, unknown>) => {
+    const account = accountSettingsFrom(items);
+    promptChip.setOffered(account.offerPrompt);
+    promptChip.setRecordVideo(recordVideoFrom(items) && videoAllowed(account));
+  };
+  let latest: Record<string, unknown> = {};
   chrome.storage.local
-    .get(RECORD_VIDEO_KEY)
-    .then((items) => promptChip.setRecordVideo(recordVideoFrom(items)))
+    .get([RECORD_VIDEO_KEY, ACCOUNT_SETTINGS_KEY])
+    .then((items) => {
+      latest = items;
+      apply(items);
+    })
     .catch(() => undefined);
   chrome.storage.onChanged.addListener((changes, areaName) => {
-    const change = changes[RECORD_VIDEO_KEY];
-    if (areaName === 'local' && change !== undefined) {
-      promptChip.setRecordVideo(recordVideoFrom({ [RECORD_VIDEO_KEY]: change.newValue }));
-    }
+    if (areaName !== 'local') return;
+    const video = changes[RECORD_VIDEO_KEY];
+    const account = changes[ACCOUNT_SETTINGS_KEY];
+    if (video === undefined && account === undefined) return;
+    latest = {
+      ...latest,
+      ...(video !== undefined ? { [RECORD_VIDEO_KEY]: video.newValue } : {}),
+      ...(account !== undefined ? { [ACCOUNT_SETTINGS_KEY]: account.newValue } : {}),
+    };
+    apply(latest);
   });
 }
 

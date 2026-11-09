@@ -12,7 +12,7 @@ const now = Date.now();
 const at = (offsetMs: number) => new Date(now + offsetMs).toISOString();
 
 export const WORKSPACE = 'ws_01JD0000000000000000000000';
-export const ME = { firstName: 'Asha', email: 'asha@example.com' };
+export const ME = { firstName: 'Asha', name: 'Asha Rao', email: 'asha@example.com' };
 
 let segCounter = 0;
 const segId = () => `seg_01JD${String(++segCounter).padStart(22, '0')}`;

@@ -191,6 +191,16 @@ describe('PromptChip', () => {
     expect(chip.isShowing()).toBe(true);
   });
 
+  it('is not offered when the user turned the prompt off in Settings (S4-12)', () => {
+    chip.setOffered(false);
+    chip.updateCallState('in_call');
+    expect(chip.isShowing()).toBe(false);
+    chip.setOffered(true);
+    expect(chip.isShowing()).toBe(true);
+    chip.setOffered(false);
+    expect(chip.isShowing()).toBe(false);
+  });
+
   it('dismisses when Not now is clicked and never shows again during call', () => {
     chip.show();
     expect(chip.isShowing()).toBe(true);

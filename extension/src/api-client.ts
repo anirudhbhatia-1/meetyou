@@ -1,5 +1,6 @@
 import {
   RecoverSessionResponse,
+  UserSettings,
   SignVideoFragmentsResponse,
   StartSessionResponse,
 } from '@meetyou/contracts';
@@ -143,4 +144,14 @@ export function apiSessionSource(
       return recoverStreamToken(apiUrl, await accessToken(), sessionId);
     },
   };
+}
+
+/** The account settings (DESIGN §15, S4-12) the extension caches for its pages. */
+export async function fetchApiSettings(apiUrl: string, accessToken: string): Promise<UserSettings> {
+  const response = await fetch(new URL('/v1/settings', apiUrl).href, {
+    headers: { authorization: `Bearer ${accessToken}`, accept: 'application/json' },
+    signal: AbortSignal.timeout(API_TIMEOUT_MS),
+  });
+  if (!response.ok) throw new ApiError('/v1/settings', response.status);
+  return UserSettings.parse(await response.json());
 }

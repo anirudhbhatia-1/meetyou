@@ -1,4 +1,4 @@
-import { Banner, Card, Icon } from '@meetyou/ui';
+import { Banner, Icon } from '@meetyou/ui';
 import { useRef, useState, type KeyboardEvent } from 'react';
 
 import { useApi } from '../lib/api-context.ts';
@@ -66,12 +66,12 @@ export function Vocabulary() {
   };
 
   return (
-    <Card>
-      <div className="vocab">
-        <div>
-          <h3 className="setting-title">Vocabulary</h3>
-          <p className="meta">Used to improve spelling in future transcripts.</p>
-        </div>
+    <div className="settings-row vocab">
+      <div className="settings-row-text">
+        <h3 className="setting-title">Names and words we should spell right</h3>
+        <p className="meta">Used to improve spelling in future transcripts.</p>
+      </div>
+      <div className="settings-row-wide vocab-body">
         <ul className="vocab-chips" aria-label="Names and words we should spell right">
           {list.map((term) => (
             <li key={term} className="vocab-chip">
@@ -108,6 +108,6 @@ export function Vocabulary() {
           <Banner tone="error">Couldn’t load your words. Reload the page to try again.</Banner>
         )}
       </div>
-    </Card>
+    </div>
   );
 }

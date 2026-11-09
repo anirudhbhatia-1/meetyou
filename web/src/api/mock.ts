@@ -1,4 +1,4 @@
-import { ASK_LIMITS, type Meeting } from '@meetyou/contracts';
+import { ASK_LIMITS, DEFAULT_USER_SETTINGS, type Meeting } from '@meetyou/contracts';
 
 import { ME, meetings, participants, segments, summaries } from './fixtures.ts';
 import type {
@@ -8,6 +8,7 @@ import type {
   MeetingFilter,
   MeetingQuestion,
   MeetingSummary,
+  UserSettings,
 } from './types.ts';
 
 /**
@@ -22,6 +23,7 @@ export function createMockApi(options: { latencyMs?: number } = {}): LibraryApi 
   /** Soft-deleted in this session (undo brings them back). */
   const deleted = new Set<string>();
   const glossary: string[] = ['Razorpay', 'Sameer'];
+  const settings: UserSettings = { ...DEFAULT_USER_SETTINGS, consentAcknowledgedAt: null };
   let exportRun: ExportView | null = null;
   const mockExport = (createdAt: string, ready: boolean): ExportView => ({
     id: 'exp_mock',
@@ -76,6 +78,13 @@ export function createMockApi(options: { latencyMs?: number } = {}): LibraryApi 
 
   return {
     me: () => wait(ME),
+    getSettings: () => wait({ ...settings }),
+    patchSettings: (patch) => {
+      const { consentAcknowledged, ...rest } = patch;
+      Object.assign(settings, rest);
+      if (consentAcknowledged === true) settings.consentAcknowledgedAt = new Date().toISOString();
+      return wait({ ...settings });
+    },
     listMeetings: (filter) =>
       wait(
         meetings

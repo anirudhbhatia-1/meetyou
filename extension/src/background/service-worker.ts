@@ -29,8 +29,15 @@ import {
 } from './capture-state.ts';
 import { isMeetUrl, meetingCodeOf } from './meet-tab.ts';
 import { LAST_RECORDING_KEY, type LastRecording } from '../last-recording.ts';
-import { RECORD_VIDEO_KEY, recordVideoFrom } from '../settings.ts';
-import { discardApiMeeting, startApiSession } from '../api-client.ts';
+import {
+  ACCOUNT_SETTINGS_KEY,
+  accountSettingsFrom,
+  RECORD_VIDEO_KEY,
+  recordVideoFrom,
+  toAccountSettings,
+  videoAllowed,
+} from '../settings.ts';
+import { discardApiMeeting, fetchApiSettings, startApiSession } from '../api-client.ts';
 import { API_URL, GATEWAY_URL, GOOGLE_CLIENT_ID } from '../build-config.ts';
 import { openMinutesDb } from '../offscreen/idb.ts';
 import { IdbFragmentQueue, uploadableSession } from '../offscreen/video-uploader.ts';
@@ -176,7 +183,39 @@ async function failCapture(event: Extract<CaptureEvent, { type: 'failed' }>): Pr
 }
 
 async function recordVideoSetting(): Promise<boolean> {
-  return recordVideoFrom(await chrome.storage.local.get(RECORD_VIDEO_KEY));
+  const items = await chrome.storage.local.get([RECORD_VIDEO_KEY, ACCOUNT_SETTINGS_KEY]);
+  return recordVideoFrom(items) && videoAllowed(accountSettingsFrom(items));
+}
+
+/** Refreshed at most this often (each Meet page load asks; Settings changes are rare). */
+const SETTINGS_REFRESH_MS = 60_000;
+let settingsFetchedAt = 0;
+
+/**
+ * Caches the account settings (S4-12) for the content script and the side panel, and resets the
+ * panel's per-meeting video choice to the account default. Not while recording: the running
+ * meeting keeps the choices it started with. Failures keep the last cached values.
+ */
+async function refreshAccountSettings(force = false): Promise<void> {
+  if (auth === null) return;
+  if (!force && Date.now() - settingsFetchedAt < SETTINGS_REFRESH_MS) return;
+  try {
+    const token = await auth.accessToken();
+    if (token === null) return;
+    const account = toAccountSettings(await fetchApiSettings(API_URL, token));
+    settingsFetchedAt = Date.now();
+    const update: Record<string, unknown> = { [ACCOUNT_SETTINGS_KEY]: account };
+    if (canStart(await loadCaptureState())) {
+      update[RECORD_VIDEO_KEY] = account.recordVideo && videoAllowed(account);
+    }
+    await chrome.storage.local.set(update);
+  } catch (error: unknown) {
+    logError('settings refresh failed', error);
+  }
+}
+
+async function followMeetMute(): Promise<boolean> {
+  return accountSettingsFrom(await chrome.storage.local.get(ACCOUNT_SETTINGS_KEY)).followMeetMute;
 }
 
 /** Cloud mode only (S2-09): the build names an API. */
@@ -325,7 +364,7 @@ async function startRecording(tabId: number | undefined): Promise<void> {
   // Usually recording starts inside the call; the adapter only reports state changes, so ask.
   if ((await readCallState(tabId)) === 'in_call') await applyCaptureEvent({ type: 'call_joined' });
   // Already muted in Meet when recording starts: the adapter reports only changes (FR-CAP-11).
-  if ((await readMuteState(tabId)) === true) await forwardMute(true);
+  if ((await followMeetMute()) && (await readMuteState(tabId)) === true) await forwardMute(true);
 }
 
 async function readMuteState(tabId: number): Promise<boolean | null> {
@@ -338,8 +377,8 @@ async function readMuteState(tabId: number): Promise<boolean | null> {
 
 /**
  * Meet's mute on the recorded tab reaches the recorder (FR-CAP-11, D-10 "follow Meet mute"): muted
- * mic audio is never stored, sent to STT or mixed into the video.
- * TODO(S4-12): honour the `followMeetMute` setting once settings sync to the extension.
+ * mic audio is never stored, sent to STT or mixed into the video. Only when the user keeps
+ * "Pause my mic when I'm muted in Meet" on (DESIGN §15.1).
  */
 async function forwardMute(muted: boolean): Promise<void> {
   try {
@@ -579,6 +618,7 @@ chrome.runtime.onInstalled.addListener((details) => {
 });
 
 chrome.runtime.onStartup.addListener(() => {
+  void refreshAccountSettings(true);
   disableBrowserOpenedPanel();
   configureExistingTabs().catch((error: unknown) => logError('configure tabs failed', error));
   enqueueCapture(resumePendingVideo);
@@ -646,6 +686,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (typeof message === 'object' && message !== null) {
     const record = message as Record<string, unknown>;
     if (record.type === 'meet.page-ready') {
+      void refreshAccountSettings();
       // The content script asks once so its prompt chip never shows over a running recording.
       void loadCaptureState().then((state) => {
         // Another tab's recording shows nothing here: its pill belongs to the recorded tab.
@@ -662,7 +703,14 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       // Only the recorded tab's mute counts, and only while it is being recorded.
       enqueueCapture(async () => {
         const state = await loadCaptureState();
-        if (fromTab !== null && state.tabId === fromTab && canStop(state)) await forwardMute(muted);
+        if (
+          fromTab !== null &&
+          state.tabId === fromTab &&
+          canStop(state) &&
+          (await followMeetMute())
+        ) {
+          await forwardMute(muted);
+        }
       });
       return false;
     }
@@ -710,7 +758,10 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     }
     const task = parsed.type === 'auth.sign_in' ? auth.signIn() : auth.signOut();
     task.then(
-      () => reply(true),
+      () => {
+        if (parsed.type === 'auth.sign_in') void refreshAccountSettings(true);
+        reply(true);
+      },
       (error: unknown) => {
         logError(`${parsed.type} failed`, error);
         reply(false);

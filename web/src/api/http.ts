@@ -1,20 +1,22 @@
 import {
   ActionItemList,
   AskQuestionResponse,
-  ExportListResponse,
-  ExportResponse,
+  PatchSettingsRequest,
   GlossaryResponse,
-  MeResponse,
   Meeting,
   MeetingList,
   MeetingProgress,
   MeetingQuestionsResponse,
   MeetingSummaryResponse,
+  MeResponse,
   SearchResponse,
   Segment,
-  VideoPlaybackResponse,
   type SummaryItem,
   type SummaryVersion,
+  UserSettings,
+  VideoPlaybackResponse,
+  ExportListResponse,
+  ExportResponse,
 } from '@meetyou/contracts';
 
 import type { WebAuth } from './auth.ts';
@@ -62,7 +64,21 @@ export function createHttpApi(auth: WebAuth): LibraryApi {
     async me() {
       const me = MeResponse.parse(await get('/v1/me'));
       const firstName = me.displayName.split(/\s+/)[0] ?? me.displayName;
-      return { firstName, email: me.email };
+      return { firstName, name: me.displayName, email: me.email };
+    },
+
+    async getSettings() {
+      return UserSettings.parse(await get('/v1/settings'));
+    },
+
+    async patchSettings(patch) {
+      const res = await auth.authorized('/v1/settings', {
+        method: 'PATCH',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify(PatchSettingsRequest.parse(patch)),
+      });
+      if (!res.ok) throw new Error(`settings not saved (${res.status})`);
+      return UserSettings.parse(await res.json());
     },
 
     async listMeetings(filter: MeetingFilter) {

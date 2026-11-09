@@ -51,8 +51,11 @@ export class PromptChip {
   private meetingCode: string | null = null;
   private liveRegion: HTMLElement | null = null;
   private reminderEl: HTMLElement | null = null;
-  // TODO(S4-12): also off when retention is "Delete after notes" (ADR-0011 §3.5).
+  /** False when retention is "Delete after notes" too (the content script decides, ADR-0011 §3.5). */
   private recordVideo = true;
+  /** Settings → "Offer to take notes when I join a call" (DESIGN §15.1). */
+  private offered = true;
+  private lastCallState: string | null = null;
   private readonly boundOnKeyDown: (e: KeyboardEvent) => void;
 
   constructor(doc: Document = document, callbacks: PromptChipCallbacks) {
@@ -152,11 +155,20 @@ export class PromptChip {
       this.meetingCode = meetingCode;
       this.dismissed = false;
     }
-    if (state === 'in_call') {
+    this.lastCallState = state;
+    if (state === 'in_call' && this.offered) {
       this.show();
     } else {
       this.hide();
     }
+  }
+
+  /** The user's "Offer to take notes" setting; off hides the prompt (recording still works). */
+  public setOffered(offered: boolean): void {
+    if (offered === this.offered) return;
+    this.offered = offered;
+    if (!offered) this.hide();
+    else if (this.lastCallState === 'in_call') this.show();
   }
 
   /**

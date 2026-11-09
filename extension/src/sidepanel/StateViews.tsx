@@ -3,7 +3,13 @@ import { Banner, Button, Icon, Switch } from '@meetyou/ui';
 import type { CaptureState } from '../background/capture-state.ts';
 import { API_URL, GATEWAY_URL } from '../build-config.ts';
 import { LAST_RECORDING_KEY, parseLastRecording } from '../last-recording.ts';
-import { RECORD_VIDEO_KEY, recordVideoFrom } from '../settings.ts';
+import {
+  ACCOUNT_SETTINGS_KEY,
+  accountSettingsFrom,
+  RECORD_VIDEO_KEY,
+  recordVideoFrom,
+  videoAllowed,
+} from '../settings.ts';
 import { AccountLine, SignInCard, useAccount } from './Account.tsx';
 import { send, useLocalSetting } from './hooks.ts';
 import { ERROR_TEXT, uploadPercent } from './panel-model.ts';
@@ -86,6 +92,9 @@ function CallVideo({ sessionId }: { sessionId: string | null }) {
  */
 function RecordingOptions() {
   const [recordVideo, setRecordVideo] = useLocalSetting(RECORD_VIDEO_KEY, recordVideoFrom);
+  const [account] = useLocalSetting(ACCOUNT_SETTINGS_KEY, accountSettingsFrom);
+  // "Delete after notes" keeps nothing to replay: video is off for every meeting (DESIGN §8.5).
+  const locked = account !== null && !videoAllowed(account);
   return (
     <div className="options">
       <div className="option-row">
@@ -93,13 +102,15 @@ function RecordingOptions() {
         <Switch
           compact
           label="Record video"
-          checked={recordVideo ?? true}
-          disabled={recordVideo === null}
+          checked={!locked && (recordVideo ?? true)}
+          disabled={recordVideo === null || locked}
           onChange={setRecordVideo}
         />
       </div>
       <p className="option-help">
-        Records what the Meet tab shows — the video grid and anything people present.
+        {locked
+          ? 'Video is off because recordings are deleted as soon as your notes are ready. Change this in Settings.'
+          : 'Records what the Meet tab shows — the video grid and anything people present. Just for this meeting; the default is in Settings.'}
       </p>
     </div>
   );

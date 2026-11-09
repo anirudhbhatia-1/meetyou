@@ -1,6 +1,8 @@
 import type {
   AskUsage,
   ExportView,
+  PatchSettingsRequest,
+  UserSettings,
   Meeting,
   MeetingProgress,
   MeetingQuestion,
@@ -13,6 +15,8 @@ import type {
 export type {
   AskUsage,
   ExportView,
+  PatchSettingsRequest,
+  UserSettings,
   Meeting,
   MeetingProgress,
   MeetingQuestion,
@@ -68,7 +72,10 @@ export interface MeetingFilter {
 
 /** What the library screens need from the API (ARCHITECTURE §12.1, DESIGN §17). */
 export interface LibraryApi {
-  me(): Promise<{ firstName: string; email: string }>;
+  me(): Promise<{ firstName: string; name: string; email: string }>;
+  /** DESIGN §15 (S4-12): every change saves at once; returns what the server stored. */
+  getSettings(): Promise<UserSettings>;
+  patchSettings(patch: PatchSettingsRequest): Promise<UserSettings>;
   listMeetings(filter: MeetingFilter): Promise<Meeting[]>;
   getMeeting(id: string): Promise<Meeting | null>;
   getSummary(id: string): Promise<MeetingSummary | null>;

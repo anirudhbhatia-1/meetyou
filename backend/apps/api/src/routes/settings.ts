@@ -1,5 +1,5 @@
 import type { FastifyPluginAsync } from 'fastify';
-import { DEFAULT_USER_SETTINGS, UserSettings } from '@meetyou/contracts';
+import { DEFAULT_USER_SETTINGS, PatchSettingsRequest, type UserSettings } from '@meetyou/contracts';
 
 import { BadRequestError, NotFoundError, UnauthorizedError } from '../errors.ts';
 
@@ -131,7 +131,9 @@ export const settingsRoutes: FastifyPluginAsync = async (fastify) => {
         throw new UnauthorizedError('Unauthorized');
       }
 
-      const parseResult = UserSettings.partial().safeParse(request.body);
+      // PatchSettingsRequest: the client says `consentAcknowledged: true`; only the server sets the
+      // time (FR-ONB-06), so a client cannot backdate or clear the acknowledgement.
+      const parseResult = PatchSettingsRequest.safeParse(request.body);
       if (!parseResult.success) {
         throw new BadRequestError(parseResult.error.issues[0]?.message ?? 'Invalid settings body');
       }
@@ -156,10 +158,8 @@ export const settingsRoutes: FastifyPluginAsync = async (fastify) => {
         if (updates.consentMode !== undefined) updateValues.consentMode = updates.consentMode;
         if (updates.consentMessage !== undefined)
           updateValues.consentMessage = updates.consentMessage;
-        if (updates.consentAcknowledgedAt !== undefined) {
-          updateValues.consentAcknowledgedAt = updates.consentAcknowledgedAt
-            ? new Date(updates.consentAcknowledgedAt)
-            : null;
+        if (updates.consentAcknowledged === true) {
+          updateValues.consentAcknowledgedAt = new Date();
         }
         if (updates.followMeetMute !== undefined)
           updateValues.followMeetMute = updates.followMeetMute;

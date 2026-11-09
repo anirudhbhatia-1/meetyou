@@ -93,8 +93,8 @@ export function DataExport() {
   };
 
   return (
-    <div className="setting-row">
-      <div>
+    <div className="settings-row">
+      <div className="settings-row-text">
         <h3 className="setting-title">Download all my data</h3>
         <p className="meta" role="status">
           {current?.status === 'ready' && current.expiresAt !== null
@@ -106,15 +106,17 @@ export function DataExport() {
                 : 'Every meeting’s transcript, notes and summary as JSON and Markdown.'}
         </p>
       </div>
-      {current?.status === 'ready' ? (
-        <Button variant="primary" onClick={() => void download()}>
-          Download
-        </Button>
-      ) : (
-        <Button disabled={busy || preparing} onClick={() => void start()}>
-          {preparing ? 'Preparing…' : 'Download all my data'}
-        </Button>
-      )}
+      <div className="settings-row-control">
+        {current?.status === 'ready' ? (
+          <Button variant="primary" onClick={() => void download()}>
+            Download
+          </Button>
+        ) : (
+          <Button disabled={busy || preparing} onClick={() => void start()}>
+            {preparing ? 'Preparing…' : 'Download all my data'}
+          </Button>
+        )}
+      </div>
     </div>
   );
 }

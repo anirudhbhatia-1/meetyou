@@ -173,6 +173,23 @@ describe('Core REST API Endpoints (S2-09)', () => {
       expect(persisted.retentionPolicy).toBe('30d');
       expect(persisted.transcriptLanguageMode).toBe('hinglish');
     });
+
+    it('records the consent acknowledgement with the server time only (FR-ONB-06)', async () => {
+      const patch = (payload: Record<string, unknown>) =>
+        app.inject({
+          method: 'PATCH',
+          url: '/v1/settings',
+          headers: { authorization: `Bearer ${tokenA}` },
+          payload,
+        });
+      const before = Date.now();
+      const ack = await patch({ consentAcknowledged: true });
+      expect(ack.statusCode).toBe(200);
+      const at = Date.parse(JSON.parse(ack.body).consentAcknowledgedAt as string);
+      expect(at).toBeGreaterThanOrEqual(before - 1000);
+      // A client-chosen time is not accepted.
+      expect((await patch({ consentAcknowledgedAt: '2020-01-01T00:00:00Z' })).statusCode).toBe(400);
+    });
   });
 
   // 4. Sessions (/v1/sessions)

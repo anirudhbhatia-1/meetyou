@@ -209,15 +209,20 @@ a {
 }
 .segmented {
   display: inline-flex;
+  max-width: 100%;
   gap: 2px;
   padding: 3px;
   border-radius: var(--radius-pill);
   background: var(--hairline-2);
   justify-self: start;
+  overflow-x: auto;
+  scrollbar-width: none;
 }
 .segmented button {
+  flex: 1 0 auto;
   height: 34px;
   padding: 0 16px;
+  white-space: nowrap;
   border: 0;
   border-radius: var(--radius-pill);
   background: transparent;
