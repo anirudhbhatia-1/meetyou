@@ -1,6 +1,7 @@
 import type {
   AskUsage,
   Meeting,
+  MeetingProgress,
   MeetingQuestion,
   Note,
   Segment,
@@ -11,6 +12,7 @@ import type {
 export type {
   AskUsage,
   Meeting,
+  MeetingProgress,
   MeetingQuestion,
   Note,
   Segment,
@@ -35,6 +37,12 @@ export interface Participant {
  * TODO(S3-08): replace with the `GET /v1/meetings/{id}/summary` DTO from shared/contracts.
  */
 export interface MeetingSummary {
+  /** The stored version shown (server summaries, S3-08); absent in mock fixtures. */
+  summaryId?: string;
+  version?: number;
+  template?: Meeting['template'];
+  /** A regenerated version waiting for Keep / Go back (DESIGN §12.2, FR-SUM-07). */
+  candidate?: { version: number; template: Meeting['template'] } | null;
   overview: string;
   /** One per user note, in note order; `note` null = topic section added from the conversation. */
   sections: { note: Note | null; items: SummaryItem[] }[];
@@ -74,6 +82,14 @@ export interface LibraryApi {
   /** Questions about one recording, oldest first, with the caller's limits (DESIGN §12.7). */
   listQuestions(meetingId: string): Promise<{ items: MeetingQuestion[]; usage: AskUsage } | null>;
   askQuestion(meetingId: string, question: string): Promise<AskResult>;
+  /** DESIGN §12.2: rewrite the notes with another template; the result arrives as a candidate. */
+  regenerateSummary(meetingId: string, template: Meeting['template']): Promise<void>;
+  keepSummary(meetingId: string, version: number): Promise<void>;
+  discardSummary(meetingId: string, version: number): Promise<void>;
+  /** DESIGN §12.4 item 8 "Were these notes useful?". */
+  sendFeedback(summaryId: string, useful: boolean, comment?: string): Promise<void>;
+  /** Processing progress until the notes are ready (S3-03); returns an unsubscribe function. */
+  watchProgress(meetingId: string, onProgress: (progress: MeetingProgress) => void): () => void;
   /** Ends the web session (clears the refresh cookie). */
   signOut(): Promise<void>;
   /** FR-SET-02: soft-deletes a meeting; the server removes it after a short grace period. */

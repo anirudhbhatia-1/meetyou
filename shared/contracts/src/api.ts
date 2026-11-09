@@ -150,6 +150,8 @@ export const ActionItem = SummaryItem.extend({
   meetingStartedAt: IsoDateTime,
   /** Display name of the owner from the participant list, or null when unassigned. */
   ownerName: z.string().nullable(),
+  /** The owner is the user who recorded the meeting. */
+  ownerIsSelf: z.boolean(),
 });
 export type ActionItem = z.infer<typeof ActionItem>;
 export const ActionItemList = page(ActionItem);

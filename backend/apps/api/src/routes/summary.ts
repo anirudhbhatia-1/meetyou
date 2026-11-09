@@ -463,6 +463,7 @@ export const summaryRoutes: FastifyPluginAsync<{ pollMs?: number; streamMs?: num
           meetingTitle: r.meetingTitle,
           meetingStartedAt: r.meetingStartedAt.toISOString(),
           ownerName: r.ownerName ?? null,
+        ownerIsSelf: r.ownerIsSelf === true,
         }));
         const last = pageRows.at(-1);
         return {

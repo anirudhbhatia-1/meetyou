@@ -1,7 +1,13 @@
 import { ASK_LIMITS, type Meeting } from '@meetyou/contracts';
 
 import { ME, meetings, participants, segments, summaries } from './fixtures.ts';
-import type { ActionItemRow, LibraryApi, MeetingFilter, MeetingQuestion } from './types.ts';
+import type {
+  ActionItemRow,
+  LibraryApi,
+  MeetingFilter,
+  MeetingQuestion,
+  MeetingSummary,
+} from './types.ts';
 
 /**
  * In-memory API for building the UI before the real endpoints exist (S4-01; "mocks over waiting",
@@ -14,6 +20,8 @@ export function createMockApi(options: { latencyMs?: number } = {}): LibraryApi 
 
   /** Soft-deleted in this session (undo brings them back). */
   const deleted = new Set<string>();
+  /** Regenerated versions waiting for Keep / Go back (DESIGN §12.2). */
+  const candidates = new Map<string, MeetingSummary>();
   /** Asked in this session, per meeting (DESIGN §12.7). */
   const asked = new Map<string, MeetingQuestion[]>();
   const usage = () => {
@@ -87,6 +95,37 @@ export function createMockApi(options: { latencyMs?: number } = {}): LibraryApi 
         if (item !== undefined) item.status = status;
       }
       return wait(undefined);
+    },
+    regenerateSummary: (id, template) => {
+      // Mock rule: the "rewrite" is the same notes under another template, ready at once.
+      const current = summaries[id];
+      if (current !== undefined) {
+        candidates.set(id, {
+          ...structuredClone(current),
+          template,
+          version: (current.version ?? 1) + 1,
+        });
+        current.candidate = { version: (current.version ?? 1) + 1, template };
+      }
+      return wait(undefined);
+    },
+    keepSummary: (id) => {
+      const next = candidates.get(id);
+      if (next !== undefined) summaries[id] = { ...next, candidate: null };
+      candidates.delete(id);
+      return wait(undefined);
+    },
+    discardSummary: (id) => {
+      const current = summaries[id];
+      if (current !== undefined) current.candidate = null;
+      candidates.delete(id);
+      return wait(undefined);
+    },
+    sendFeedback: () => wait(undefined),
+    watchProgress: (id, onProgress) => {
+      const m = meetings.find((x) => x.id === id);
+      if (m !== undefined) onProgress({ status: m.status, processingStep: m.processingStep });
+      return () => undefined;
     },
     listQuestions: (id) => wait({ items: asked.get(id) ?? [], usage: usage() }),
     askQuestion: (id, question) => {

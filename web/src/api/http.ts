@@ -1,15 +1,46 @@
 import {
+  ActionItemList,
   AskQuestionResponse,
   MeResponse,
   Meeting,
   MeetingList,
+  MeetingProgress,
   MeetingQuestionsResponse,
+  MeetingSummaryResponse,
   Segment,
   VideoPlaybackResponse,
+  type SummaryItem,
+  type SummaryVersion,
 } from '@meetyou/contracts';
 
 import type { WebAuth } from './auth.ts';
-import type { LibraryApi, MeetingFilter } from './types.ts';
+import type { LibraryApi, MeetingFilter, MeetingSummary } from './types.ts';
+
+const SETTLED = new Set(['ready', 'updated', 'failed', 'too_short']);
+
+/** A stored summary version as the Notes tab reads it (DESIGN §12.4). */
+function toMeetingSummary(body: MeetingSummaryResponse): MeetingSummary | null {
+  const v: SummaryVersion | null = body.current;
+  if (v === null) return null;
+  const of = (kind: SummaryItem['kind']) => v.items.filter((i) => i.kind === kind);
+  return {
+    summaryId: v.id,
+    version: v.version,
+    template: v.template,
+    candidate:
+      body.candidate === null
+        ? null
+        : { version: body.candidate.version, template: body.candidate.template },
+    overview: v.overview,
+    sections: body.notes.map((note) => ({
+      note,
+      items: v.items.filter((i) => i.kind === 'anchor_detail' && i.anchorNoteId === note.id),
+    })),
+    decisions: of('decision'),
+    questions: of('question'),
+    actionItems: of('action_item'),
+  };
+}
 
 /**
  * The library API over HTTP (S4-14, ARCHITECTURE §12.1). Paths are same-origin: the web server
@@ -48,8 +79,10 @@ export function createHttpApi(auth: WebAuth): LibraryApi {
       return body === null ? null : Meeting.parse(body);
     },
 
-    // TODO(S3-08): GET /v1/meetings/{id}/summary once summaries are generated on the server.
-    getSummary: () => Promise.resolve(null),
+    async getSummary(id) {
+      const body = await get(`/v1/meetings/${encodeURIComponent(id)}/summary`);
+      return body === null ? null : toMeetingSummary(MeetingSummaryResponse.parse(body));
+    },
 
     async getSegments(id) {
       const body = await get(`/v1/meetings/${encodeURIComponent(id)}/segments`);
@@ -59,12 +92,142 @@ export function createHttpApi(auth: WebAuth): LibraryApi {
       return items.map((raw) => Segment.parse(withoutNulls(raw)));
     },
 
-    // TODO(S3-08): participants come with the summary DTO (owners of action items).
-    getParticipants: () => Promise.resolve([]),
-    // TODO(S3-08): GET /v1/action-items.
-    listActionItems: () => Promise.resolve([]),
-    setActionItemStatus: () =>
-      Promise.reject(new Error('Action items arrive with server summaries (S3-08)')),
+    async getParticipants(id) {
+      const body = await get(`/v1/meetings/${encodeURIComponent(id)}/summary`);
+      return body === null ? [] : MeetingSummaryResponse.parse(body).participants;
+    },
+
+    async listActionItems(status) {
+      // TODO(S4-09): follow `nextCursor`; the first 100 cover alpha.
+      const list = ActionItemList.parse(await get(`/v1/action-items?status=${status}&limit=100`));
+      return list.items.map(({ meetingId, meetingTitle, ownerName, ownerIsSelf, ...item }) => ({
+        item: {
+          id: item.id,
+          kind: item.kind,
+          text: item.text,
+          anchorNoteId: item.anchorNoteId,
+          ownerParticipantId: item.ownerParticipantId,
+          dueDate: item.dueDate,
+          duePhrase: item.duePhrase,
+          status: item.status,
+          segmentIds: item.segmentIds,
+          userEdited: item.userEdited,
+          flagged: item.flagged,
+        },
+        meetingId,
+        meetingTitle,
+        ownerName: ownerIsSelf ? 'You' : (ownerName ?? 'Unassigned'),
+        ownedBySelf: ownerIsSelf,
+      }));
+    },
+
+    async setActionItemStatus(id, status) {
+      const res = await auth.authorized(`/v1/summary-items/${encodeURIComponent(id)}`, {
+        method: 'PATCH',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ status }),
+      });
+      if (!res.ok) throw new Error(`action item update failed (${res.status})`);
+    },
+
+    async regenerateSummary(meetingId, template) {
+      const res = await auth.authorized(
+        `/v1/meetings/${encodeURIComponent(meetingId)}/summary:regenerate`,
+        {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ template }),
+        },
+      );
+      if (res.status !== 202) throw new Error(`regenerate failed (${res.status})`);
+    },
+
+    async keepSummary(meetingId, version) {
+      const res = await auth.authorized(
+        `/v1/meetings/${encodeURIComponent(meetingId)}/summary:keep`,
+        {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ version }),
+        },
+      );
+      if (res.status !== 204) throw new Error(`keep failed (${res.status})`);
+    },
+
+    async discardSummary(meetingId, version) {
+      const res = await auth.authorized(
+        `/v1/meetings/${encodeURIComponent(meetingId)}/summary:discard`,
+        {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ version }),
+        },
+      );
+      if (res.status !== 204) throw new Error(`go back failed (${res.status})`);
+    },
+
+    async sendFeedback(summaryId, useful, comment) {
+      const res = await auth.authorized('/v1/feedback', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          targetType: 'summary',
+          targetId: summaryId,
+          rating: useful ? 1 : -1,
+          ...(comment !== undefined && comment.trim() !== '' ? { comment } : {}),
+        }),
+      });
+      if (res.status !== 201) throw new Error(`feedback failed (${res.status})`);
+    },
+
+    watchProgress(meetingId, onProgress) {
+      // Server-sent events over fetch (EventSource cannot send the access token). The API ends
+      // each stream before Cloud Run's 60 s timeout; this reconnects until the meeting settles.
+      const controller = new AbortController();
+      let stopped = false;
+      const pause = (ms: number) => new Promise((r) => setTimeout(r, ms));
+      void (async () => {
+        while (!stopped) {
+          try {
+            const res = await auth.authorized(
+              `/v1/meetings/${encodeURIComponent(meetingId)}/events`,
+              { headers: { accept: 'text/event-stream' }, signal: controller.signal },
+            );
+            if (!res.ok || res.body === null) {
+              await pause(5_000);
+              continue;
+            }
+            const reader = res.body.pipeThrough(new TextDecoderStream()).getReader();
+            let buffer = '';
+            for (;;) {
+              const { value, done } = await reader.read();
+              if (done) break;
+              buffer += value;
+              let end;
+              while ((end = buffer.indexOf('\n\n')) >= 0) {
+                const data = buffer
+                  .slice(0, end)
+                  .split('\n')
+                  .find((line) => line.startsWith('data: '));
+                buffer = buffer.slice(end + 2);
+                if (data === undefined) continue;
+                const progress = MeetingProgress.safeParse(JSON.parse(data.slice(6)));
+                if (!progress.success) continue;
+                onProgress(progress.data);
+                if (SETTLED.has(progress.data.status)) stopped = true;
+              }
+            }
+          } catch {
+            if (stopped) return;
+            await pause(3_000);
+          }
+        }
+      })();
+      return () => {
+        stopped = true;
+        controller.abort();
+      };
+    },
 
     async getVideo(meetingId, options) {
       const query = options?.download === true ? '?download=1' : '';

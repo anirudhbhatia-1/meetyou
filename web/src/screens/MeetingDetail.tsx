@@ -1,5 +1,5 @@
-import type { Segment, SummaryItem } from '@meetyou/contracts';
-import { useMemo, useRef, useState } from 'react';
+import type { Meeting, Segment, SummaryItem } from '@meetyou/contracts';
+import { useEffect, useMemo, useRef, useState } from 'react';
 
 import type { MeetingSummary, Participant } from '../api/types.ts';
 import {
@@ -27,6 +27,7 @@ import { href, navigate, type DetailTab } from '../lib/router.ts';
 import { useAsync } from '../lib/useAsync.ts';
 import { AskTab, type AskCitation } from './AskTab.tsx';
 import { MoreMenu, useDeleteMeeting } from './MeetingMenu.tsx';
+import { CandidateBanner, NotesFeedback, TemplateMenu } from './SummaryControls.tsx';
 import { VideoPlayer, type PlayerHandle } from './VideoPlayer.tsx';
 
 const TAB_LABEL: Record<DetailTab, string> = {
@@ -59,6 +60,43 @@ export function MeetingDetail({
     deleted: () => navigate({ screen: 'meetings' }),
     restored: (id) => navigate({ screen: 'detail', meetingId: id, tab: 'notes' }),
   });
+  const toast = useToast();
+  // Template being rewritten (DESIGN §12.2); the notes fade until the new version arrives.
+  const [rewriting, setRewriting] = useState<Meeting['template'] | null>(null);
+
+  // S3-03: while the notes are being written, follow progress and refresh once they are ready.
+  const status = meeting.data?.status;
+  useEffect(() => {
+    if (status !== 'processing') return undefined;
+    return api.watchProgress(meetingId, (p) => {
+      if (p.status !== 'processing') {
+        meeting.reload();
+        summary.reload();
+        people.reload();
+      }
+    });
+    // Reload functions change identity each render; status and meeting decide when to follow.
+  }, [status, meetingId]);
+
+  // Regenerate: look for the candidate every 3 s, give up after 2 minutes.
+  const candidate = summary.data?.candidate ?? null;
+  useEffect(() => {
+    if (rewriting === null) return undefined;
+    if (candidate !== null) {
+      setRewriting(null);
+      return undefined;
+    }
+    const started = Date.now();
+    const timer = setInterval(() => {
+      if (Date.now() - started > 120_000) {
+        setRewriting(null);
+        toast({ message: 'Couldn’t rewrite the notes. Try again.' });
+        return;
+      }
+      summary.reload();
+    }, 3_000);
+    return () => clearInterval(timer);
+  }, [rewriting, candidate]);
 
   const m = meeting.data;
   if (meeting.loading && m === undefined) {
@@ -89,10 +127,17 @@ export function MeetingDetail({
         </Button>
         <span className="toolbar-title">{meetingTitle(m)}</span>
         <div className="toolbar-actions">
-          {/* TODO(S4-09/S3-08): regenerate menu (§12.2), share sheet (§13.1). */}
-          <Button disabled title="Available when summaries come from the server (S3-08)">
-            <Icon name="refresh-cw" /> {TEMPLATE_LABEL[m.template]}
-          </Button>
+          <TemplateMenu
+            current={summary.data?.template ?? m.template}
+            disabled={summary.data == null || rewriting !== null || candidate !== null}
+            onPick={(template) => {
+              void api
+                .regenerateSummary(meetingId, template)
+                .then(() => setRewriting(template))
+                .catch(() => toast({ message: 'Couldn’t rewrite the notes. Try again.' }));
+            }}
+          />
+          {/* TODO(S4-10): share sheet (§13.1). */}
           <Button variant="primary" disabled title="Share sheet comes with S4-10">
             Share
           </Button>
@@ -125,9 +170,29 @@ export function MeetingDetail({
               </a>
             ))}
           </div>
+          {candidate !== null && tab === 'notes' && (
+            <CandidateBanner
+              onKeep={() => {
+                void api.keepSummary(meetingId, candidate.version).then(() => {
+                  summary.reload();
+                  toast({ message: `Rewritten as ${TEMPLATE_LABEL[candidate.template]} notes` });
+                });
+              }}
+              onGoBack={() => {
+                void api.discardSummary(meetingId, candidate.version).then(() => summary.reload());
+              }}
+            />
+          )}
           <div className="detail-grid">
             {tab === 'notes' && (
               <NotesTab
+                fading={rewriting !== null}
+                onFeedback={
+                  summary.data?.summaryId === undefined
+                    ? null
+                    : (useful, comment) =>
+                        api.sendFeedback(summary.data?.summaryId ?? '', useful, comment)
+                }
                 summary={summary.data ?? null}
                 loading={summary.loading}
                 selected={selected}
@@ -197,7 +262,11 @@ function NotesTab({
   selected,
   onSelect,
   status,
+  fading,
+  onFeedback,
 }: {
+  fading: boolean;
+  onFeedback: ((useful: boolean, comment?: string) => Promise<void>) | null;
   summary: MeetingSummary | null;
   loading: boolean;
   selected: SummaryItem | null;
@@ -233,7 +302,9 @@ function NotesTab({
         <p className="empty">
           {status === 'too_short'
             ? 'This meeting was too short for notes.'
-            : 'No notes for this meeting yet.'}
+            : status === 'failed'
+              ? 'We couldn’t write notes for this meeting. Pick a template above to try again.'
+              : 'No notes for this meeting yet.'}
         </p>
       </Card>
     );
@@ -241,16 +312,25 @@ function NotesTab({
   const bullet = (item: SummaryItem) => {
     const n = numbers.get(item.id);
     return (
-      <li key={item.id} className="ai-line">
+      <li key={item.id} className={`ai-line ${item.flagged ? 'unverified' : ''}`}>
         <span>{item.text}</span>
-        {n !== undefined && (
-          <CitationChip n={n} selected={selected?.id === item.id} onSelect={() => onSelect(item)} />
+        {item.flagged ? (
+          // DESIGN §6.14: never a citation chip on an unverified item.
+          <span className="unverified-chip">⚠ Not found in the transcript</span>
+        ) : (
+          n !== undefined && (
+            <CitationChip
+              n={n}
+              selected={selected?.id === item.id}
+              onSelect={() => onSelect(item)}
+            />
+          )
         )}
       </li>
     );
   };
   return (
-    <Card className="notes">
+    <Card className={`notes ${fading ? 'fading' : ''}`}>
       <p className="legend">
         <span className="swatch swatch-ink" aria-hidden /> You wrote this
         <span className="swatch swatch-muted" aria-hidden /> Added from the conversation
@@ -289,6 +369,7 @@ function NotesTab({
           <ul className="bullets questions">{summary.questions.map(bullet)}</ul>
         </section>
       )}
+      {onFeedback !== null && <NotesFeedback onSend={onFeedback} />}
     </Card>
   );
 }

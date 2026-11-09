@@ -10,7 +10,10 @@ export function numberCitations(summary: MeetingSummary): Map<string, number> {
     ...summary.actionItems,
   ];
   for (const item of all) {
-    if (item.segmentIds.length > 0 && !numbers.has(item.id)) numbers.set(item.id, numbers.size + 1);
+    // Unverified items show their own chip instead of a number (DESIGN §6.14).
+    if (item.segmentIds.length > 0 && !item.flagged && !numbers.has(item.id)) {
+      numbers.set(item.id, numbers.size + 1);
+    }
   }
   return numbers;
 }
