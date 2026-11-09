@@ -11,10 +11,11 @@ import {
 } from '@meetyou/ui';
 import { useEffect, useMemo, useRef, useState } from 'react';
 
-import type { MeetingSummary } from '../api/types.ts';
+import type { Meeting, MeetingSummary, Participant } from '../api/types.ts';
 import { useApi } from '../lib/api-context.ts';
 import { numberCitations } from '../lib/citations.ts';
 import { formatClock, segmentLang } from '../lib/format.ts';
+import { MinutesView } from './MinutesView.tsx';
 import { NotesFeedback } from './SummaryControls.tsx';
 
 /** DESIGN §12.6: the popover appears within 200 ms of hover or focus. */
@@ -41,7 +42,7 @@ function CitePopover({ item, segments }: { item: SummaryItem; segments: Segment[
  * One AI bullet (DESIGN §12.4): citation chip with hover popover, unverified chip instead of a
  * citation, and inline edit (pencil on hover/focus; "edited" once saved, FR-SUM-08).
  */
-function Bullet({
+export function Bullet({
   item,
   n,
   selected,
@@ -159,7 +160,12 @@ export function NotesTab({
   onEdited,
   onRetry,
   status,
+  meeting,
+  people,
 }: {
+  /** Needed for the Minutes of meeting layout (details and owners). */
+  meeting: Meeting | null;
+  people: Participant[];
   fading: boolean;
   onFeedback: ((useful: boolean, comment?: string) => Promise<void>) | null;
   summary: MeetingSummary | null;
@@ -243,35 +249,50 @@ export function NotesTab({
           Click to see who said it
         </span>
       </p>
-      <p className="overview">{summary.overview}</p>
-      {summary.sections.map((section, i) => (
-        <section key={section.note?.id ?? `topic-${i}`} className="note-section">
-          <h2 className={section.note === null ? 'topic-heading' : 'note-heading'}>
-            {section.note?.text ?? 'From the conversation'}
-          </h2>
-          <p className="meta small num">
-            {section.note === null
-              ? 'added from the conversation'
-              : `your note · ${formatClock(section.note.sessionMs)}`}
-          </p>
-          {section.items.length === 0 ? (
-            <p className="ai-line italic">Nothing in the conversation matched this note yet.</p>
-          ) : (
-            <ul className="bullets">{section.items.map(bullet)}</ul>
+      {summary.template === 'minutes' && meeting !== null ? (
+        <MinutesView
+          meeting={meeting}
+          people={people}
+          summary={summary}
+          segments={segments}
+          numbers={numbers}
+          selected={selected}
+          onSelect={onSelect}
+          onEdited={onEdited}
+        />
+      ) : (
+        <>
+          <p className="overview">{summary.overview}</p>
+          {summary.sections.map((section, i) => (
+            <section key={section.note?.id ?? `topic-${i}`} className="note-section">
+              <h2 className={section.note === null ? 'topic-heading' : 'note-heading'}>
+                {section.note?.text ?? 'From the conversation'}
+              </h2>
+              <p className="meta small num">
+                {section.note === null
+                  ? 'added from the conversation'
+                  : `your note · ${formatClock(section.note.sessionMs)}`}
+              </p>
+              {section.items.length === 0 ? (
+                <p className="ai-line italic">Nothing in the conversation matched this note yet.</p>
+              ) : (
+                <ul className="bullets">{section.items.map(bullet)}</ul>
+              )}
+            </section>
+          ))}
+          {summary.decisions.length > 0 && (
+            <section className="note-section">
+              <h2 className="note-heading">Decisions</h2>
+              <ul className="bullets decisions">{summary.decisions.map(bullet)}</ul>
+            </section>
           )}
-        </section>
-      ))}
-      {summary.decisions.length > 0 && (
-        <section className="note-section">
-          <h2 className="note-heading">Decisions</h2>
-          <ul className="bullets decisions">{summary.decisions.map(bullet)}</ul>
-        </section>
-      )}
-      {summary.questions.length > 0 && (
-        <section className="note-section">
-          <h2 className="note-heading">Open questions</h2>
-          <ul className="bullets questions">{summary.questions.map(bullet)}</ul>
-        </section>
+          {summary.questions.length > 0 && (
+            <section className="note-section">
+              <h2 className="note-heading">Open questions</h2>
+              <ul className="bullets questions">{summary.questions.map(bullet)}</ul>
+            </section>
+          )}
+        </>
       )}
       {onFeedback !== null && <NotesFeedback onSend={onFeedback} />}
     </Card>

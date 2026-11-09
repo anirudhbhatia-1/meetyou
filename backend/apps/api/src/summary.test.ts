@@ -180,6 +180,13 @@ describe('summary endpoints', () => {
     });
     expect(keep.statusCode).toBe(204);
     expect((await summary()).body).toMatchObject({ current: { version: 2 }, candidate: null });
+    // The kept template becomes the meeting's (the Meetings filter follows it).
+    const meeting = await app.inject({
+      method: 'GET',
+      url: `/v1/meetings/${meetingId}`,
+      headers: auth(),
+    });
+    expect(meeting.json().template).toBe('standup');
 
     await summarizeTask({ db: env.db, llm: llm('v3') }).handle(
       { workspaceId, meetingId, reason: 'regenerate' },

@@ -48,6 +48,7 @@ function toMeetingSummary(body: MeetingSummaryResponse): MeetingSummary | null {
     decisions: of('decision'),
     questions: of('question'),
     actionItems: of('action_item'),
+    topics: of('topic').map((i) => i.text),
   };
 }
 

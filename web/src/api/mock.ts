@@ -184,6 +184,9 @@ export function createMockApi(options: { latencyMs?: number } = {}): LibraryApi 
     keepSummary: (id) => {
       const next = candidates.get(id);
       if (next !== undefined) summaries[id] = { ...next, candidate: null };
+      // Like the API: the kept template becomes the meeting's.
+      const kept = meetings.find((x) => x.id === id);
+      if (kept !== undefined && next?.template !== undefined) kept.template = next.template;
       candidates.delete(id);
       return wait(undefined);
     },

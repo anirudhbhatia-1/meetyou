@@ -109,7 +109,14 @@ export function Meetings() {
           <SkeletonRows />
         ) : (list.data?.meetings ?? []).length === 0 ? (
           <div className="empty">
-            {debounced.trim() === '' ? (
+            {debounced.trim() === '' && template !== 'all' ? (
+              <>
+                <p>No {TEMPLATE_LABEL[template]} meetings yet.</p>
+                <Button variant="ghost" onClick={() => setTemplate('all')}>
+                  Show all meetings
+                </Button>
+              </>
+            ) : debounced.trim() === '' ? (
               <p>
                 No meetings yet. Join a Google Meet call and press Start. Your notes will appear
                 here.

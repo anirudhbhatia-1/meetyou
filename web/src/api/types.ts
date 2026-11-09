@@ -64,6 +64,8 @@ export interface MeetingSummary {
   decisions: SummaryItem[];
   questions: SummaryItem[];
   actionItems: SummaryItem[];
+  /** Subjects covered, in order: the agenda of Minutes of meeting notes. */
+  topics?: string[];
 }
 
 export interface ActionItemRow {

@@ -29,6 +29,8 @@ export interface NotesDoc {
   decisions: NotesDocItem[];
   actionItems: NotesDocAction[];
   questions: NotesDocItem[];
+  /** Set for "Minutes of meeting" notes (template `minutes`): printed as formal minutes. */
+  minutes?: { attendees: string[]; agenda: string[] };
 }
 
 export interface NotesTextOptions {
@@ -59,6 +61,7 @@ function clean(text: string, md: boolean): string {
 }
 
 export function notesText(doc: NotesDoc, options: NotesTextOptions): string {
+  if (doc.minutes !== undefined) return minutesText(doc, doc.minutes, options);
   const md = options.format === 'markdown';
   const t = (text: string) => clean(text, md);
   const time = (item: NotesDocItem) =>
@@ -95,6 +98,67 @@ export function notesText(doc: NotesDoc, options: NotesTextOptions): string {
     'Open questions',
     shown(doc.questions).map((i) => `- ${t(i.text)}${time(i)}`),
   );
+  return `${out.join('\n')}\n`;
+}
+
+/**
+ * Minutes of meeting: details, agenda, summary, numbered discussion points, decisions, action items
+ * with owner, due date and status, open questions. Same cleaning and unverified-item rules as the
+ * notes; empty decisions and action items say "None recorded." as formal minutes do.
+ */
+function minutesText(
+  doc: NotesDoc,
+  minutes: { attendees: string[]; agenda: string[] },
+  options: NotesTextOptions,
+): string {
+  const md = options.format === 'markdown';
+  const t = (text: string) => clean(text, md);
+  const time = (item: NotesDocItem) =>
+    options.includeTimes && item.atMs !== null ? ` [${clockTime(item.atMs)}]` : '';
+  const title = doc.title.trim() === '' ? 'Untitled meeting' : t(doc.title);
+  const label = (name: string) => (md ? `**${name}:**` : `${name}:`);
+  const out: string[] = [
+    md ? `# Minutes of meeting: ${title}` : `MINUTES OF MEETING: ${title.toUpperCase()}`,
+    '',
+    `${label('Date')} ${doc.when}`,
+    `${label('Duration')} ${doc.length}`,
+    `${label('Attendees')} ${minutes.attendees.map(t).join(', ')}`,
+  ];
+  const section = (heading: string, lines: string[]) => {
+    out.push('', md ? `## ${heading}` : heading.toUpperCase(), ...lines);
+  };
+  const numbered = (lines: string[]) =>
+    lines.length === 0 ? ['None recorded.'] : lines.map((line, i) => `${i + 1}. ${line}`);
+
+  if (minutes.agenda.length > 0) section('Agenda', numbered(minutes.agenda.map(t)));
+  if (doc.overview.trim() !== '') section('Summary', [t(doc.overview)]);
+  const points = doc.sections.filter((s) => s.heading !== null || shown(s.items).length > 0);
+  if (points.length > 0) {
+    const lines: string[] = [];
+    points.forEach((s, i) => {
+      const heading = `${i + 1}. ${s.heading === null ? 'From the conversation' : t(s.heading)}`;
+      lines.push(...(i > 0 ? [''] : []), md ? `### ${heading}` : heading);
+      const items = shown(s.items);
+      lines.push(
+        ...(items.length === 0 ? ['None recorded.'] : items.map((x) => `- ${t(x.text)}${time(x)}`)),
+      );
+    });
+    section('Discussion', lines);
+  }
+  section('Decisions', numbered(shown(doc.decisions).map((i) => `${t(i.text)}${time(i)}`)));
+  section(
+    'Action items',
+    numbered(
+      shown(doc.actionItems).map((a) => {
+        const due = a.due === null ? 'no due date' : `due ${t(a.due)}`;
+        return `${t(a.text)} — ${t(a.owner ?? 'Unassigned')}, ${due}, ${a.done ? 'done' : 'open'}${time(a)}`;
+      }),
+    ),
+  );
+  const questions = shown(doc.questions);
+  if (questions.length > 0) {
+    section('Open questions', numbered(questions.map((i) => `${t(i.text)}${time(i)}`)));
+  }
   return `${out.join('\n')}\n`;
 }
 

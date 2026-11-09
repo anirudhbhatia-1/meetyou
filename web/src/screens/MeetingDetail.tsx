@@ -298,6 +298,8 @@ export function MeetingDetail({
           <div className="detail-grid">
             {tab === 'notes' && (
               <NotesTab
+                meeting={m}
+                people={people.data ?? []}
                 fading={rewriting !== null}
                 onFeedback={
                   summary.data?.summaryId === undefined

@@ -182,6 +182,19 @@ export async function acceptSummary(
     .where('meetingId', '=', meetingId)
     .execute();
   await tx.updateTable('summaries').set({ accepted: true }).where('id', '=', summaryId).execute();
+  // The meeting's template is the one of the notes the user reads: filters and later re-runs
+  // (batch pass) follow a kept rewrite, e.g. to MoM.
+  const kept = await tx
+    .selectFrom('summaries')
+    .select('template')
+    .where('id', '=', summaryId)
+    .executeTakeFirstOrThrow();
+  await tx
+    .updateTable('meetings')
+    .set({ template: kept.template })
+    .where('id', '=', meetingId)
+    .where('template', '<>', kept.template)
+    .execute();
   if (previous === undefined) return;
 
   const actions = (id: string) =>

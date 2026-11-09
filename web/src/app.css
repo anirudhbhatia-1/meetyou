@@ -1447,3 +1447,84 @@ mark.match-current {
   gap: 6px;
   white-space: nowrap;
 }
+
+/* Minutes of meeting layout (template `minutes`). */
+.mom {
+  display: grid;
+  gap: 26px;
+}
+.mom .overline {
+  margin: 0;
+}
+.mom-details {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 12px 24px;
+  margin: 0;
+  padding: 16px 18px;
+  border-radius: var(--radius-inner);
+  background: var(--paper-2);
+}
+.mom-details dt {
+  font-size: 12px;
+  color: var(--muted);
+}
+.mom-details dd {
+  margin: 2px 0 0;
+  font-size: 14px;
+  color: var(--ink);
+}
+.mom-attendees {
+  grid-column: 1 / -1;
+}
+.mom-list {
+  margin: 4px 0 0;
+  padding-left: 22px;
+  display: grid;
+  gap: 4px;
+  font-size: 15px;
+}
+.mom-point {
+  display: grid;
+  gap: 4px;
+}
+.mom-point-title {
+  font-family: inherit;
+  font-size: 16px;
+  font-weight: 600;
+  margin: 8px 0 0;
+}
+.mom-point-title.muted {
+  color: var(--muted);
+}
+.mom-table-wrap {
+  overflow-x: auto;
+}
+.mom-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+}
+.mom-table th {
+  text-align: left;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--muted);
+  padding: 6px 10px 6px 0;
+  border-bottom: 1px solid var(--hairline);
+}
+.mom-table td {
+  vertical-align: top;
+  padding: 10px 10px 10px 0;
+  border-bottom: 1px solid var(--hairline);
+}
+.mom-table td .bullets {
+  margin: 0;
+}
+/* In the table the row number already marks each action. */
+.mom-table .ai-line {
+  padding-left: 0;
+}
+.mom-table .ai-line::before {
+  content: none;
+}

@@ -211,6 +211,13 @@ the web labels (template menu, Meetings filter, Settings default) and DESIGN; **
 widens the three template CHECK constraints (the staging deploy applies it). No golden meeting uses
 it yet, so the summary eval does not cover it; existing recorded outputs are unchanged.
 
+Fixed after Anirudh's first try on staging: keeping a rewritten version now sets the meeting's own
+template (`acceptSummary`), so the **MoM** filter finds it; MoM notes show a minutes layout on the
+web (details, agenda from the topics, summary, numbered discussion, decisions, action-items table,
+open questions; citations and edits still work) and Share / Download print the same minutes
+(`notesText` with `minutes`). A filter with no meetings says so instead of "No meetings yet".
+A meeting rewritten as MoM before this fix needs its MoM version kept again to show under the filter.
+
 ### 2026-11-09 — Anirudh (Claude Code): staging test fixes
 
 From Anirudh's first staging test: a recording could start on Meet's home page (no call), and a

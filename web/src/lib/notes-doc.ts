@@ -52,6 +52,17 @@ export function toNotesDoc(
           : i.duePhrase,
     })),
     questions: summary.questions.map(item),
+    ...(summary.template === 'minutes'
+      ? {
+          minutes: {
+            attendees: [...meeting.participantNames, 'You'],
+            agenda:
+              summary.topics !== undefined && summary.topics.length > 0
+                ? summary.topics
+                : summary.sections.map((s) => s.note?.text ?? 'From the conversation'),
+          },
+        }
+      : {}),
   };
 }
 

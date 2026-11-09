@@ -251,6 +251,7 @@ const pricingNote = note('note_pricing', 95_000, 'Pricing page copy');
 
 export const summaries: Record<string, MeetingSummary> = {
   mtg_q4_launch: {
+    topics: ['Launch date', 'Payment bugs', 'Pricing-page copy', 'Hindi UI at launch'],
     overview:
       'The team confirmed 14 November as the Q4 launch date, provided the last QA round finishes on Monday and two payment bugs are fixed this week. Pricing-page copy is the remaining content gap; Hindi UI at launch is still open.',
     sections: [

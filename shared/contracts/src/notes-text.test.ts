@@ -105,3 +105,61 @@ describe('notesText with hostile content', () => {
     expect(plain).toContain('- a b\n');
   });
 });
+
+describe('notesText as minutes of meeting', () => {
+  const minutes: NotesDoc = {
+    ...doc,
+    minutes: { attendees: ['Sameer', 'You'], agenda: ['Payments', 'Hiring'] },
+  };
+
+  it('prints details, agenda, numbered points and owned actions', () => {
+    expect(notesText(minutes, { format: 'text', includeTimes: false })).toBe(
+      [
+        'MINUTES OF MEETING: WEEKLY SYNC',
+        '',
+        'Date: Mon 9 Nov 2026, 10:30',
+        'Duration: 42 min',
+        'Attendees: Sameer, You',
+        '',
+        'AGENDA',
+        '1. Payments',
+        '2. Hiring',
+        '',
+        'SUMMARY',
+        'Release moves to Friday.',
+        '',
+        'DISCUSSION',
+        '1. Payments bugs',
+        '- Two bugs still open',
+        '',
+        '2. From the conversation',
+        '- Hiring update',
+        '',
+        '3. Empty note',
+        'None recorded.',
+        '',
+        'DECISIONS',
+        '1. Release on Friday',
+        '',
+        'ACTION ITEMS',
+        '1. Fix the refund bug — Sameer, due Thu 12 Nov, open',
+        '2. Send the deck — Unassigned, no due date, done',
+        '',
+      ].join('\n'),
+    );
+  });
+
+  it('says "None recorded." and keeps meeting text on one line', () => {
+    const empty: NotesDoc = {
+      ...minutes,
+      title: 'Sync\n# injected',
+      decisions: [],
+      actionItems: [],
+    };
+    const md = notesText(empty, { format: 'markdown', includeTimes: false });
+    expect(md).toContain('# Minutes of meeting: Sync # injected');
+    expect(md).toContain('## Decisions\nNone recorded.');
+    expect(md).toContain('## Action items\nNone recorded.');
+    expect(md).not.toMatch(/^# injected/m);
+  });
+});
