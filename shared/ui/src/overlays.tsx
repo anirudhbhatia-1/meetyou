@@ -267,8 +267,9 @@ export function Menu({
       {open && (
         <div className="menu" role="menu" aria-label={label} ref={list} onKeyDown={onKeyDown}>
           {helper !== undefined && <p className="menu-helper">{helper}</p>}
-          {items.map((item) => (
-            <div key={item.label}>
+          {items.map((item, index) => (
+            // Index key: labels repeat (two participants with the same name).
+            <div key={`${index}-${item.label}`}>
               {item.separated === true && <hr className="menu-sep" />}
               <button
                 type="button"

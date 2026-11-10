@@ -97,6 +97,8 @@ export function MeetingDetail({
         meeting.reload();
         summary.reload();
         people.reload();
+        // The batch pass (status `updated`) replaces the live segments (2026-11-09 audit).
+        segments.reload();
       }
     });
     // Reload functions change identity each render; status and meeting decide when to follow.

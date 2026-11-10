@@ -20,3 +20,7 @@ jobs:
       - run: pnpm lint
       - run: pnpm typecheck
       - run: pnpm test
+      # The bundles were never built in CI: a broken esbuild/vite config reached a green main
+      # (2026-11-09 audit). The staging extension build also checks the manifest copy.
+      - run: pnpm --filter ./extension run build:staging
+      - run: pnpm --filter ./web run build

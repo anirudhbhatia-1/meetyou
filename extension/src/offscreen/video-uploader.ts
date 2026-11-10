@@ -33,7 +33,6 @@ export interface SignedFragment {
   headers?: Record<string, string>;
 }
 
-/** The server will never accept this session's fragments (unknown or ended session). */
 /**
  * The server refused this one fragment for good (e.g. 413 too large, 400 type mismatch). It stays
  * in IndexedDB (pruned with the 7-day retention) and the uploader moves on to the next one.
@@ -82,7 +81,6 @@ export interface VideoUploaderOptions {
   sleep?: (ms: number) => Promise<void>;
 }
 
-/** `video/mp4;codecs=avc1,opus` → `video/mp4`, the type the signed URL is bound to. */
 /** Fragments of server sessions upload; local-only recordings (no session ID yet) stay put. */
 export function uploadableSession(sessionId: string): boolean {
   return sessionId.startsWith('ses_');

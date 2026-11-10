@@ -56,7 +56,8 @@ ffmpeg -i audio/hx-001.them.wav -c:a libopus -b:a 24k /tmp/x.opus && ffmpeg -i /
 export BENCH_DATA_DIR="$PWD/bench-data/mucs"   # gitignored, inside the repo
 pnpm --filter @meetyou/stt-benchmark bench run-batch  --config tools/stt-benchmark/examples/runs.phase-a.json
 pnpm --filter @meetyou/stt-benchmark bench run-stream --config tools/stt-benchmark/examples/runs.phase-b.json
-pnpm --filter @meetyou/stt-benchmark bench run-stream --config tools/stt-benchmark/examples/runs.google.json   # ADR-0001 gate
+# Historical: Google Chirp 3 streaming (dropped 2026-11-05, ADR-0001 gate cancelled; kept for reproducing old runs)
+pnpm --filter @meetyou/stt-benchmark bench run-stream --config tools/stt-benchmark/examples/runs.google.json
 pnpm --filter @meetyou/stt-benchmark bench score      --config tools/stt-benchmark/examples/runs.phase-a.json
 pnpm --filter @meetyou/stt-benchmark bench blind-samples --config tools/stt-benchmark/examples/runs.phase-b.json
 pnpm --filter @meetyou/stt-benchmark bench measure-latency

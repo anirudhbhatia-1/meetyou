@@ -17,8 +17,15 @@ export function parseRoute(hash: string): Route {
   const parts = hash.replace(/^#\/?/, '').split('/').filter(Boolean);
   switch (parts[0]) {
     case 'meetings': {
-      const id = parts[1];
-      if (id === undefined) return { screen: 'meetings' };
+      const raw = parts[1];
+      if (raw === undefined) return { screen: 'meetings' };
+      // `href` encodes the id; decode it back (a malformed escape keeps the raw text).
+      let id: string;
+      try {
+        id = decodeURIComponent(raw);
+      } catch {
+        id = raw;
+      }
       return {
         screen: 'detail',
         meetingId: id,

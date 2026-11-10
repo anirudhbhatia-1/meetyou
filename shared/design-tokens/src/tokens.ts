@@ -96,24 +96,6 @@ export const fonts = {
   sans: '"DM Sans", "Noto Sans Devanagari", system-ui, sans-serif',
 } as const;
 
-/** DESIGN §5.2 — [size px, line-height, weight, letter-spacing em]. */
-export const typeScale = {
-  display: [50, 1.05, 400, -0.02],
-  meetingTitle: [46, 1.05, 400, -0.02],
-  panelH3: [26, 1.2, 400, 0],
-  h2: [26, 1.2, 400, 0],
-  noteH3: [25, 1.25, 400, 0],
-  cardTitle: [21, 1.25, 400, 0],
-  quote: [19, 1.4, 400, 0],
-  body: [15, 1.55, 400, 0.01],
-  overview: [16, 1.6, 400, 0.01],
-  liveTranscript: [14, 1.5, 400, 0.01],
-  label: [14, 1.3, 500, 0.01],
-  meta: [12, 1.4, 400, 0.01],
-  overline: [11, 1.3, 400, 0.08],
-  speaker: [12, 1.3, 600, 0.01],
-} as const;
-
 export const space = [4, 6, 8, 10, 12, 14, 16, 18, 20, 22, 24, 28, 32, 36, 40, 48, 72, 96] as const;
 
 export const radius = {
@@ -138,28 +120,3 @@ export const motion = {
   recordingPulse: 1600,
   processingPulse: 1200,
 } as const;
-
-/** Lucide icon names used by the UI (DESIGN §5.8); SVGs are bundled by the UI packages. */
-export const icons = [
-  'house',
-  'align-left',
-  'square-check',
-  'settings',
-  'search',
-  'x',
-  'chevron-left',
-  'chevron-right',
-  'refresh-cw',
-  'more-horizontal',
-  'shield',
-  'download',
-  'arrow-up',
-  'check',
-  'play',
-  'pause',
-  'mic',
-  'alert-triangle',
-  'wifi-off',
-  'pencil',
-  'star',
-] as const;

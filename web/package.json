@@ -17,8 +17,7 @@
     "@meetyou/design-tokens": "workspace:*",
     "@meetyou/ui": "workspace:*",
     "react": "19.1.10",
-    "react-dom": "19.1.10",
-    "zod": "^4.6.7"
+    "react-dom": "19.1.10"
   },
   "devDependencies": {
     "@types/react": "19.3.0",

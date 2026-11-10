@@ -5,7 +5,7 @@ import {
   StartSessionResponse,
   newUlid,
 } from '@meetyou/contracts';
-import { createMeetingForSession, endMeeting, meetingForSession } from '@meetyou/db';
+import { createMeetingForSession, meetingForSession } from '@meetyou/db';
 import type { TokenService } from '@meetyou/auth';
 import { recordSpan } from '@meetyou/tracing';
 

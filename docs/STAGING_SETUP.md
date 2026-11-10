@@ -540,8 +540,11 @@ right now".
      --update-secrets GEMINI_API_KEY=meetyou-staging-gemini-api-key:latest \
      --update-env-vars LLM_PROVIDER=gemini,GEMINI_FREE_TIER_ACCEPTED=true,GEMINI_FREE_TIER_ON_STAGING=true
    ```
-   Once the key is **paid**, add a new secret version with it and drop the exception:
-   `--remove-env-vars GEMINI_FREE_TIER_ACCEPTED,GEMINI_FREE_TIER_ON_STAGING`.
+   Once the key is **paid**, add a new secret version with it and declare the tier — do not just
+   remove the variable: since 2026-11-10 a service with a Gemini key and no
+   `GEMINI_FREE_TIER_ACCEPTED` refuses to start outside local/CI:
+   `--update-env-vars GEMINI_FREE_TIER_ACCEPTED=false --remove-env-vars GEMINI_FREE_TIER_ON_STAGING`
+   (on the API and the worker).
 3. Check: on the website open a meeting with a transcript → **Ask** → "What did we decide?". The
    answer has numbered sources; "Write me a poem" gets "I can only answer questions about this
    recording."
@@ -622,8 +625,9 @@ real meeting recording as a fixture (AGENTS §8).
 - [ ] `meetyou_app` has no `SUPERUSER`/`BYPASSRLS`; tables owned by it; services refuse otherwise.
 - [ ] Logs carry IDs and counts only (AGENTS §7) — spot-check gateway and API logs after a call.
 - [ ] Deepgram key is the paid staging key; `mip_opt_out=true` is sent (adapter does it).
-- [ ] The free Gemini key is **not** configured anywhere in staging (the provider registry refuses
-      `GEMINI_FREE_TIER_ACCEPTED=true` outside local/ci).
+- [ ] The free Gemini key is **not** configured anywhere in staging once the paid key is in (every
+      service with a Gemini key declares `GEMINI_FREE_TIER_ACCEPTED=true|false`; `true` is refused
+      outside local/CI unless the temporary `GEMINI_FREE_TIER_ON_STAGING=true` exception is set).
 - [ ] Budget alert active; OAuth consent screen in testing mode with only our accounts.
 - [ ] Retention: the 31-day lifecycle rule is in place; the retention job (S2-10) is next.
 

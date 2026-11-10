@@ -29,12 +29,6 @@ export class UnauthorizedError extends AppError {
   }
 }
 
-export class ForbiddenError extends AppError {
-  constructor(message = 'forbidden', code = 'forbidden') {
-    super(403, code, message, false);
-  }
-}
-
 export class NotFoundError extends AppError {
   constructor(message = 'not found', code = 'not_found') {
     super(404, code, message, false);

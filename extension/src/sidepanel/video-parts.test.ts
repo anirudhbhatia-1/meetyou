@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import type { VideoFragmentRow } from '../offscreen/video-recorder.ts';
-import { latestSessionParts, uploadLabel } from './video-parts.ts';
+import { latestSessionParts } from './video-parts.ts';
 
 function row(
   sessionId: string,
@@ -38,14 +38,5 @@ describe('latestSessionParts', () => {
 
   it('returns nothing when no video is stored', () => {
     expect(latestSessionParts([])).toEqual([]);
-  });
-});
-
-describe('uploadLabel', () => {
-  it('shows upload progress, then done, and nothing before any video', () => {
-    expect(uploadLabel(0, 0)).toBe('');
-    expect(uploadLabel(6, 4)).toBe('Uploading video — 40%');
-    expect(uploadLabel(1, 0)).toBe('Uploading video — 0%');
-    expect(uploadLabel(0, 10)).toBe('Video uploaded');
   });
 });

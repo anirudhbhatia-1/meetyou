@@ -1,5 +1,5 @@
 import type { Meeting } from '@meetyou/contracts';
-import { Banner, Button, Icon, Menu } from '@meetyou/ui';
+import { Banner, Button, Icon, Menu, useToast } from '@meetyou/ui';
 import { useState } from 'react';
 
 import { TEMPLATE_LABEL } from '../lib/format.ts';
@@ -77,15 +77,22 @@ export function NotesFeedback({
 }: {
   onSend: (useful: boolean, comment?: string) => Promise<void>;
 }) {
+  const toast = useToast();
   const [state, setState] = useState<'ask' | 'comment' | 'sent'>('ask');
   const [comment, setComment] = useState('');
+  // A failed send stays on the question with a toast (it was an unhandled rejection before).
+  const sendNow = (useful: boolean, text?: string) =>
+    void onSend(useful, text).then(
+      () => setState('sent'),
+      () => toast({ message: 'Couldn’t send that. Try again.' }),
+    );
   if (state === 'sent') return <p className="meta small">Thanks for telling us.</p>;
   return (
     <div className="feedback">
       {state === 'ask' ? (
         <>
           <span className="meta">Were these notes useful?</span>
-          <Button size="sm" onClick={() => void onSend(true).then(() => setState('sent'))}>
+          <Button size="sm" onClick={() => sendNow(true)}>
             Yes
           </Button>
           <Button size="sm" onClick={() => setState('comment')}>
@@ -101,10 +108,7 @@ export function NotesFeedback({
             value={comment}
             onChange={(e) => setComment(e.target.value)}
           />
-          <Button
-            size="sm"
-            onClick={() => void onSend(false, comment).then(() => setState('sent'))}
-          >
+          <Button size="sm" onClick={() => sendNow(false, comment)}>
             Send
           </Button>
         </>

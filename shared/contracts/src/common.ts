@@ -3,8 +3,6 @@ import { z } from 'zod';
 /** Crockford base32 ULID: 26 characters, sortable by time. */
 export const ULID_PATTERN = /^[0-9A-HJKMNP-TV-Z]{26}$/;
 
-export const Ulid = z.string().regex(ULID_PATTERN, 'Expected a ULID');
-
 /** Segment IDs are what the LLM cites (PRD §14), so they carry a recognisable prefix. */
 export const SegmentId = z.string().regex(/^seg_[0-9A-HJKMNP-TV-Z]{26}$/, 'Expected seg_<ULID>');
 export type SegmentId = z.infer<typeof SegmentId>;

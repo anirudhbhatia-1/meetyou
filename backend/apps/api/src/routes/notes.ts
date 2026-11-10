@@ -1,5 +1,6 @@
 import type { FastifyPluginAsync } from 'fastify';
-import { Note, NoteMarker, newUlid, PutNotesRequest } from '@meetyou/contracts';
+import type { Note } from '@meetyou/contracts';
+import { NoteMarker, newUlid, PutNotesRequest } from '@meetyou/contracts';
 import { z } from 'zod';
 
 import { BadRequestError, ConflictError, NotFoundError, UnauthorizedError } from '../errors.ts';

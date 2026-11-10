@@ -36,13 +36,59 @@ export interface MeetingAudio {
   unavailable: boolean;
 }
 
+let stopOther: (() => void) | null = null;
+
 /**
- * Audio playback for meetings without video (DESIGN §12.5–§12.6): each lane is fetched once (owner
- * only, through the API) and played from a blob URL; times map through the lane's spans.
+ * Only one player sounds at a time on the page (DESIGN §6.19): the transcript and the citation card
+ * each have a player, and clicking one used to leave the other playing (2026-11-09 audit). A player
+ * calls this when it starts; the previous one is paused.
+ */
+export function claimPlayback(stop: () => void): void {
+  if (stopOther !== null && stopOther !== stop) stopOther();
+  stopOther = stop;
+}
+
+/** Lanes fetched once per meeting for every player on the page, released with the last one. */
+const laneCache = new Map<
+  string,
+  { users: number; lanes: Map<'me' | 'them', Promise<LaneAudio | null>> }
+>();
+
+function useLaneCache(meetingId: string) {
+  const entry = useRef<{ lanes: Map<'me' | 'them', Promise<LaneAudio | null>> } | null>(null);
+  useEffect(() => {
+    let cached = laneCache.get(meetingId);
+    if (cached === undefined) {
+      cached = { users: 0, lanes: new Map() };
+      laneCache.set(meetingId, cached);
+    }
+    cached.users += 1;
+    entry.current = cached;
+    const mine = cached;
+    return () => {
+      mine.users -= 1;
+      if (mine.users > 0) return;
+      laneCache.delete(meetingId);
+      for (const lane of mine.lanes.values()) {
+        void lane.then((l) => {
+          if (l !== null) URL.revokeObjectURL(l.url);
+        });
+      }
+    };
+  }, [meetingId]);
+  return entry;
+}
+
+/**
+ * Audio playback for meetings without video (DESIGN §12.5–§12.6): each lane is fetched once per
+ * page (owner only, through the API) and played from a blob URL; times map through the lane's
+ * spans. Concurrent first clicks share one download.
  */
 export function useMeetingAudio(api: LibraryApi, meetingId: string): MeetingAudio {
   const element = useRef<HTMLAudioElement | null>(null);
   const lanes = useRef(new Map<'me' | 'them', LaneAudio | null>());
+  const shared = useLaneCache(meetingId);
+  const stop = useRef(() => element.current?.pause());
   const current = useRef<'me' | 'them' | null>(null);
   const [playing, setPlaying] = useState(false);
   const [sessionMs, setSessionMs] = useState<number | null>(null);
@@ -68,7 +114,7 @@ export function useMeetingAudio(api: LibraryApi, meetingId: string): MeetingAudi
       audio.removeEventListener('play', onPlay);
       audio.removeEventListener('pause', onStop);
       audio.removeEventListener('ended', onStop);
-      for (const lane of loaded.values()) if (lane !== null) URL.revokeObjectURL(lane.url);
+      // Blob URLs belong to the shared cache, which revokes them with its last user.
       loaded.clear();
     };
   }, [meetingId]);
@@ -78,7 +124,13 @@ export function useMeetingAudio(api: LibraryApi, meetingId: string): MeetingAudi
       const audio = element.current;
       if (audio === null) return false;
       if (!lanes.current.has(lane)) {
-        lanes.current.set(lane, await api.getAudio(meetingId, lane).catch(() => null));
+        const cache = shared.current?.lanes;
+        let pending = cache?.get(lane);
+        if (pending === undefined) {
+          pending = api.getAudio(meetingId, lane).catch(() => null);
+          cache?.set(lane, pending);
+        }
+        lanes.current.set(lane, await pending);
       }
       const loaded = lanes.current.get(lane) ?? null;
       const fileMs = loaded === null ? null : sessionToFile(loaded.spans, at);
@@ -91,6 +143,7 @@ export function useMeetingAudio(api: LibraryApi, meetingId: string): MeetingAudi
         current.current = lane;
       }
       audio.currentTime = fileMs / 1000;
+      claimPlayback(stop.current);
       await audio.play().catch(() => undefined);
       return true;
     },

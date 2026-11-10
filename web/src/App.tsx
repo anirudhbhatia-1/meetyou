@@ -126,7 +126,12 @@ export function App() {
     <Library
       api={boot.api}
       onSignOut={() => {
-        void boot.api.signOut().finally(() => signedOut(clientId));
+        // Signed out locally either way; a failed server logout (e.g. right after account
+        // deletion) must not surface as an unhandled rejection.
+        void boot.api
+          .signOut()
+          .catch(() => undefined)
+          .finally(() => signedOut(clientId));
       }}
     />
   );

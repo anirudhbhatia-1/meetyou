@@ -29,6 +29,7 @@ export const meetingsRoutes: FastifyPluginAsync = async (fastify) => {
             limit: { type: 'integer' },
             template: { type: 'string' },
             q: { type: 'string' },
+            ids: { type: 'string' },
           },
         },
       },
@@ -44,6 +45,8 @@ export const meetingsRoutes: FastifyPluginAsync = async (fastify) => {
         limit?: string | number;
         template?: string;
         q?: string;
+        /** Comma-separated meeting ids (≤ 50): the web's search hits, in one request. */
+        ids?: string;
       };
       const limit = parseLimit(query.limit);
       const cursorData = decodeCursor(query.cursor);
@@ -62,10 +65,34 @@ export const meetingsRoutes: FastifyPluginAsync = async (fastify) => {
           }
         }
 
-        // Title search for the library list (FR-LIB-02); content search stays in /v1/search.
+        if (query.ids !== undefined) {
+          const ids = query.ids
+            .split(',')
+            .map((id) => id.trim())
+            .filter((id) => /^[A-Za-z0-9_]{1,80}$/.test(id))
+            .slice(0, 50);
+          q = q.where('id', 'in', ids.length > 0 ? ids : ['']);
+        }
+
+        // Title and people search for the library list (FR-LIB-02); content search stays in
+        // /v1/search. Participant names are not in the search index, so they are matched here
+        // and the web no longer downloads every meeting to do it (2026-11-09 audit).
         const needle = query.q?.trim().slice(0, 200);
         if (needle) {
-          q = q.where('title', 'ilike', `%${needle.replace(/[%_\\]/g, '\\$&')}%`);
+          const like = `%${needle.replace(/[%_\\]/g, '\\$&')}%`;
+          q = q.where((eb) =>
+            eb.or([
+              eb('title', 'ilike', like),
+              eb.exists(
+                eb
+                  .selectFrom('participants')
+                  .select('participants.id')
+                  .whereRef('participants.meetingId', '=', 'meetings.id')
+                  .where('participants.isSelf', '=', false)
+                  .where('participants.displayName', 'ilike', like),
+              ),
+            ]),
+          );
         }
 
         // Apply cursor condition: startedAt <= cursorTimestamp

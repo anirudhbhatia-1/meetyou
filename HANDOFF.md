@@ -6,10 +6,10 @@ pointer to where the full detail lives — the linked document stays the source 
 
 | Field | Value |
 |---|---|
-| Last updated | 2026-11-09 (Anirudh: Stage 4 complete in code — every feature on its UI, Moonrise colour, analytics) |
+| Last updated | 2026-11-10 (Anirudh: full S0–S4 audit and fixes, docs/AUDIT-2026-11-09.md) |
 | Updated by | Anirudh (Claude Code) |
 | Repository | [anirudhbhatia-1/meetyou](https://github.com/anirudhbhatia-1/meetyou) — branches `main`, `anirudh`, `Gauravbro` |
-| Current stage | **Stage 4** complete in code (S4-01..S4-17, Anirudh) after Stage 3; real Chrome/Meet checks pending (§7, §9 2026-11-09) |
+| Current stage | **Stage 4** complete in code; 2026-11-09 audit fixes landed; Stage-5 hardening planned (AUDIT §4); real Chrome/Meet checks pending (§7) |
 
 ---
 
@@ -176,15 +176,19 @@ and smoke-tests). **Stage 3 is complete in code (2026-11-09, Anirudh did all of 
 Gaurav's S3-07..S3-11 — Gaurav should not start them).** **Stage 4 is complete in code
 (2026-11-09, Anirudh did all of S4 by decision, including S4-07).** Next:
 
-0. **Anirudh:** after the push, confirm the staging deploy ran migration 0008 (`product_events`;
-   the deploy job migrates before rollout); run the real Chrome/Meet checklist (Meet chat notice, overlay layouts, notifications, mic picker, Stop
+0. **Anirudh:** migrations 0008 (`product_events`) and 0009 (`minutes` template) ran on staging
+   (deploy job, 2026-11-09). Run the real Chrome/Meet checklist (Meet chat notice, overlay layouts, notifications, mic picker, Stop
    and delete, onboarding, 320–480 px panel, paste tests); decide the product name (MeetYou in the
    extension vs Minutes in DESIGN and the web app).
 1. **Anirudh:** turn S3 on in staging (STAGING_SETUP §9.5) and test a call end to end; accept or
    amend ADR-0007; finish templates v2 from the stash once the Gemini quota allows; grow the
    golden set from 10 to 30+ meetings (PRD §14.6).
    A **paid-tier Gemini key** is still needed before real (non-test) meetings.
-2. **Gaurav:** review the S3 commits (2026-11-09) and Stage 4 tasks per IMPLEMENTATION_PLAN.
+2. **Gaurav:** review the S3 and S4 commits and the audit fixes (2026-11-09/10).
+2a. **Stage 5 hardening** (either developer, by agreement): the ordered list in
+   [docs/AUDIT-2026-11-09.md](docs/AUDIT-2026-11-09.md) §4 — gateway fencing first.
+   When the Gemini key turns paid, set `GEMINI_FREE_TIER_ACCEPTED=false` (do not remove it:
+   services now refuse to start without the declaration; STAGING_SETUP §9.5).
 3. Still to run (Anirudh): live S2 tests — gateway failover (S2-04), worker crash mid-job (S2-06),
    60-min video sync (S2-14); trace arrival check (STAGING_SETUP §9.3).
 
@@ -202,7 +206,38 @@ Gaurav's S3-07..S3-11 — Gaurav should not start them).** **Stage 4 is complete
 
 Newest first. One entry per working session (either person).
 
-### 2026-11-09 (latest) — Anirudh (Claude Code): Minutes of meeting (MoM) template
+### 2026-11-10 (latest) — Anirudh (Claude Code): full S0–S4 audit and fixes
+
+Anirudh asked for a scan of everything built so far for bugs, dead code and missing pieces, a plan,
+and fixes. Four parallel reviews (extension, web vs DESIGN, backend, shared/CI/docs), high items
+re-verified by hand; ~190 findings merged into **docs/AUDIT-2026-11-09.md** with a status per row
+and an ordered Stage-5 list. Landed (two commits):
+- **Backend:** idempotency scoped per workspace (cross-user replay of a session reply), in-house
+  per-instance rate limits (auth, sessions, exports, search, regenerate, events), consent-log /
+  notes / segments / sessions contracts aligned (dead `/sessions/:id/end` removed), deletedAt
+  guards, restore only inside the grace window, video fragment index bound, retention refusal
+  for video uploads, sweep keeps video of processing/failed meetings, finalize gives up on
+  never-ended meetings and marks video failed, ws heartbeat, idempotent end, jti TTL covers the
+  verifier tolerance, Gemini key must declare its tier, `/v1/meetings` gains `q` (title + people)
+  and `ids`, list enrichment batched (3N+1 → 4 queries).
+- **Extension:** stops when the recorded tab leaves Meet; signed-out banner mid-recording; pill
+  no longer stuck after errors; stale audio buffer cleared; encoder failure shown; replies on
+  every path; notes use the pause-aware clock; local notes removed after Done; Chrome ≥ 120.
+- **Web:** transcript reloads after the batch pass; one player sounds at a time and lanes download
+  once; Home toggle/undo, feedback, sign-out, video download errors handled; single save per edit;
+  "Try again" shows the writing state; search is three requests instead of a library scan;
+  action items follow every page; daily Ask limit copy; library-empty heading; sidebar count text.
+- **CI/tooling:** CI builds the extension and web bundles; manual deploys from main only; six unused
+  npm dependencies and dead exports/CSS/placeholder page removed.
+- **Docs:** ARCHITECTURE §23/§25, plan header and ✅ marks, AGENTS §2/§5, PRD §18, STAGING_SETUP
+  paid-key step, benchmark README.
+
+Planned, not done (AUDIT §4): gateway instance fencing, Redis-backed limits, graceful gateway
+shutdown and usage accounting, vendor retry, streamed audio playback, cleanup crons, FR-ONB-06
+enforcement and crash recovery, panel polish (Slow link state, product-name pass), candidate
+before/after view and offline disabling on the web, deploy rollback.
+
+### 2026-11-09 — Anirudh (Claude Code): Minutes of meeting (MoM) template
 
 Anirudh asked for a simple MoM feature and chose an AI template over a fixed export. New template
 `minutes` (label "MoM") in `backend/packages/summarizer/src/templates.ts`: formal third-person

@@ -4,7 +4,7 @@
 |---|---|
 | Purpose | The complete technical architecture of the product, from capture in the browser to summaries, search, and integrations, across all phases |
 | Status | Draft — design reference. Technology choices marked **(proposed)** need an ADR before implementation |
-| Last updated | 2026-10-28 |
+| Last updated | 2026-11-10 (repository structure §23, technology choices §25) |
 | Related | [PRD.md](PRD.md) · [FEATURES.md](FEATURES.md) · [AGENTS.md](../AGENTS.md) · [STT_PREFLIGHT.md](STT_PREFLIGHT.md) · [STT_BENCHMARK_PLAN.md](STT_BENCHMARK_PLAN.md) |
 
 > **Scope.** Phase 1 (Google Meet Chrome extension) is described in full detail. Phase 2 and 3
@@ -910,35 +910,51 @@ call quality.
 
 ## 23. Repository structure
 
-Proposed monorepo (extends the layout in AGENTS.md §5):
+The monorepo as built (updated 2026-11-10 after the full audit; AGENTS.md §5 is the short version):
 ```
 extension/
   src/
-    background/        service worker: state machine, auth, tabCapture, routing
-    offscreen/         capture, audio worklets, encoder, buffer, websocket client
-    adapters/meet/     selectors, detector, metadata, speaker, mute, chat notice, health
-    ui/sidepanel/      live transcript, notes, summary
-    ui/pages/          onboarding, settings, library (alpha)
+    background/        service worker: capture state machine, auth, tabCapture, notes watch, routing
+    offscreen/         capture graph, PCM worklet, Opus encoder, IndexedDB buffer, stream client,
+                       video recorder + uploader
+    adapters/meet/     selectors, detector, metadata, speaker, mute, chat, side-panel measure, health
+    content/           Meet prompt and recording pill (Shadow DOM)
+    sidepanel/         React side panel (ready, consent, live, processing, ready, error views)
+    onboarding/        React onboarding page
+web/                   library web app (React + Vite); web/server proxies /v1 and serves the build
 backend/
   apps/
-    api/               REST API
-    gateway/           realtime WebSocket gateway
-    workers/           pipeline jobs, scheduler
+    api/               REST API (Fastify): auth, sessions, meetings, notes, summary, search, ask,
+                       exports, settings, events; rate limits and idempotency middleware
+    gateway/           realtime WebSocket gateway: stream protocol, chunk store, STT, assembler
+    worker/            graphile-worker runner: summarize, retranscribe, video.finalize,
+                       exports, deletion, retention sweep
+    smoke/             staging smoke job (synthetic speech end to end)
   packages/
-    core/              domain logic: sessions, segments, speakers, summaries, retention
-    providers/         stt/, llm/, transliteration/, embeddings/ (vendor adapters only here)
-    db/                schema, migrations, data-access layer with tenancy enforcement
-    observability/     logging (field allow-list), metrics, tracing
+    auth/              Google sign-in, JWT access/stream tokens, refresh rotation
+    db/                schema, migrations, workspace-scoped access (forced RLS)
+    providers/         STT and LLM adapters behind interfaces (only place vendor APIs are called)
+    queue/             graphile-worker wiring, transactional enqueue, lifecycle jobs
+    storage/           Cloud Storage bucket, object layout, signed URLs, video store
+    video/             video.finalize (ffmpeg join/remux/gap fill/poster)
+    summarizer/        summary and Ask engines: prompts, templates, schema validation, grounding
+    pipeline/          worker jobs that join the pieces (summarize, batch pass, export, retention)
+    log/               content-free structured logs (field allow-list)
+    tracing/           OpenTelemetry spans, one trace per meeting
 shared/
-  contracts/           event schema, WS protocol, REST DTOs, summary JSON schema (zod, single source)
-  design-tokens/       colour/type tokens, tokens.css, bundled fonts
+  contracts/           zod schemas: capture events, WS protocol, REST DTOs, summary, ask, analytics
+  design-tokens/       colour/type tokens, tokens.css, bundled fonts, contrast tests
+  ui/                  React components and base CSS shared by web/ and the extension pages
+  hinglish/            canonical spellings, Devanagari→Roman, display-text policies
+  fixtures/            synthetic meeting script and recorded gateway sessions
 tools/
-  stt-benchmark/       STT benchmark tooling (Stage 0)
-infra/                 infrastructure as code, environment configs (later)
-docs/                  PRD, features, architecture, research, ADRs
+  stt-benchmark/       STT benchmark (Stage 0)
+  summary-eval/        golden meetings, metrics and the CI regression gate for summaries
+infra/                 Terraform (modules/, environments/)
+docs/                  PRD, features, architecture, design, plan, ADRs, audits, runbooks
 ```
-Dependency rules: `adapters/*` may depend on `shared/` only; `core` must not import `providers`
-implementations (only interfaces); only `providers/` imports vendor SDKs.
+Dependency rules: `adapters/*` may depend on `shared/` only; the core pipeline imports provider
+interfaces, never implementations; only `providers/` calls vendor APIs.
 
 ---
 
@@ -985,13 +1001,13 @@ contracts. Changing them requires an ADR and a migration plan.
 
 | Area | Choice | Status | Rationale |
 |---|---|---|---|
-| Language | TypeScript everywhere | **Proposed** | One language for extension, backend, and shared schemas |
+| Language | TypeScript everywhere | **Decided** (S0) | One language for extension, backend, and shared schemas |
 | Extension platform | Chrome MV3 | Decided | Required by Chrome |
 | Web app | React + Vite (`web/`) | **Decided** 2026-11-06 | Library web app (D-07); static build, hosting in ADR-0006 |
-| Schema validation | Runtime schema library shared by client and server (e.g. zod) | Proposed | Single source of truth for contracts |
-| HTTP/WS server | Lightweight Node.js framework with first-class WebSocket support | Proposed | Gateway needs efficient long-lived connections |
-| Database | PostgreSQL (+ pgvector in Phase 2) | Proposed | Relational data, RLS, full-text search, queue, vectors in one system |
-| Job queue | Postgres-backed queue | Proposed | Fewer moving parts in Phase 1; revisit at scale |
+| Schema validation | zod, shared by client and server (`shared/contracts`) | **Decided** | Single source of truth for contracts |
+| HTTP/WS server | Fastify (API); Node `http` + `ws` (gateway) | **Decided** | Gateway needs efficient long-lived connections |
+| Database | PostgreSQL on Cloud SQL (+ pgvector in Phase 2) | **Decided** (ADR-0002) | Relational data, RLS, full-text search, queue, vectors in one system |
+| Job queue | graphile-worker on Postgres | **Decided** (ADR-0005) | Fewer moving parts in Phase 1; revisit at scale |
 | Cache / pub-sub | Redis | Proposed | Gateway session state and fan-out |
 | Object storage | Cloud Storage (`asia-south1`), SSE | Selected (ADR-0002) | Standard, cheap, lifecycle rules |
 | STT | Deepgram Nova-3 only | **Decided** 2026-11-05 ([ADR-0001](adr/0001-stt-provider.md) §0) | Measured best on the benchmark; Google Chirp 3 dropped |

@@ -14,8 +14,7 @@
     "@meetyou/contracts": "workspace:*",
     "@meetyou/db": "workspace:*",
     "@meetyou/log": "workspace:*",
-    "ws": "^8.22.0",
-    "zod": "^4.6.7"
+    "ws": "^8.22.0"
   },
   "devDependencies": {
     "@meetyou/api": "workspace:*",

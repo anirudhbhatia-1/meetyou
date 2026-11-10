@@ -22,9 +22,12 @@ permissions:
 jobs:
   deploy:
     # Skipped (not failed) until the repository variables from STAGING_SETUP §9.3 are set.
+    # A manual run deploys main only: dispatching another branch bypassed the green-CI gate
+    # (2026-11-09 audit).
     if: >-
       vars.GCP_WIF_PROVIDER != '' &&
-      (github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success')
+      ((github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main') ||
+       github.event.workflow_run.conclusion == 'success')
     runs-on: ubuntu-latest
     environment: staging
     env:

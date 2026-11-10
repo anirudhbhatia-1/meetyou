@@ -171,6 +171,9 @@ body {
   flex: none;
   border-radius: 50%;
   border: 1.5px solid var(--control-line);
+  display: inline-grid;
+  place-items: center;
+  transition: background 200ms;
 }
 .ready-check {
   width: 44px;
@@ -523,11 +526,6 @@ body {
 }
 
 /* §8.7 steps fill in turn */
-.step-dot {
-  display: inline-grid;
-  place-items: center;
-  transition: background 200ms;
-}
 .step-done {
   color: var(--ink);
 }

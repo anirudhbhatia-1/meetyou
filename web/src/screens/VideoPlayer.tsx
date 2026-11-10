@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useImperativeHandle, useRef, useState, type Ref } from 'react';
 
 import type { VideoPlaybackResponse } from '../api/types.ts';
-import { Button, Icon, SkeletonRows } from '@meetyou/ui';
+import { Button, Icon, SkeletonRows, useToast } from '@meetyou/ui';
 import { useApi } from '../lib/api-context.ts';
+import { claimPlayback } from '../lib/audio.ts';
 import { formatClock } from '../lib/format.ts';
 
 export interface PlayerHandle {
@@ -36,6 +37,7 @@ export function VideoPlayer({
   compact?: boolean;
 }) {
   const api = useApi();
+  const toast = useToast();
   const video = useRef<HTMLVideoElement>(null);
   const box = useRef<HTMLDivElement>(null);
   const [playback, setPlayback] = useState<VideoPlaybackResponse | null | undefined>(undefined);
@@ -48,18 +50,31 @@ export function VideoPlayer({
   const retried = useRef(false);
   const pendingSeek = useRef<number | null>(null);
 
+  // The signed URL is fetched per meeting only: re-fetching on every "continue at" time reloaded
+  // the whole video (2026-11-09 audit). A new start time just seeks.
+  const startRef = useRef(startAt);
+  startRef.current = startAt;
   const load = useCallback(() => {
     api.getVideo(meetingId).then(
       (p) => {
-        if (p !== null && startAt !== null && pendingSeek.current === null) {
-          pendingSeek.current = Math.max(0, (startAt - p.startMs) / 1000);
+        const at = startRef.current;
+        if (p !== null && at !== null && pendingSeek.current === null) {
+          pendingSeek.current = Math.max(0, (at - p.startMs) / 1000);
         }
         setPlayback(p);
       },
       () => setFailed(true),
     );
-  }, [api, meetingId, startAt]);
+  }, [api, meetingId]);
   useEffect(load, [load]);
+  useEffect(() => {
+    const el = video.current;
+    if (startAt === null || el === null || playback == null || el.readyState === 0) return;
+    el.currentTime = Math.max(0, (startAt - playback.startMs) / 1000);
+    claimPlayback(() => el.pause());
+    el.play().catch(() => undefined);
+    // Only a new start time seeks; playback identity is stable once loaded.
+  }, [startAt]);
 
   useImperativeHandle(ref, () => ({
     playFrom(sessionMs) {
@@ -69,6 +84,7 @@ export function VideoPlayer({
       if (el.readyState === 0) pendingSeek.current = seconds;
       else el.currentTime = seconds;
       // Chrome may refuse to start with sound outside a click; the seek still happened.
+      claimPlayback(() => el.pause());
       el.play().catch(() => undefined);
       box.current?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
     },
@@ -107,6 +123,9 @@ export function VideoPlayer({
       const file = await api.getVideo(meetingId, { download: true });
       // The signed URL answers with Content-Disposition: attachment, so this saves the file.
       if (file !== null) window.location.assign(file.url);
+      else toast({ message: 'The video isn’t available to download.' });
+    } catch {
+      toast({ message: 'Couldn’t start the download. Try again.' });
     } finally {
       setDownloading(false);
     }
@@ -135,7 +154,9 @@ export function VideoPlayer({
         preload="metadata"
         playsInline
         onClick={toggle}
-        onPlay={() => {
+        onPlay={(e) => {
+          const el = e.currentTarget;
+          claimPlayback(() => el.pause());
           setPlaying(true);
           onPlayingChange?.(true);
         }}

@@ -114,4 +114,3 @@ export const CaptureEvent = z.discriminatedUnion('type', [
   SessionEnded,
 ]);
 export type CaptureEvent = z.infer<typeof CaptureEvent>;
-export type CaptureEventType = CaptureEvent['type'];

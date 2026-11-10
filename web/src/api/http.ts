@@ -89,34 +89,52 @@ export function createHttpApi(auth: WebAuth): LibraryApi {
     },
 
     async listMeetings(filter: MeetingFilter, count = PAGE) {
-      const q = filter.query.trim();
-      // A search ranks every meeting the user has, so it reads them all; browsing reads `count`.
-      const wanted = q === '' ? count : Number.POSITIVE_INFINITY;
-      const items: Meeting[] = [];
-      let cursor: string | null = null;
-      do {
-        const query = new URLSearchParams({ limit: '100' });
+      const q = filter.query.trim().slice(0, 200);
+      const listQuery = (cursor: string | null, limit: number) => {
+        const query = new URLSearchParams({ limit: String(limit) });
         if (filter.template !== 'all') query.set('template', filter.template);
+        if (q !== '') query.set('q', q);
         if (cursor !== null) query.set('cursor', cursor);
-        const page = MeetingList.parse(await get(`/v1/meetings?${query.toString()}`));
-        items.push(...page.items);
-        cursor = page.nextCursor;
-      } while (cursor !== null && items.length < wanted);
+        return `/v1/meetings?${query.toString()}`;
+      };
       if (q === '') {
+        const items: Meeting[] = [];
+        let cursor: string | null = null;
+        do {
+          const page = MeetingList.parse(await get(listQuery(cursor, Math.min(100, count))));
+          items.push(...page.items);
+          cursor = page.nextCursor;
+        } while (cursor !== null && items.length < count);
         return { meetings: items.slice(0, count), more: items.length > count || cursor !== null };
       }
-      // S3-09: transcripts, notes, summaries and titles on the server, best match first; people's
-      // names are matched here (they are not indexed).
-      const found = SearchResponse.parse(
-        await get(`/v1/search?q=${encodeURIComponent(q.slice(0, 200))}&limit=50`),
-      );
-      const rank = new Map(found.results.map((r, i) => [r.meeting.id, i]));
-      const words = q.toLowerCase().split(/\s+/).filter(Boolean);
-      const byPeople = (m: Meeting) =>
-        words.every((w) => m.participantNames.join(' ').toLowerCase().includes(w));
-      const meetings = items
-        .filter((m) => rank.has(m.id) || byPeople(m))
-        .sort((a, b) => (rank.get(a.id) ?? 1e9) - (rank.get(b.id) ?? 1e9));
+      // S3-09 content search (transcripts, notes, summaries, titles; best match first) merged with
+      // the list's title and people match — two requests, not a scan of the whole library.
+      const [found, named] = await Promise.all([
+        get(`/v1/search?q=${encodeURIComponent(q)}&limit=50`).then((b) => SearchResponse.parse(b)),
+        get(listQuery(null, 50)).then((b) => MeetingList.parse(b)),
+      ]);
+      const hitIds = found.results.map((r) => r.meeting.id);
+      const hits =
+        hitIds.length === 0
+          ? []
+          : MeetingList.parse(
+              await get(
+                `/v1/meetings?limit=50&ids=${encodeURIComponent(hitIds.join(','))}` +
+                  (filter.template !== 'all' ? `&template=${filter.template}` : ''),
+              ),
+            ).items;
+      // Content hits in rank order, then title/people matches not already listed.
+      const byId = new Map(hits.map((m) => [m.id, m]));
+      const seen = new Set<string>();
+      const meetings: Meeting[] = [];
+      for (const m of [
+        ...hitIds.map((id) => byId.get(id)).filter((m) => m !== undefined),
+        ...named.items,
+      ]) {
+        if (seen.has(m.id)) continue;
+        seen.add(m.id);
+        meetings.push(m);
+      }
       return { meetings, more: false };
     },
 
@@ -216,8 +234,17 @@ export function createHttpApi(auth: WebAuth): LibraryApi {
     },
 
     async listActionItems(status) {
-      // TODO(S4-09): follow `nextCursor`; the first 100 cover alpha.
-      const list = ActionItemList.parse(await get(`/v1/action-items?status=${status}&limit=100`));
+      // Every page: the sidebar count and the page lost items past the first 100 (2026-11-09 audit).
+      const rows: ActionItemList['items'] = [];
+      let cursor: string | null = null;
+      do {
+        const query = new URLSearchParams({ status, limit: '100' });
+        if (cursor !== null) query.set('cursor', cursor);
+        const page = ActionItemList.parse(await get(`/v1/action-items?${query.toString()}`));
+        rows.push(...page.items);
+        cursor = page.nextCursor;
+      } while (cursor !== null && rows.length < 2_000);
+      const list = { items: rows };
       return list.items.map(({ meetingId, meetingTitle, ownerName, ownerIsSelf, ...item }) => ({
         item: {
           id: item.id,

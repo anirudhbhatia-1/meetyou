@@ -49,7 +49,8 @@ short version.
 - Live transcript in a side panel.
 - Live notepad: the user's own notes act as **anchors** for the AI summary.
 - Post-meeting summary, decisions, and action items, each **citing transcript segments**.
-- Recording-consent notice posted in Meet chat when recording starts.
+- Recording-consent notice posted in Meet chat when recording starts (**switched off 2026-11-09** behind
+  `MEET_CHAT_NOTICE_ENABLED`, see §9).
 - Library **web app** (D-07): sign in and see your own recordings, transcripts, and summaries from
   any device; search, export, delete (with undo), and a lightweight action-items list (open/done).
 - Languages: English, Hindi, Hinglish (code-switching within a sentence).
@@ -136,13 +137,13 @@ an event. **Source of truth:** `shared/contracts` (zod schemas + tests); this bl
 ```
 shared/contracts       ✅ zod schemas: capture events, WS protocol, REST DTOs, summary output
 shared/design-tokens   ✅ colour/type/radius tokens, tokens.css, bundled fonts, contrast tests
-shared/ui              (S4-02) React components + base CSS (DESIGN §6) shared by web/ and the extension pages
-shared/hinglish        Hinglish canonical spelling list, Devanagari→Roman, display-text policies
-shared/fixtures        (S2-13) synthetic meeting script, recorded gateway sessions + replayer, TTS audio script
+shared/ui              ✅ React components + base CSS (DESIGN §6) shared by web/ and the extension pages
+shared/hinglish        ✅ Hinglish canonical spelling list, Devanagari→Roman, display-text policies
+shared/fixtures        ✅ synthetic meeting script, recorded gateway sessions + replayer, TTS audio script
 tools/stt-benchmark    ✅ STT benchmark: runner, streaming harness, normalizer, scorer
-extension/             (Stage 1) Chrome MV3: service worker, offscreen document, side panel (React), Meet adapter (esbuild)
-web/                   (S4) library web app, React + Vite; web/server proxies /v1 to the API (mock in Vite dev)
-backend/apps/gateway   (S1-05) realtime gateway, local dev
+extension/             ✅ Chrome MV3: service worker, offscreen document, side panel (React), Meet adapter (esbuild)
+web/                   ✅ library web app, React + Vite; web/server proxies /v1 to the API (mock in Vite dev)
+backend/apps/gateway   ✅ realtime WebSocket gateway (Cloud Run)
 backend/packages/db    (S2-01) Postgres schema, migrations, workspace-scoped access (Kysely)
 backend/packages/auth  (S2-02) Google sign-in, JWT access/stream tokens, rotating refresh tokens
 backend/packages/providers (S2-03) STT/LLM/transliteration interfaces, Deepgram adapters, registry
@@ -156,8 +157,8 @@ backend/packages/log   (S2-11) content-free structured logs (field allow-list, C
 backend/packages/tracing (S2-11) OpenTelemetry spans, one trace per meeting, OTLP to Google's Telemetry API
 backend/packages/summarizer (S3-01, S3-12) summary engine and Ask this meeting: data-wrapped prompts, templates as data, schema retry, validation chain
 backend/packages/pipeline (S3-03/04/11) worker jobs: meeting.summarize, meeting.retranscribe (batch pass), account.export, retention scheduling
-tools/summary-eval     (S3-05/06) golden meetings, metrics, recorded outputs + CI regression gate, injection cases
-docs/                  PRD, features, architecture, design, plan, research, ADRs, benchmark kit, legal drafts,
+tools/summary-eval     ✅ (S3-05/06) golden meetings, metrics, recorded outputs + CI regression gate, injection cases
+docs/                  PRD, features, architecture, design, plan, research, ADRs, audits (AUDIT-*.md), legal drafts,
                        STAGING_SETUP.md (step-by-step cloud setup runbook)
 ```
 

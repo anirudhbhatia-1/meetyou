@@ -117,10 +117,14 @@ export function Meetings() {
                 </Button>
               </>
             ) : debounced.trim() === '' ? (
-              <p>
-                No meetings yet. Join a Google Meet call and press Start. Your notes will appear
-                here.
-              </p>
+              // DESIGN §16 "Library empty": a heading, then what to do.
+              <>
+                <h2 className="card-title">No meetings yet</h2>
+                <p>
+                  Join a Google Meet call and press Start in the MeetYou side panel. Your notes will
+                  appear here.
+                </p>
+              </>
             ) : (
               <>
                 <p>No meetings match &ldquo;{debounced}&rdquo;.</p>

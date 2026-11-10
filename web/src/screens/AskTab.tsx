@@ -49,8 +49,8 @@ export function AskTab({
 
   const items = [...(history.data?.items ?? []), ...asked];
   const usage = latestUsage ?? history.data?.usage ?? null;
-  const limited =
-    usage !== null && (usage.usedLastHour >= usage.perHour || usage.usedLastDay >= usage.perDay);
+  const dailyLimited = usage !== null && usage.usedLastDay >= usage.perDay;
+  const limited = usage !== null && (usage.usedLastHour >= usage.perHour || dailyLimited);
   const length = draft.trim().length;
   const over = length > ASK_LIMITS.questionChars;
   const canSend = length > 0 && !over && pending === null && !limited;
@@ -135,7 +135,11 @@ export function AskTab({
         </ol>
       )}
       {limited && (
-        <Banner tone="warning">You’ve reached the question limit. Try again in an hour.</Banner>
+        <Banner tone="warning">
+          {dailyLimited
+            ? 'You’ve reached today’s question limit. Try again tomorrow.'
+            : 'You’ve reached the question limit. Try again in an hour.'}
+        </Banner>
       )}
       {error !== null && <Banner tone="error">{error}</Banner>}
       <div className="ask-composer">

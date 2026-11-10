@@ -1,16 +1,7 @@
 import { z } from 'zod';
 
-import { IsoDateTime, SessionMs } from './common.ts';
-import { SessionEnded } from './events.ts';
-import {
-  Meeting,
-  MeetingStatus,
-  Note,
-  page,
-  SummaryItem,
-  TemplateId,
-  UserSettings,
-} from './rest.ts';
+import { IsoDateTime } from './common.ts';
+import { Meeting, Note, page, SummaryItem, TemplateId, UserSettings } from './rest.ts';
 import { Segment } from './transcript.ts';
 
 /**

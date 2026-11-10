@@ -98,7 +98,14 @@ export function Home({ onActionsChanged }: { onActionsChanged: () => void }) {
   const mine = (todos.data ?? []).filter((row) => row.ownedBySelf).slice(0, 4);
 
   const toggle = async (id: string, done: boolean) => {
-    await api.setActionItemStatus(id, done ? 'done' : 'open');
+    try {
+      await api.setActionItemStatus(id, done ? 'done' : 'open');
+    } catch {
+      // Like the Action items page: say so, and let the reload put the checkbox back.
+      toast({ message: 'Couldn’t save that. Try again.' });
+      todos.reload();
+      return;
+    }
     analytics.track('action_item_status', { status: done ? 'done' : 'open' });
     todos.reload();
     onActionsChanged();
@@ -106,10 +113,13 @@ export function Home({ onActionsChanged }: { onActionsChanged: () => void }) {
       toast({
         message: 'Marked done',
         undo: () => {
-          void api.setActionItemStatus(id, 'open').then(() => {
-            todos.reload();
-            onActionsChanged();
-          });
+          api.setActionItemStatus(id, 'open').then(
+            () => {
+              todos.reload();
+              onActionsChanged();
+            },
+            () => toast({ message: 'Couldn’t undo that. Try again.' }),
+          );
         },
       });
     }

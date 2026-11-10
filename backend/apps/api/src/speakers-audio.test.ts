@@ -141,6 +141,20 @@ describe('speakers and audio', () => {
     expect(row?.participantNames).toEqual(['Neha']);
   });
 
+  it('filters the list by title or person (q) and by id', async () => {
+    const list = async (query: string) =>
+      (
+        (await app.inject({ method: 'GET', url: `/v1/meetings?${query}`, headers: auth() })).json()
+          .items as { id: string }[]
+      ).map((m) => m.id);
+    // Neha was added as a participant by the test above; the user's own row never matches.
+    expect(await list('q=neh')).toEqual([meetingId]);
+    expect(await list('q=You')).toEqual([]);
+    expect(await list('q=nobody-here')).toEqual([]);
+    expect(await list(`ids=${meetingId},mtg_unknown`)).toEqual([meetingId]);
+    expect(await list('ids=bad%20id')).toEqual([]);
+  });
+
   it('renames a speaker for the whole meeting, with a typed name or a participant', async () => {
     const rename = (payload: Record<string, unknown>, who = 0) =>
       app.inject({

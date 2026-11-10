@@ -27,8 +27,10 @@ export function Sidebar({ route, openActions }: { route: Route; openActions: num
               <Icon name={item.icon} size={18} />
               <span>{item.label}</span>
               {item.screen === 'actions' && openActions !== null && openActions > 0 && (
-                <span className="nav-count" aria-label={`${openActions} open`}>
+                // aria-label on a plain span is ignored; the hidden word makes it "4 open".
+                <span className="nav-count">
                   {openActions}
+                  <span className="visually-hidden"> open</span>
                 </span>
               )}
             </a>

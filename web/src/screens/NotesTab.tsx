@@ -78,7 +78,12 @@ export function Bullet({
     setPeek(false);
   };
 
+  const saving = useRef(false);
   const save = () => {
+    // Enter saves and unmounts the textarea, whose removal fires blur → a second PATCH
+    // (2026-11-09 audit). One save per edit.
+    if (saving.current) return;
+    saving.current = true;
     const text = draft.trim();
     setEditing(false);
     if (text === '' || text === item.text) {
@@ -140,7 +145,10 @@ export function Bullet({
         type="button"
         className="edit-btn"
         aria-label="Edit this point"
-        onClick={() => setEditing(true)}
+        onClick={() => {
+          saving.current = false;
+          setEditing(true);
+        }}
       >
         <Icon name="pencil" size={14} />
       </button>
@@ -188,7 +196,9 @@ export function NotesTab({
         <SkeletonRows rows={5} />
       </Card>
     );
-  if (summary === null && status === 'processing') {
+  // "Try again" after failed notes shows the same writing state, not the failed card with an
+  // enabled button that could queue several rewrites (2026-11-09 audit).
+  if (summary === null && (status === 'processing' || fading)) {
     // Notes are still being written; the Transcript tab (and video) can be used meanwhile.
     return (
       <Card className="processing">

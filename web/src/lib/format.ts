@@ -41,14 +41,8 @@ export function formatLength(startIso: string, endIso: string | null): string {
   return `${Math.floor(minutes / 60)} h ${String(minutes % 60).padStart(2, '0')} min`;
 }
 
-/** Session-clock time: "4:07", "1:02:30" */
-export function formatClock(ms: number): string {
-  const total = Math.max(0, Math.floor(ms / 1000));
-  const h = Math.floor(total / 3600);
-  const m = Math.floor((total % 3600) / 60);
-  const s = String(total % 60).padStart(2, '0');
-  return h > 0 ? `${h}:${String(m).padStart(2, '0')}:${s}` : `${m}:${s}`;
-}
+/** Session-clock time: "4:07", "1:02:30" — the shared contracts helper, so exports match. */
+export { clockTime as formatClock } from '@meetyou/contracts';
 
 /** "Recording 5 days left" / "Recording deleted" (DESIGN §5.1). */
 export function recordingLabel(expiresIso: string | null, now: Date): string | null {
