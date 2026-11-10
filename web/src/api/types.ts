@@ -66,6 +66,8 @@ export interface MeetingSummary {
   actionItems: SummaryItem[];
   /** Subjects covered, in order: the agenda of Minutes of meeting notes. */
   topics?: string[];
+  /** The language the stored version was written in (Settings "Write my notes in" at that time). */
+  language?: 'english' | 'hindi' | 'hinglish';
 }
 
 export interface ActionItemRow {

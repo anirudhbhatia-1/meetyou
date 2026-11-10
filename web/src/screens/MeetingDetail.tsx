@@ -40,6 +40,8 @@ const TAB_LABEL: Record<DetailTab, string> = {
 };
 
 /** DESIGN §12 */
+const LANGUAGE_LABEL = { english: 'English', hindi: 'Hindi', hinglish: 'Hinglish' } as const;
+
 export function MeetingDetail({
   meetingId,
   tab,
@@ -109,6 +111,28 @@ export function MeetingDetail({
   const candidate = summary.data?.candidate ?? null;
   const shownVersion = summary.data?.version ?? null;
   const [rewriteFrom, setRewriteFrom] = useState<number | null>(null);
+  const rewrite = (template: Meeting['template']) => {
+    void api
+      .regenerateSummary(meetingId, template)
+      .then(() => {
+        setRewriteFrom(shownVersion);
+        setRewriting(template);
+      })
+      .catch(() => toast({ message: 'Couldn’t rewrite the notes. Try again.' }));
+  };
+  // Notes written before "Write my notes in" changed stay in the old language until rewritten
+  // (Settings says so); say it on the page and offer the rewrite (2026-11-10).
+  const settings = useAsync(() => api.getSettings(), []);
+  const written = summary.data?.language;
+  const wanted = settings.data?.summaryLanguage;
+  const languageMismatch =
+    written !== undefined &&
+    wanted !== undefined &&
+    written !== wanted &&
+    candidate === null &&
+    rewriting === null
+      ? { written, wanted }
+      : null;
   useEffect(() => {
     if (rewriting === null) return undefined;
     if (candidate !== null || (summary.data != null && shownVersion !== rewriteFrom)) {
@@ -171,15 +195,7 @@ export function MeetingDetail({
             disabled={
               !SETTLED.has(m.status) || summary.loading || rewriting !== null || candidate !== null
             }
-            onPick={(template) => {
-              void api
-                .regenerateSummary(meetingId, template)
-                .then(() => {
-                  setRewriteFrom(shownVersion);
-                  setRewriting(template);
-                })
-                .catch(() => toast({ message: 'Couldn’t rewrite the notes. Try again.' }));
-            }}
+            onPick={rewrite}
           />
           <Button
             variant="primary"
@@ -278,12 +294,27 @@ export function MeetingDetail({
               onSeeChanges={() => navigate({ screen: 'detail', meetingId, tab: 'transcript' })}
             />
           )}
+          {languageMismatch !== null && tab === 'notes' && (
+            <Banner
+              tone="info"
+              action={
+                <Button size="sm" onClick={() => rewrite(summary.data?.template ?? m.template)}>
+                  Rewrite in {LANGUAGE_LABEL[languageMismatch.wanted]}
+                </Button>
+              }
+            >
+              These notes are in {LANGUAGE_LABEL[languageMismatch.written]}. Your notes language is{' '}
+              {LANGUAGE_LABEL[languageMismatch.wanted]}.
+            </Banner>
+          )}
           {candidate !== null && tab === 'notes' && (
             <CandidateBanner
               onKeep={() =>
                 api.keepSummary(meetingId, candidate.version).then(
                   () => {
                     summary.reload();
+                    // The kept template becomes the meeting's (list label, Meetings filter).
+                    meeting.reload();
                     toast({ message: `Rewritten as ${TEMPLATE_LABEL[candidate.template]} notes` });
                   },
                   () => toast({ message: 'Couldn’t keep the new version. Try again.' }),

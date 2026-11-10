@@ -6,7 +6,7 @@ pointer to where the full detail lives — the linked document stays the source 
 
 | Field | Value |
 |---|---|
-| Last updated | 2026-11-10 (Anirudh: full S0–S4 audit and fixes, docs/AUDIT-2026-11-09.md) |
+| Last updated | 2026-11-10 (Anirudh: MoM language + template label fixes; full audit) |
 | Updated by | Anirudh (Claude Code) |
 | Repository | [anirudhbhatia-1/meetyou](https://github.com/anirudhbhatia-1/meetyou) — branches `main`, `anirudh`, `Gauravbro` |
 | Current stage | **Stage 4** complete in code; 2026-11-09 audit fixes landed; Stage-5 hardening planned (AUDIT §4); real Chrome/Meet checks pending (§7) |
@@ -206,7 +206,17 @@ Gaurav's S3-07..S3-11 — Gaurav should not start them).** **Stage 4 is complete
 
 Newest first. One entry per working session (either person).
 
-### 2026-11-10 (latest) — Anirudh (Claude Code): full S0–S4 audit and fixes
+### 2026-11-10 (latest) — Anirudh (Claude Code): MoM stayed Hindi and filed as General
+
+From Anirudh's staging test: after switching "Write my notes in" to English the MoM notes stayed in
+Hindi, and the meeting still showed under General. Causes: the template menu ignored the current
+template (no way to rewrite MoM again), and the MoM version was kept before the 2026-11-09
+`acceptSummary` fix. Now the current template can be rewritten, the notes page shows "These notes
+are in Hindi. Your notes language is English · Rewrite in English" when they differ, Keep reloads
+the meeting, and **migration 0010** backfills `meetings.template` from the kept notes (RLS lifted
+for that one statement inside its transaction).
+
+### 2026-11-10 — Anirudh (Claude Code): full S0–S4 audit and fixes
 
 Anirudh asked for a scan of everything built so far for bugs, dead code and missing pieces, a plan,
 and fixes. Four parallel reviews (extension, web vs DESIGN, backend, shared/CI/docs), high items

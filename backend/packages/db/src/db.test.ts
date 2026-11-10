@@ -1,3 +1,6 @@
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
+
 import { newUlid } from '@meetyou/contracts';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
@@ -69,6 +72,7 @@ describe('migrations', () => {
       '0007',
       '0008',
       '0009',
+      '0010',
     ]);
   });
 });
@@ -505,5 +509,54 @@ describe('review fixes (2026-11-05)', () => {
   it('serialises concurrent first sign-ins of one Google account', async () => {
     const [x, y] = await Promise.all([signIn(env.db, 'same'), signIn(env.db, 'same')]);
     expect(x.userId).toBe(y.userId);
+  });
+});
+
+describe('0010 template backfill', () => {
+  it('files a meeting under the template of its kept notes', async () => {
+    const { workspaceId } = await signIn(env.db, 'g-backfill');
+    const meetingId = await addMeeting(env.db, workspaceId);
+    await env.db.inWorkspace(workspaceId, (tx) =>
+      tx
+        .insertInto('summaries')
+        .values([
+          {
+            id: id('sum'),
+            workspaceId,
+            meetingId,
+            version: 1,
+            template: 'general',
+            language: 'hindi',
+            model: 'm',
+            status: 'ready',
+            accepted: false,
+          },
+          {
+            id: id('sum'),
+            workspaceId,
+            meetingId,
+            version: 2,
+            template: 'minutes',
+            language: 'hindi',
+            model: 'm',
+            status: 'ready',
+            accepted: true,
+          },
+        ])
+        .execute(),
+    );
+    const sql = readFileSync(
+      join(import.meta.dirname, '..', 'migrations', '0010_meeting_template_backfill.sql'),
+      'utf8',
+    );
+    await env.pg.exec(sql);
+    const row = await env.db.inWorkspace(workspaceId, (tx) =>
+      tx
+        .selectFrom('meetings')
+        .select('template')
+        .where('id', '=', meetingId)
+        .executeTakeFirstOrThrow(),
+    );
+    expect(row.template).toBe('minutes');
   });
 });

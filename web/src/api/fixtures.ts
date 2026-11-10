@@ -317,6 +317,8 @@ export const summaries: Record<string, MeetingSummary> = {
     ],
   },
   mtg_standup: {
+    // Written in Hinglish while the demo setting is English: shows the language banner (§12.2).
+    language: 'hinglish',
     overview:
       'Short standup: search pagination is merged; Sameer is blocked on the staging database.',
     sections: [

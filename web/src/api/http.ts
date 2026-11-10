@@ -49,6 +49,9 @@ function toMeetingSummary(body: MeetingSummaryResponse): MeetingSummary | null {
     questions: of('question'),
     actionItems: of('action_item'),
     topics: of('topic').map((i) => i.text),
+    ...(v.language === 'english' || v.language === 'hindi' || v.language === 'hinglish'
+      ? { language: v.language }
+      : {}),
   };
 }
 

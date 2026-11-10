@@ -30,9 +30,9 @@ export function TemplateMenu({
       items={TEMPLATES.map((t) => ({
         label: TEMPLATE_LABEL[t],
         checked: t === current,
-        onSelect: () => {
-          if (t !== current) onPick(t);
-        },
+        // The current template too: rewriting it again is how notes follow a changed language
+        // setting (it did nothing before, 2026-11-10).
+        onSelect: () => onPick(t),
       }))}
     />
   );
