@@ -1,7 +1,7 @@
 import type { Segment, SummaryItem } from '@meetyou/contracts';
 
 import type { Meeting, MeetingSummary, Participant } from '../api/types.ts';
-import { formatDue, formatLength } from '../lib/format.ts';
+import { formatDue, formatLength, MARKER_LABEL } from '../lib/format.ts';
 import { Bullet } from './NotesTab.tsx';
 
 /**
@@ -49,7 +49,7 @@ export function MinutesView({
     summary.topics !== undefined && summary.topics.length > 0
       ? summary.topics
       : discussion.map((s) => s.note?.text ?? 'From the conversation');
-  const none = <p className="ai-line italic">None recorded.</p>;
+  const none = <p className="meta italic">None recorded.</p>;
 
   return (
     <div className="mom">
@@ -105,6 +105,9 @@ export function MinutesView({
             <div key={s.note?.id ?? `topic-${i}`} className="mom-point">
               <h3 className={s.note === null ? 'mom-point-title muted' : 'mom-point-title'}>
                 {i + 1}. {s.note?.text ?? 'From the conversation'}
+                {s.note?.marker != null && (
+                  <span className="mom-tag">{MARKER_LABEL[s.note.marker]}</span>
+                )}
               </h3>
               {s.items.length === 0 ? none : <ul className="bullets">{s.items.map(bullet)}</ul>}
             </div>

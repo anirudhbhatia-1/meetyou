@@ -14,7 +14,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import type { Meeting, MeetingSummary, Participant } from '../api/types.ts';
 import { useApi } from '../lib/api-context.ts';
 import { numberCitations } from '../lib/citations.ts';
-import { formatClock, segmentLang } from '../lib/format.ts';
+import { formatClock, MARKER_LABEL, segmentLang } from '../lib/format.ts';
 import { MinutesView } from './MinutesView.tsx';
 import { NotesFeedback } from './SummaryControls.tsx';
 
@@ -281,7 +281,12 @@ export function NotesTab({
               <p className="meta small num">
                 {section.note === null
                   ? 'added from the conversation'
-                  : `your note · ${formatClock(section.note.sessionMs)}`}
+                  : [
+                      'your note',
+                      // The tag picked in the side panel; it was dropped on the web before.
+                      ...(section.note.marker !== null ? [MARKER_LABEL[section.note.marker]] : []),
+                      formatClock(section.note.sessionMs),
+                    ].join(' · ')}
               </p>
               {section.items.length === 0 ? (
                 <p className="ai-line italic">Nothing in the conversation matched this note yet.</p>

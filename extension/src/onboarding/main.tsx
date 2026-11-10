@@ -279,8 +279,9 @@ function Consent({ onNext }: { onNext: () => void }) {
         <span>
           I&rsquo;ll tell people when I&rsquo;m taking notes, and get consent where required.{' '}
           <span className="meta">
-            Minutes can post a note in Meet chat for you; some places need everyone&rsquo;s
-            agreement before recording.
+            {MEET_CHAT_NOTICE_ENABLED
+              ? 'Minutes can post a note in Meet chat for you; some places need everyone’s agreement before recording.'
+              : 'Say it out loud at the start of the call; some places need everyone’s agreement before recording.'}
           </span>
         </span>
       </label>
@@ -323,7 +324,9 @@ function Done() {
           <span className="ob-step-n">1</span> Join a call
         </li>
         <li>
-          <span className="ob-step-n">2</span> Press Start in the small prompt
+          {/* The Meet prompt has no Start button (Chrome needs the icon or shortcut, §8.2). */}
+          <span className="ob-step-n">2</span> Click the MeetYou icon in Chrome&rsquo;s toolbar,
+          then Start
         </li>
         <li>
           <span className="ob-step-n">3</span> Read your notes

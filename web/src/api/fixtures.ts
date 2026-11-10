@@ -246,7 +246,7 @@ function item(
   };
 }
 
-const launchNote = note('note_launch', 25_000, 'Launch date?');
+const launchNote = note('note_launch', 25_000, 'Launch date?', 'decision');
 const pricingNote = note('note_pricing', 95_000, 'Pricing page copy');
 
 export const summaries: Record<string, MeetingSummary> = {

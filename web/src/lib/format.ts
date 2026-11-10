@@ -102,3 +102,11 @@ export function segmentLang(language: string, text: string): string | undefined 
   if (language === 'hi' && !DEVANAGARI.test(text)) return 'hi-Latn';
   return language;
 }
+
+/** The tag a note was written with (Note · Decision · Action · Question, or `IMPORTANT:`). */
+export const MARKER_LABEL = {
+  decision: 'Decision',
+  action: 'Action',
+  question: 'Question',
+  important: 'Important',
+} as const;

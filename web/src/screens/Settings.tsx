@@ -327,7 +327,7 @@ export function Settings({ onSignOut }: { onSignOut: () => void }) {
         </Row>
         <Row
           title="Marker words"
-          helper="Start a note with DECISION, ACTION, QUESTION or IMPORTANT (or tap a tag) and your notes will put it in the right place."
+          helper="Start a note with DECISION, ACTION, QUESTION or IMPORTANT (or tap a tag) to label it. The label shows with your note."
         />
       </Section>
 

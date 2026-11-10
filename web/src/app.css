@@ -1507,3 +1507,15 @@ mark.match-current {
 .mom-table .ai-line::before {
   content: none;
 }
+
+/* A tagged note's label beside its MoM discussion point. */
+.mom-tag {
+  margin-left: 8px;
+  padding: 1px 8px;
+  border-radius: var(--radius-pill);
+  background: var(--olive-tint);
+  color: var(--olive-ink);
+  font-size: 12px;
+  font-weight: 500;
+  vertical-align: 2px;
+}

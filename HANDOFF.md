@@ -216,6 +216,14 @@ are in Hindi. Your notes language is English · Rewrite in English" when they di
 the meeting, and **migration 0010** backfills `meetings.template` from the kept notes (RLS lifted
 for that one statement inside its transaction).
 
+Recheck of every problem reported this session (2026-11-10): chat notice off everywhere except the
+onboarding promise text (fixed: no longer says Minutes posts in chat); note tags now show on the
+web notes and MoM ("your note · Decision · 0:25") and the Settings "Marker words" text no longer
+promises the AI places them — **teaching the AI the tags is open**: it changes the summary prompt,
+so PROMPT_VERSION must bump and the 10 golden meetings be re-recorded (`eval:live`, Gemini).
+Onboarding Done step now says to click the toolbar icon (the Meet prompt has no Start button).
+MoM "None recorded." lost its stray list dash.
+
 ### 2026-11-10 — Anirudh (Claude Code): full S0–S4 audit and fixes
 
 Anirudh asked for a scan of everything built so far for bugs, dead code and missing pieces, a plan,
