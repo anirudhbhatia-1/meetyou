@@ -766,6 +766,10 @@ Account deletion has no undo grace; it runs on confirmation (PRD FR-SET-03).
 
 ## 17. Deployment topology
 
+> **2026-11-12:** staging runs on **Azure Central India** ([ADR-0012](adr/0012-azure-hosting.md)):
+> Container Apps, Postgres Flexible Server, Azure Managed Redis, Blob Storage with user delegation
+> SAS, Key Vault. The Google Cloud names below map one to one (ADR-0012 §2); the shape is unchanged.
+
 ### 17.1 Environments
 | Environment | Purpose | Data |
 |---|---|---|

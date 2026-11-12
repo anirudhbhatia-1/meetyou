@@ -1,0 +1,13 @@
+# Copy to terraform.tfvars (gitignored). Never commit real values.
+subscription_id = "00000000-0000-0000-0000-000000000000"
+unique_suffix   = "ab12"                # 4-8 lowercase letters/digits, makes global names unique
+image_tag       = "<commit sha pushed by the first workflow run>"
+
+# openssl rand -base64 36 | tr -d '/+=' (two different values)
+db_admin_password = "<random, >= 32 chars>"
+db_app_password   = "<random, >= 32 chars>"
+
+google_client_id  = "<id>.apps.googleusercontent.com"
+stream_token_jwks = "{\"keys\":[...]}"  # PUBLIC keys only (runbook A.5)
+
+gemini_free_tier = true                 # staging test meetings only (AGENTS §9)

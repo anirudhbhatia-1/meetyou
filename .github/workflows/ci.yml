@@ -24,3 +24,13 @@ jobs:
       # (2026-11-09 audit). The staging extension build also checks the manifest copy.
       - run: pnpm --filter ./extension run build:staging
       - run: pnpm --filter ./web run build
+
+  # infra/azure (ADR-0012): catches broken references and arguments before anyone applies it.
+  # No credentials: validate never configures the provider.
+  terraform:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: hashicorp/setup-terraform@v3
+      - run: terraform -chdir=infra/azure init -backend=false -input=false
+      - run: terraform -chdir=infra/azure validate

@@ -149,7 +149,7 @@ backend/packages/auth  (S2-02) Google sign-in, JWT access/stream tokens, rotatin
 backend/packages/providers (S2-03) STT/LLM/transliteration interfaces, Deepgram adapters, registry
 backend/packages/queue (S2-06) graphile-worker: transactional enqueue, worker, dead letter
 backend/packages/video (S2-14) video.finalize: ffmpeg join/remux/gap fill/poster, queue task
-backend/packages/storage Cloud Storage: bucket interface, object layout, video store, V4 signed URLs
+backend/packages/storage bucket interface (Azure Blob + user delegation SAS, GCS V4), object layout, video store
 backend/apps/api       (S2-08, Gaurav) Fastify REST API
 backend/apps/worker    (S2-06) background worker: video.finalize, meeting/account delete, retention sweep, queue depth
 backend/apps/smoke     (S2-12) staging smoke job: synthetic speech through gateway → segments via API
@@ -311,6 +311,13 @@ Work like a careful senior engineer pairing with the developer.
   ("Minutes of meeting (MoM)", shown as **MoM**): the AI writes formal, third-person minutes with
   agenda-order topics, discussion points, decisions and owned action items. Same output schema and
   grounding rules as the others; migration 0009 widens the template CHECK constraints.
+
+- **2026-11-12 — Staging moves to Azure (Anirudh):** the Google Cloud billing account was closed,
+  so staging hosting moves to **Azure Central India (Pune)**
+  ([ADR-0012](docs/adr/0012-azure-hosting.md), supersedes ADR-0002 Part B). The stack is
+  Container Apps, Postgres Flexible Server, **Azure Managed Redis**, Blob Storage with user
+  delegation SAS, Key Vault and Container Registry. Terraform lives in `infra/azure`. Google
+  sign-in (a project without billing), Gemini and Deepgram are unchanged.
 
 ### Open (do not assume an answer)
 - LLM for summaries (D-04): [ADR-0007](docs/adr/0007-llm-provider-and-prompt-versions.md)

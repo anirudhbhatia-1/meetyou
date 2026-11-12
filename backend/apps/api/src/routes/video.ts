@@ -1,6 +1,6 @@
 import { SignVideoFragmentsRequest, type SignVideoFragmentsResponse } from '@meetyou/contracts';
 import { meetingForSession, type Db } from '@meetyou/db';
-import { meetingVideoPlayback, signFragmentUploads, type GcsBucket } from '@meetyou/storage';
+import { meetingVideoPlayback, signFragmentUploads, type SignableBucket } from '@meetyou/storage';
 import type { FastifyPluginAsync, FastifyRequest } from 'fastify';
 import type { z } from 'zod';
 
@@ -12,7 +12,7 @@ export const UPLOAD_GRACE_MS = 24 * 60 * 60 * 1000;
 export interface VideoRoutesOptions {
   db?: Db;
   /** The recordings bucket; video routes answer 503 when it is not configured. */
-  bucket?: GcsBucket;
+  bucket?: SignableBucket;
   now?: () => number;
 }
 
@@ -35,7 +35,7 @@ function workspaceOf(request: FastifyRequest): string {
  */
 export const videoRoutes: FastifyPluginAsync<VideoRoutesOptions> = async (fastify, options) => {
   const now = options.now ?? Date.now;
-  const bucketOrFail = (): GcsBucket => {
+  const bucketOrFail = (): SignableBucket => {
     if (options.bucket === undefined) {
       throw new AppError(503, 'storage_unavailable', 'video storage not configured', true);
     }

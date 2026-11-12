@@ -1,5 +1,8 @@
 # MeetYou Staging Infrastructure (Google Cloud Mumbai)
 
+> **Not in use since 2026-11-12.** Staging moved to Azure ([ADR-0012](../../docs/adr/0012-azure-hosting.md),
+> [`infra/azure`](../../azure/README.md)). Kept for reference until production hosting is decided.
+
 This directory manages the core staging cloud infrastructure for **MeetYou** in region **`asia-south1` (Mumbai)** via Terraform, compliant with [ADR-0002](../../docs/adr/0002-backend-stack-and-hosting.md).
 
 ---

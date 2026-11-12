@@ -10,6 +10,8 @@ import { GcsBucket, MemoryBucket } from './bucket.ts';
 import { audioChunkBase, videoFileKey, videoFragmentKey } from './layout.ts';
 import { LENGTH_RANGE_HEADER, signFragmentUploads, signReadUrl } from './signing.ts';
 import { ObjectVideoStore } from './video-store.ts';
+import { AnonymousCredential, BlobServiceClient } from '@azure/storage-blob';
+import { AzureBlobBucket, isNotFound } from './bucket.ts';
 
 const PART = 'vp_01J00000000000000000000PRT';
 
@@ -110,5 +112,66 @@ describe('V4 signed URLs (signed locally with a throwaway key; no network)', () 
     const parsed = new URL(url);
     expect(parsed.searchParams.get('response-content-disposition')).toContain('attachment');
     expect(Number(parsed.searchParams.get('X-Goog-Expires'))).toBeLessThanOrEqual(900);
+  });
+});
+
+describe('AzureBlobBucket links (ADR-0012)', () => {
+  // No network: the user delegation key is stubbed; SAS signing itself is local HMAC.
+  const service = new BlobServiceClient(
+    'https://acct.blob.core.windows.net',
+    new AnonymousCredential(),
+  );
+  Object.assign(service, {
+    getUserDelegationKey: async (startsOn: Date, expiresOn: Date) => ({
+      signedObjectId: '00000000-0000-0000-0000-000000000001',
+      signedTenantId: '00000000-0000-0000-0000-000000000002',
+      signedStartsOn: startsOn,
+      signedExpiresOn: expiresOn,
+      signedService: 'b',
+      signedVersion: '2025-01-05',
+      value: Buffer.from('k'.repeat(32)).toString('base64'),
+    }),
+  });
+  const bucket = new AzureBlobBucket('acct', 'recordings', service);
+  const now = Date.now();
+
+  it('signs one fragment for create/write over HTTPS for 15 minutes, with the blob-type header', async () => {
+    const signed = await signFragmentUploads(
+      bucket,
+      {
+        workspaceId: 'ws_1',
+        meetingId: 'mtg_1',
+        partId: PART,
+        indices: [3],
+        contentType: 'video/webm',
+      },
+      now,
+    );
+    expect(signed.headers).toEqual({ 'x-ms-blob-type': 'BlockBlob' });
+    const url = new URL(signed.fragments[0]?.url ?? '');
+    expect(url.hostname).toBe('acct.blob.core.windows.net');
+    expect(url.pathname).toBe(`/recordings/ws/ws_1/meetings/mtg_1/video/${PART}/3.frag`);
+    expect(url.searchParams.get('sp')).toBe('cw');
+    expect(url.searchParams.get('spr')).toBe('https');
+    expect(url.searchParams.get('sr')).toBe('b');
+    expect(Date.parse(url.searchParams.get('se') ?? '')).toBeLessThanOrEqual(now + 15 * 60 * 1000);
+    expect(url.searchParams.get('sig')).toBeTruthy();
+  });
+
+  it('signs reads, as a download when asked', async () => {
+    const { url } = await signReadUrl(bucket, 'ws/ws_1/meetings/mtg_1/video/playback.mp4', {
+      now,
+      downloadName: 'minutes "q4".mp4',
+    });
+    const parsed = new URL(url);
+    expect(parsed.searchParams.get('sp')).toBe('r');
+    expect(parsed.searchParams.get('rscd')).toBe('attachment; filename="minutes q4.mp4"');
+  });
+
+  it('treats only missing objects as not found', () => {
+    expect(isNotFound({ statusCode: 404, code: 'BlobNotFound' })).toBe(true);
+    expect(isNotFound({ code: 404 })).toBe(true);
+    expect(isNotFound({ statusCode: 503 })).toBe(false);
+    expect(isNotFound(new Error('boom'))).toBe(false);
   });
 });

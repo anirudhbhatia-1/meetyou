@@ -1,4 +1,12 @@
-export { GcsBucket, MemoryBucket, type ObjectBucket } from './bucket.ts';
+export {
+  AzureBlobBucket,
+  bucketFromEnv,
+  GcsBucket,
+  isNotFound,
+  MemoryBucket,
+  type ObjectBucket,
+  type SignableBucket,
+} from './bucket.ts';
 export * from './layout.ts';
 export { meetingVideoPlayback } from './playback.ts';
 export {

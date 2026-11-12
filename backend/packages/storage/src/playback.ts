@@ -2,7 +2,7 @@ import type { VideoPlaybackResponse } from '@meetyou/contracts';
 import type { Db } from '@meetyou/db';
 import type { z } from 'zod';
 
-import type { GcsBucket } from './bucket.ts';
+import type { SignableBucket } from './bucket.ts';
 import { videoFileKey } from './layout.ts';
 import { signReadUrl } from './signing.ts';
 
@@ -13,7 +13,7 @@ import { signReadUrl } from './signing.ts';
  */
 export async function meetingVideoPlayback(
   db: Db,
-  bucket: GcsBucket,
+  bucket: SignableBucket,
   workspaceId: string,
   meetingId: string,
   options: { now?: number; download?: boolean } = {},

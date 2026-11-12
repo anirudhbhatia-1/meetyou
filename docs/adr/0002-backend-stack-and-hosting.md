@@ -2,7 +2,7 @@
 
 | Field | Value |
 |---|---|
-| Status | **Accepted** (Anirudh, 2026-11-01) — Option B. Checks 1 and 4 in §9 need the staging project and run in S1-11; a failed check reopens this ADR |
+| Status | **Hosting (Part B) superseded by [ADR-0012](0012-azure-hosting.md) on 2026-11-12** (Azure, Central India). **Accepted** (Anirudh, 2026-11-01) — Option B. Checks 1 and 4 in §9 need the staging project and run in S1-11; a failed check reopens this ADR |
 | Date | 2026-10-28 |
 | Decision | D-08 (PRD §22) |
 | Related | [ARCHITECTURE.md §17, §25](../ARCHITECTURE.md) · [PRD §11, §17](../PRD.md) · [STT_PREFLIGHT.md](../STT_PREFLIGHT.md) |

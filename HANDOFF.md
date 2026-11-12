@@ -6,7 +6,7 @@ pointer to where the full detail lives — the linked document stays the source 
 
 | Field | Value |
 |---|---|
-| Last updated | 2026-11-10 (Anirudh: MoM language + template label fixes; full audit) |
+| Last updated | 2026-11-12 (Anirudh: staging moves from Google Cloud to Azure, ADR-0012) |
 | Updated by | Anirudh (Claude Code) |
 | Repository | [anirudhbhatia-1/meetyou](https://github.com/anirudhbhatia-1/meetyou) — branches `main`, `anirudh`, `Gauravbro` |
 | Current stage | **Stage 4** complete in code; 2026-11-09 audit fixes landed; Stage-5 hardening planned (AUDIT §4); real Chrome/Meet checks pending (§7) |
@@ -206,7 +206,29 @@ Gaurav's S3-07..S3-11 — Gaurav should not start them).** **Stage 4 is complete
 
 Newest first. One entry per working session (either person).
 
-### 2026-11-10 (latest) — Anirudh (Claude Code): MoM stayed Hindi and filed as General
+### 2026-11-12 (latest) — Anirudh (Claude Code): staging moves to Azure (ADR-0012)
+
+Google Cloud staging went down on 2026-11-11: the billing account was closed and asks for
+account verification and a new payment method, so every service answered 500/503 ("billing is
+disabled"). Anirudh chose to leave Google Cloud for **Azure, Central India (Pune)**, with **Azure
+Managed Redis** for gateway sessions (Azure Cache for Redis takes no new customers).
+- **Code:** `@meetyou/storage` adds `SignableBucket` and `AzureBlobBucket` (user delegation SAS,
+  no account key). `bucketFromEnv` picks Azure (`AZURE_STORAGE_ACCOUNT`/`AZURE_STORAGE_CONTAINER`)
+  or GCS, and the API, gateway and worker use it. The web CSP storage origin comes from
+  `STORAGE_ORIGIN`. New deps (approved with the move): `@azure/storage-blob`, `@azure/identity`.
+- **Infra:** `infra/azure` (azurerm 5.13): Container Apps (api, gateway with sticky sessions,
+  web, worker), migrate/smoke jobs, Postgres B1ms, Managed Redis, Blob, Key Vault, ACR and the
+  GitHub OIDC deployer. CI runs `terraform validate` on it. `deploy-staging.yml` now deploys to
+  Azure (`.github/scripts/run-aca-job.sh` waits for jobs).
+- **Runbook:** STAGING_SETUP **Part A**. The old Google sections are kept as Part G.
+- **Not done / to verify:** nothing is applied yet, so Anirudh runs Part A. Terraform has not run
+  locally (no binary); CI validate is the first check. The extension `build:staging` needs the
+  new API/web URLs and Google client ID after A.7. The SAS cannot bound upload size (ADR-0012
+  §2.2.1, Stage 5). Tracing is off on Azure. Old staging data is not migrated.
+- Gaurav's earlier `1cf9122` (extension shortcut fix) is no longer on `origin/main` as of this
+  session (main is `d729c2c`); Gaurav, re-push it if you still want it.
+
+### 2026-11-10 — Anirudh (Claude Code): MoM stayed Hindi and filed as General
 
 From Anirudh's staging test: after switching "Write my notes in" to English the MoM notes stayed in
 Hindi, and the meeting still showed under General. Causes: the template menu ignored the current

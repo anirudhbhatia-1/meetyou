@@ -6,7 +6,7 @@ import { join } from 'node:path';
 
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
-import { createWebServer } from './server.ts';
+import { createWebServer, contentSecurityPolicy } from './server.ts';
 
 const listen = (server: Server) =>
   new Promise<string>((done) =>
@@ -97,5 +97,15 @@ describe('web server', () => {
     expect(last?.body).toBe('{"a":1}');
     expect(last?.headers).toMatchObject({ cookie: 'minutes_rt=old', 'x-minutes-client': 'web' });
     expect(last?.headers['x-evil']).toBeUndefined();
+  });
+});
+
+describe('content security policy (ADR-0012)', () => {
+  it('allows signed media from the configured storage origin only', () => {
+    expect(contentSecurityPolicy()).toContain('media-src https://storage.googleapis.com blob:');
+    const azure = contentSecurityPolicy('https://meetyoustaging.blob.core.windows.net');
+    expect(azure).toContain("img-src 'self' data: https://meetyoustaging.blob.core.windows.net");
+    expect(azure).toContain('media-src https://meetyoustaging.blob.core.windows.net blob:');
+    expect(azure).not.toContain('googleapis');
   });
 });

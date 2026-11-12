@@ -1,9 +1,9 @@
 name: Deploy staging
 
-# S2-12: every green CI run on main builds the images, migrates the database, rolls out the
-# services and runs the smoke job (STAGING_SETUP §9.3). Keyless: GitHub OIDC → Workload Identity
-# Federation → the deployer service account (infra/modules/ci). Image-only updates keep each
-# service's environment and secrets as they are.
+# Azure staging (ADR-0012): every green CI run on main builds the images, migrates the database,
+# rolls out the apps and runs the smoke job (STAGING_SETUP "Azure" A.6). Keyless: GitHub OIDC →
+# federated credential on the deployer identity (infra/azure/ci.tf). Image-only updates keep
+# each app's environment and secrets as Terraform set them.
 on:
   workflow_run:
     workflows: [CI]
@@ -21,52 +21,66 @@ permissions:
 
 jobs:
   deploy:
-    # Skipped (not failed) until the repository variables from STAGING_SETUP §9.3 are set.
-    # A manual run deploys main only: dispatching another branch bypassed the green-CI gate
-    # (2026-11-09 audit).
+    # Skipped (not failed) until the repository variables from the runbook are set. A manual run
+    # deploys main only: dispatching another branch bypassed the green-CI gate (2026-11-09 audit).
     if: >-
-      vars.GCP_WIF_PROVIDER != '' &&
+      vars.AZURE_CLIENT_ID != '' &&
       ((github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main') ||
        github.event.workflow_run.conclusion == 'success')
     runs-on: ubuntu-latest
     environment: staging
     env:
-      REGION: asia-south1
-      REPO: asia-south1-docker.pkg.dev/${{ vars.GCP_PROJECT_ID }}/meetyou
+      RG: ${{ vars.AZURE_RESOURCE_GROUP }}
+      REGISTRY: ${{ vars.AZURE_REGISTRY }}
+      PREFIX: meetyou-staging
       TAG: ${{ github.event.workflow_run.head_sha || github.sha }}
     steps:
       - uses: actions/checkout@v5
         with:
           ref: ${{ env.TAG }}
 
-      - uses: google-github-actions/auth@v3
+      - uses: azure/login@v2
         with:
-          workload_identity_provider: ${{ vars.GCP_WIF_PROVIDER }}
-          service_account: ${{ vars.GCP_DEPLOY_SA }}
-
-      - uses: google-github-actions/setup-gcloud@v3
+          client-id: ${{ vars.AZURE_CLIENT_ID }}
+          tenant-id: ${{ vars.AZURE_TENANT_ID }}
+          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
 
       - name: Build and push images
         run: |
-          gcloud auth configure-docker asia-south1-docker.pkg.dev --quiet
+          az acr login --name "${REGISTRY%%.*}"
           for app in api gateway worker web migrate smoke; do
-            docker build -f "Dockerfile.$app" -t "$REPO/$app:$TAG" .
-            docker push "$REPO/$app:$TAG"
+            docker build -f "Dockerfile.$app" -t "$REGISTRY/$app:$TAG" .
+            docker push "$REGISTRY/$app:$TAG"
           done
 
-      - name: Migrate the database
+      # First run (runbook A.6): the images exist before Terraform creates the apps, so the
+      # remaining steps skip until the apps are there.
+      - name: Check the apps exist
+        id: apps
         run: |
-          gcloud run jobs update meetyou-staging-migrate --region "$REGION" --image "$REPO/migrate:$TAG"
-          gcloud run jobs execute meetyou-staging-migrate --region "$REGION" --wait
+          if az containerapp show --name "$PREFIX-api" --resource-group "$RG" --query name -o tsv >/dev/null 2>&1; then
+            echo "ready=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "::notice::Apps not created yet: images pushed with tag $TAG; apply infra/azure with image_tag=$TAG."
+            echo "ready=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Migrate the database
+        if: steps.apps.outputs.ready == 'true'
+        run: |
+          az containerapp job update --name "$PREFIX-migrate" --resource-group "$RG" --image "$REGISTRY/migrate:$TAG" -o none
+          ./.github/scripts/run-aca-job.sh "$PREFIX-migrate" "$RG"
 
       # Worker first: it installs the queue schema the gateway and API enqueue into.
-      - name: Deploy services
+      - name: Deploy apps
+        if: steps.apps.outputs.ready == 'true'
         run: |
           for app in worker api gateway web; do
-            gcloud run services update "meetyou-staging-$app" --region "$REGION" --image "$REPO/$app:$TAG"
+            az containerapp update --name "$PREFIX-$app" --resource-group "$RG" --image "$REGISTRY/$app:$TAG" -o none
           done
 
       - name: Smoke test
+        if: steps.apps.outputs.ready == 'true'
         run: |
-          gcloud run jobs update meetyou-staging-smoke --region "$REGION" --image "$REPO/smoke:$TAG"
-          gcloud run jobs execute meetyou-staging-smoke --region "$REGION" --wait
+          az containerapp job update --name "$PREFIX-smoke" --resource-group "$RG" --image "$REGISTRY/smoke:$TAG" -o none
+          ./.github/scripts/run-aca-job.sh "$PREFIX-smoke" "$RG"

@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "Object storage for recordings (ARCHITECTURE \u00a711.4): a small bucket interface with a Cloud Storage adapter, the object layout, the video store for video.finalize, and V4 signed URLs for the API (S2-04, S2-14).",
+  "description": "Object storage for recordings (ARCHITECTURE §11.4): a small bucket interface with a Cloud Storage adapter, the object layout, the video store for video.finalize, and V4 signed URLs for the API (S2-04, S2-14).",
   "exports": {
     ".": "./src/index.ts"
   },
@@ -12,6 +12,8 @@
     "test": "vitest run --testTimeout=30000 --hookTimeout=60000"
   },
   "dependencies": {
+    "@azure/identity": "4.14.1",
+    "@azure/storage-blob": "12.34.0",
     "@google-cloud/storage": "8.4.0",
     "@meetyou/contracts": "workspace:*",
     "@meetyou/db": "workspace:*",

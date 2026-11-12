@@ -1,4 +1,4 @@
-import type { GcsBucket } from './bucket.ts';
+import type { SignableBucket } from './bucket.ts';
 import { videoFragmentKey } from './layout.ts';
 
 /** ADR-0011 §3.3: upload URLs expire after 15 minutes and take at most 8 MB. */
@@ -8,9 +8,8 @@ export const MAX_FRAGMENT_BYTES = 8 * 1024 * 1024;
 export const PLAYBACK_URL_TTL_MS = 15 * 60 * 1000;
 
 /**
- * The size bound travels as a signed extension header: the uploader must send exactly this
- * header, and Cloud Storage refuses a body outside the range (x-goog-content-length-range).
- * [Verify] in staging: the bucket CORS must list this header so the browser may send it.
+ * Cloud Storage's signed size-range header (GcsBucket). Azure links carry `x-ms-blob-type`
+ * instead and cannot bound the size (AzureBlobBucket).
  */
 export const LENGTH_RANGE_HEADER = 'x-goog-content-length-range';
 
@@ -21,14 +20,13 @@ export interface SignedUpload {
 }
 
 /**
- * V4 signed PUT URLs for video fragments (S2-14, `POST /v1/sessions/{id}/video/fragments:sign`).
- * Each URL is bound to its object, the content type and the size range. The API checks before
- * calling this that the session is the caller's own and still accepts video. On Cloud Run the
- * library signs through the IAM `signBlob` API (the service account needs
- * `iam.serviceAccounts.signBlob` on itself, STAGING_SETUP §5.2).
+ * Signed PUT URLs for video fragments (S2-14, `POST /v1/sessions/{id}/video/fragments:sign`).
+ * Each URL is bound to its object; the response's `headers` must be sent with every PUT (the
+ * extension's uploader does). The API checks before calling this that the session is the caller's
+ * own and still accepts video. Which signature that is depends on the bucket (ADR-0012).
  */
 export async function signFragmentUploads(
-  bucket: GcsBucket,
+  bucket: SignableBucket,
   request: {
     workspaceId: string;
     meetingId: string;
@@ -38,36 +36,34 @@ export async function signFragmentUploads(
   },
   now: number = Date.now(),
 ): Promise<{ fragments: SignedUpload[]; headers: Record<string, string> }> {
-  const expires = now + UPLOAD_URL_TTL_MS;
-  const range = `0,${MAX_FRAGMENT_BYTES}`;
+  const expiresAt = new Date(now + UPLOAD_URL_TTL_MS);
+  let headers: Record<string, string> = {};
   const fragments = await Promise.all(
     request.indices.map(async (index) => {
       const key = videoFragmentKey(request.workspaceId, request.meetingId, request.partId, index);
-      const [url] = await bucket.file(key).getSignedUrl({
-        version: 'v4',
-        action: 'write',
-        expires,
+      const signed = await bucket.signUpload(key, {
         contentType: request.contentType,
-        extensionHeaders: { [LENGTH_RANGE_HEADER]: range },
+        maxBytes: MAX_FRAGMENT_BYTES,
+        expiresAt,
       });
-      return { index, url, expiresAt: new Date(expires).toISOString() };
+      // The same for every fragment of one bucket.
+      headers = signed.headers;
+      return { index, url: signed.url, expiresAt: expiresAt.toISOString() };
     }),
   );
-  return { fragments, headers: { [LENGTH_RANGE_HEADER]: range } };
+  return { fragments, headers };
 }
 
-/** A V4 signed GET URL; `downloadName` makes the browser save instead of play. */
+/** A signed GET URL; `downloadName` makes the browser save instead of play. */
 export async function signReadUrl(
-  bucket: GcsBucket,
+  bucket: SignableBucket,
   key: string,
   options: { now?: number; downloadName?: string } = {},
 ): Promise<{ url: string; expiresAt: string }> {
-  const expires = (options.now ?? Date.now()) + PLAYBACK_URL_TTL_MS;
-  const [url] = await bucket.file(key).getSignedUrl({
-    version: 'v4',
-    action: 'read',
-    expires,
-    ...(options.downloadName !== undefined ? { promptSaveAs: options.downloadName } : {}),
+  const expiresAt = new Date((options.now ?? Date.now()) + PLAYBACK_URL_TTL_MS);
+  const url = await bucket.signRead(key, {
+    expiresAt,
+    ...(options.downloadName !== undefined ? { downloadName: options.downloadName } : {}),
   });
-  return { url, expiresAt: new Date(expires).toISOString() };
+  return { url, expiresAt: expiresAt.toISOString() };
 }

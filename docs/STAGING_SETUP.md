@@ -1,4 +1,167 @@
-# Staging setup runbook (Google Cloud, Mumbai)
+# Staging setup runbook
+
+> **Since 2026-11-12 staging runs on Azure, Central India (Pune)** ([ADR-0012](adr/0012-azure-hosting.md)):
+> follow **Part A** below. The Google Cloud sections after it (§0–§13) are kept for reference
+> (ADR-0002); the GCP project is no longer used. Their rules on the database role, secrets
+> handling, deploy order and the security checklist still apply unless Part A says otherwise.
+
+## Part A — Azure staging (current)
+
+**Who runs it:** Anirudh, in **Azure Cloud Shell (Bash)**, which has `az`, `terraform`, `git` and
+`psql` **[Verify]**. The agent writes the code and Terraform; nobody pastes secrets into chat,
+files in the repo or logs.
+
+```
+Chrome extension ──HTTPS──► api (Container App) ──► Postgres Flexible Server 16 (TLS, RLS)
+       │                        └─► Blob Storage (user delegation SAS: video PUT / playback GET)
+       └──WSS──► gateway (Container App, sticky) ──► Deepgram
+                     ├─ audio chunks ──► Blob Storage      └─ sessions ──► Azure Managed Redis
+worker (Container App, 1 replica) ◄── graphile-worker jobs in Postgres (video.finalize, retention…)
+web (Container App) ──/v1 proxy──► api            Jobs: migrate, smoke     Secrets: Key Vault
+```
+
+### A.1 Accounts (once)
+1. **Azure free account** (portal.azure.com): needs a Visa/Mastercard card and phone check.
+   Open **Cloud Shell → Bash** and check `az account show --query "{id:id, name:name}"`.
+2. Register the resource providers (each takes a minute; safe to rerun):
+   ```bash
+   for ns in Microsoft.App Microsoft.OperationalInsights Microsoft.ContainerRegistry \
+     Microsoft.DBforPostgreSQL Microsoft.Cache Microsoft.KeyVault Microsoft.Storage \
+     Microsoft.ManagedIdentity; do az provider register --namespace $ns; done
+   ```
+3. **Google sign-in** (ADR-0004) stays with Google. Create a **new Google Cloud project without
+   billing** (none is needed for OAuth), then do §7.2 steps 1–3 there. The redirect URIs come in A.8.
+
+### A.2 Terraform, phase 1: everything except the apps and jobs
+```bash
+git clone https://github.com/anirudhbhatia-1/meetyou.git && cd meetyou/infra/azure
+cp terraform.tfvars.example terraform.tfvars   # fill it in with the Cloud Shell editor: `code terraform.tfvars`
+```
+- `subscription_id` from A.1; `unique_suffix` any 4–8 lowercase letters/digits;
+  `image_tag = "bootstrap"` for now; two different random passwords
+  (`openssl rand -base64 36 | tr -d '/+='`); `google_client_id` from A.1.3;
+  `stream_token_jwks = "{}"` for now (A.5 fills it).
+- `terraform.tfvars` and the state hold passwords and the Redis key: never commit them (gitignored).
+  The Cloud Shell home drive keeps them between sessions.
+```bash
+terraform init
+terraform apply \
+  -target=azurerm_container_app_environment.main \
+  -target=azurerm_key_vault_secret.database_url -target=azurerm_key_vault_secret.redis_url \
+  -target=azurerm_role_assignment.runtime_kv_secrets -target=azurerm_role_assignment.runtime_acr_pull \
+  -target=azurerm_role_assignment.runtime_blob -target=azurerm_storage_management_policy.recordings \
+  -target=azurerm_postgresql_flexible_server_firewall_rule.azure_services \
+  -target=azurerm_federated_identity_credential.github_main \
+  -target=azurerm_role_assignment.deployer_acr_push -target=azurerm_role_assignment.deployer_apps
+```
+Targets pull in what they depend on (resource group, registry, Key Vault, storage, Postgres,
+Redis, identities). Managed Redis and Postgres take 10–20 minutes. Read the plan before `yes`.
+Role assignments take a minute or two to apply: a 403 on a Key Vault secret or the blob container
+during the first apply means rerun the same command.
+
+### A.3 Database: the application role
+The services and migrations connect as **`meetyou_app`**, which must not be a superuser or bypass
+row security (§6). The admin login only creates it.
+```bash
+RG=$(terraform output -raw resource_group); PG=$(terraform output -raw postgres_host)
+MYIP=$(curl -s https://api.ipify.org)
+az postgres flexible-server firewall-rule create -g $RG --name ${PG%%.*} \
+  --rule-name cloudshell --start-ip-address $MYIP --end-ip-address $MYIP     # [Verify] flags
+psql "host=$PG port=5432 dbname=meetyou user=meetyou_admin sslmode=require"  # admin password from tfvars
+```
+```sql
+CREATE ROLE meetyou_app LOGIN NOSUPERUSER NOBYPASSRLS NOCREATEROLE;
+\password meetyou_app
+-- type db_app_password from terraform.tfvars (not echoed, not in history)
+GRANT CONNECT, CREATE ON DATABASE meetyou TO meetyou_app;   -- graphile_worker creates its schema
+GRANT USAGE, CREATE ON SCHEMA public TO meetyou_app;
+\q
+```
+```bash
+az postgres flexible-server firewall-rule delete -g $RG --name ${PG%%.*} --rule-name cloudshell --yes
+```
+
+### A.4 Secrets in Key Vault
+Terraform already wrote `database-url` and `redis-url`. Add the others without echoing them
+(`read -rs` prompts silently; paste, press Enter):
+```bash
+KV=$(terraform output -raw key_vault)
+put() { read -rs V && printf '%s' "$V" | az keyvault secret set --vault-name $KV --name "$1" --file /dev/stdin -o none; unset V; echo "$1 set"; }
+put deepgram-api-key        # the paid staging key, not the dev key
+put gemini-api-key          # free key only with gemini_free_tier = true and agreed test meetings
+put google-client-secret    # from A.1.3
+```
+`--file /dev/stdin` is **[Verify]**; if `az` refuses it, use `--value "$V"` inside `put` instead.
+
+Token signing key (ADR-0004 §4.2): a P-256 private JWK made with Node's own crypto, piped straight
+into the vault (never printed or saved):
+```bash
+node -e 'const {generateKeyPairSync}=require("crypto");const k=generateKeyPairSync("ec",{namedCurve:"prime256v1"}).privateKey.export({format:"jwk"});console.log(JSON.stringify([{...k,kid:"stg-2026-11",alg:"ES256"}]))' \
+  | az keyvault secret set --vault-name $KV --name auth-signing-jwks --file /dev/stdin -o none
+```
+
+### A.5 The gateway's public keys
+Print only the public half (no `d`) and put it in `terraform.tfvars` as `stream_token_jwks`:
+```bash
+az keyvault secret show --vault-name $KV --name auth-signing-jwks --query value -o tsv \
+  | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>console.log(JSON.stringify(JSON.stringify({keys:JSON.parse(s).map(({kty,crv,x,y,kid})=>({kty,crv,x,y,kid,alg:"ES256",use:"sig"}))}))))'
+```
+(The output is already quoted for HCL: `stream_token_jwks = <paste>`.)
+
+### A.6 GitHub deploys and the first images
+1. GitHub → Settings → **Environments → New environment `staging`** → Deployment branches:
+   **Selected branches → `main`**. The federated credential trusts only this environment.
+2. Settings → Secrets and variables → Actions → **Variables**: add each pair from
+   `terraform output github_variables` (`AZURE_CLIENT_ID`, `AZURE_TENANT_ID`,
+   `AZURE_SUBSCRIPTION_ID`, `AZURE_RESOURCE_GROUP`, `AZURE_REGISTRY`). The old `GCP_*` variables
+   can be deleted.
+3. Actions → **Deploy staging → Run workflow** on `main`. It builds and pushes the six images and
+   ends with the notice "Apps not created yet … image_tag=<sha>". Copy that SHA.
+
+### A.7 Terraform, phase 2: jobs, migrations, apps
+Set `image_tag = "<sha>"` in `terraform.tfvars`, then:
+```bash
+terraform apply -target=azurerm_container_app_job.job
+../../.github/scripts/run-aca-job.sh meetyou-staging-migrate $RG      # "migrations applied: …"
+terraform apply -target=azurerm_container_app.backend -target=azurerm_container_app.web
+terraform output   # api_url, web_url, gateway_ws_url
+```
+The worker starts before the gateway enqueues (it installs the queue schema). From now on every
+green CI run on `main` deploys automatically (build → migrate → worker, api, gateway, web → smoke).
+Terraform ignores image changes, so a later `apply` never rolls an app back.
+
+### A.8 Sign-in and the extension
+1. In the Google project from A.1.3 → Credentials → the web client → Authorized redirect URIs:
+   `https://hjimcofnjnikbeepahmclaniopbnhbbe.chromiumapp.org/oauth2` **and**
+   `<web_url>/auth/callback`.
+2. Tell the agent the `api_url`, `web_url` and client ID: it updates `build:staging` in
+   `extension/package.json`, and you rebuild the tester zip.
+
+### A.9 Checks
+```bash
+curl -s $(terraform output -raw api_url)/health
+curl -s https://$(terraform output -raw gateway_ws_url | sed 's#wss://##; s#/v1/stream##')/healthz
+curl -s $(terraform output -raw web_url)/config.json
+az containerapp logs show -n meetyou-staging-gateway -g $RG --tail 30   # gateway.listening … storage "azure", redis true, db true
+az containerapp logs show -n meetyou-staging-worker  -g $RG --tail 30   # worker.started
+../../.github/scripts/run-aca-job.sh meetyou-staging-smoke $RG
+```
+Then the ADR-0012 §4 checks: role check (§6 step 2 SQL as admin), a 2-minute recording with video
+(fragments PUT 201 to `*.blob.core.windows.net`, `video.finalized` in the worker log, the web player
+plays), and a 60-minute recording on one WebSocket.
+
+### A.10 Cost and shutting down
+- Portal → Cost Management → **Budgets**: add a monthly budget with an email alert at 50%/90%.
+- Always on: the worker (1 replica), Managed Redis, the registry, Postgres (free 12 months).
+  Pause when idle: `az postgres flexible-server stop -g $RG --name ${PG%%.*}` (Azure restarts a
+  stopped server after 7 days).
+- Everything at once: `az group delete -n $RG` deletes **all** staging data. Ask Anirudh first.
+
+---
+
+# Part G — Google Cloud (reference only since 2026-11-12)
+
+## Staging setup on Google Cloud, Mumbai (historical)
 
 **For:** Gaurav (owner of S1-10, S1-11, S2-08..S2-12). **Written by:** Anirudh, 2026-11-06.
 **Goal:** a staging environment where a signed-in user records a Meet call with the extension, and

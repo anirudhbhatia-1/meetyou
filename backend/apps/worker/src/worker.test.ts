@@ -19,13 +19,24 @@ const PART = 'vp_01J00000000000000000000PRT';
 
 describe('worker configuration', () => {
   it('needs the database and the bucket, and names what is missing without values', () => {
+    // ADR-0012: an Azure account + container, or a Cloud Storage bucket.
     expect(() => loadWorkerEnv({ DATABASE_URL: 'postgres://secret@x/db' })).toThrow(
-      'worker: invalid or missing GCS_AUDIO_BUCKET',
+      'worker: invalid or missing AZURE_STORAGE_ACCOUNT',
     );
+    expect(() =>
+      loadWorkerEnv({ DATABASE_URL: 'postgres://x', AZURE_STORAGE_ACCOUNT: 'acct' }),
+    ).toThrow('AZURE_STORAGE_ACCOUNT');
     expect(() => loadWorkerEnv({})).not.toThrow(/secret/);
     expect(
       loadWorkerEnv({ DATABASE_URL: 'postgres://x', GCS_AUDIO_BUCKET: 'bucket', PORT: '9000' }),
     ).toMatchObject({ PORT: 9000, WORKER_CONCURRENCY: 2, APP_ENV: 'local' });
+    expect(
+      loadWorkerEnv({
+        DATABASE_URL: 'postgres://x',
+        AZURE_STORAGE_ACCOUNT: 'acct',
+        AZURE_STORAGE_CONTAINER: 'recordings',
+      }),
+    ).toMatchObject({ AZURE_STORAGE_CONTAINER: 'recordings' });
   });
 });
 

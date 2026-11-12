@@ -3,7 +3,12 @@ import fastifyCors from '@fastify/cors';
 import { TokenService, generateSigningJwk, loadKeyRing, type AuthService } from '@meetyou/auth';
 import type { Db } from '@meetyou/db';
 import type { LlmProvider } from '@meetyou/providers';
-import { GcsBucket, signReadUrl, type ObjectBucket } from '@meetyou/storage';
+import {
+  bucketFromEnv,
+  signReadUrl,
+  type ObjectBucket,
+  type SignableBucket,
+} from '@meetyou/storage';
 
 import { loadConfig, type ApiConfig } from './config.ts';
 import { handleFastifyError, handleNotFound } from './errors.ts';
@@ -38,7 +43,7 @@ export interface BuildAppOptions {
   idempotencyStore?: IdempotencyStore;
   fastifyOptions?: FastifyServerOptions;
   /** Recordings bucket for video URLs; built from GCS_AUDIO_BUCKET when absent. */
-  bucket?: GcsBucket;
+  bucket?: SignableBucket;
   /** Tests replace the Google exchange; built from the config otherwise. */
   authService?: AuthService;
   /** "Ask this meeting" model; null or absent answers 503 `answers_unavailable`. */
@@ -164,9 +169,8 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
     config,
   });
 
-  const bucket =
-    options.bucket ??
-    (config.gcsAudioBucket !== undefined ? new GcsBucket(config.gcsAudioBucket) : undefined);
+  // ADR-0012: Azure Blob or Cloud Storage, whichever the environment names.
+  const bucket = options.bucket ?? (config.env === 'test' ? undefined : bucketFromEnv(process.env));
   await app.register(videoRoutes, {
     ...(options.db !== undefined ? { db: options.db } : {}),
     ...(bucket !== undefined ? { bucket } : {}),

@@ -3,7 +3,7 @@ import process from 'node:process';
 import { createPgPool } from '@meetyou/db';
 import { createLogger } from '@meetyou/log';
 import { createLlmProvider, createProviders } from '@meetyou/providers';
-import { GcsBucket } from '@meetyou/storage';
+import { bucketFromEnv } from '@meetyou/storage';
 import { startTracing } from '@meetyou/tracing';
 
 import { loadWorkerEnv } from './config.ts';
@@ -30,7 +30,8 @@ const tracing = startTracing('worker');
 const pool = createPgPool(env.DATABASE_URL);
 const worker = await runWorker({
   pool,
-  bucket: new GcsBucket(env.GCS_AUDIO_BUCKET),
+  // loadWorkerEnv refused a configuration without a bucket.
+  bucket: bucketFromEnv(process.env) as NonNullable<ReturnType<typeof bucketFromEnv>>,
   port: env.PORT,
   concurrency: env.WORKER_CONCURRENCY,
   // LLM_PROVIDER / GEMINI_* (STAGING_SETUP §9.4); the free-key guard runs here (ADR-0001 §7).

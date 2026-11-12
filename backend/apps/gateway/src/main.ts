@@ -8,7 +8,7 @@ import { createPgPool, Db, WORKSPACE_ID } from '@meetyou/db';
 import { asProvidedPolicy, romanRulesPolicy } from '@meetyou/hinglish';
 import { createProviders } from '@meetyou/providers';
 
-import { GcsBucket } from '@meetyou/storage';
+import { bucketFromEnv } from '@meetyou/storage';
 import { startTracing } from '@meetyou/tracing';
 
 import { LocalChunkStore, type ChunkStore } from './chunk-store.ts';
@@ -54,15 +54,13 @@ const env = Env.parse(process.env);
 // stream tokens only and must have every shared dependency, or it would lose data on a restart.
 const deployed = env.APP_ENV === 'staging' || env.APP_ENV === 'production';
 if (deployed) {
-  const missing = (
-    [
-      'DATABASE_URL',
-      'REDIS_URL',
-      'STREAM_TOKEN_JWKS',
-      'GCS_AUDIO_BUCKET',
-      'ALLOWED_ORIGINS',
-    ] as const
+  const missing: string[] = (
+    ['DATABASE_URL', 'REDIS_URL', 'STREAM_TOKEN_JWKS', 'ALLOWED_ORIGINS'] as const
   ).filter((name) => env[name] === undefined);
+  // A deployed gateway must keep audio in a bucket, Azure or Cloud Storage (ADR-0012).
+  if (bucketFromEnv(process.env) === undefined) {
+    missing.push('AZURE_STORAGE_ACCOUNT+AZURE_STORAGE_CONTAINER (or GCS_AUDIO_BUCKET)');
+  }
   if (missing.length > 0) {
     console.error(`gateway: ${env.APP_ENV} needs ${missing.join(', ')}`);
     process.exit(1);
@@ -96,10 +94,12 @@ if (env.REDIS_URL !== undefined) {
   registry = redis;
 }
 
+// ADR-0012: Azure Blob or Cloud Storage when the environment names one; local files otherwise.
+const recordingsBucket = bucketFromEnv(process.env);
 const store: ChunkStore =
-  env.GCS_AUDIO_BUCKET === undefined
+  recordingsBucket === undefined
     ? new LocalChunkStore(env.DATA_DIR)
-    : new GcsChunkStore(new GcsBucket(env.GCS_AUDIO_BUCKET));
+    : new GcsChunkStore(recordingsBucket);
 
 const tracing = startTracing('gateway');
 const gateway = createGateway({
@@ -127,7 +127,12 @@ gateway.server.listen(env.PORT, host, () => {
   log('gateway.listening', {
     port: env.PORT,
     host,
-    storage: env.GCS_AUDIO_BUCKET === undefined ? 'local' : 'gcs',
+    storage:
+      recordingsBucket === undefined
+        ? 'local'
+        : process.env.AZURE_STORAGE_ACCOUNT !== undefined
+          ? 'azure'
+          : 'gcs',
     stt: stt?.name ?? 'none',
     appEnv: env.APP_ENV,
     db: db !== undefined,

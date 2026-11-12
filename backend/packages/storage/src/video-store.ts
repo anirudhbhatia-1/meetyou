@@ -1,7 +1,7 @@
 import type { PartTiming, VideoStore } from '@meetyou/video';
 import { z } from 'zod';
 
-import type { ObjectBucket } from './bucket.ts';
+import { isNotFound, type ObjectBucket } from './bucket.ts';
 import {
   videoFileKey,
   videoFragmentKey,
@@ -83,13 +83,20 @@ export class ObjectVideoStore implements VideoStore {
   ): Promise<void> {
     const key = videoPartInfoKey(workspaceId, meetingId, info.partId);
     let previous: Record<string, unknown> = {};
+    let bytes: Uint8Array | null = null;
     try {
-      previous = JSON.parse(new TextDecoder().decode(await this.#bucket.read(key))) as Record<
-        string,
-        unknown
-      >;
-    } catch {
-      // First event of the part.
+      bytes = await this.#bucket.read(key);
+    } catch (error: unknown) {
+      // Only a missing file is the part's first event; a transient read error must not rewrite
+      // part.json as a stub (finalize would then mistime the part — 2026-11-09 audit).
+      if (!isNotFound(error)) throw error;
+    }
+    if (bytes !== null) {
+      try {
+        previous = JSON.parse(new TextDecoder().decode(bytes)) as Record<string, unknown>;
+      } catch {
+        // A corrupt file is replaced by the merged record.
+      }
     }
     const merged = JSON.stringify({ ...previous, ...info });
     await this.#bucket.save(key, new TextEncoder().encode(merged), 'application/json');

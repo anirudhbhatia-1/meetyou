@@ -15,6 +15,11 @@ export interface WebServerOptions {
   staticDir: string;
   apiUrl: string;
   googleClientId: string;
+  /**
+   * Where signed video and poster links point (ADR-0012): the Azure storage account's blob origin,
+   * e.g. `https://<account>.blob.core.windows.net`. Defaults to Cloud Storage.
+   */
+  storageOrigin?: string;
 }
 
 const TYPES: Record<string, string> = {
@@ -51,23 +56,27 @@ const FORWARD_RESPONSE = [
   'x-audio-spans',
 ];
 
-// Signed video and poster URLs are served by Cloud Storage (V4 signed URLs).
-const CSP = [
-  "default-src 'self'",
-  "script-src 'self'",
-  "style-src 'self' 'unsafe-inline'",
-  "img-src 'self' data: https://storage.googleapis.com",
-  // Video from signed Cloud Storage URLs; audio is fetched through /v1 and played from a blob.
-  'media-src https://storage.googleapis.com blob:',
-  "font-src 'self' data:",
-  "connect-src 'self'",
-  "frame-ancestors 'none'",
-  "base-uri 'none'",
-  "form-action 'self'",
-].join('; ');
+const DEFAULT_STORAGE_ORIGIN = 'https://storage.googleapis.com';
 
-function securityHeaders(res: ServerResponse): void {
-  res.setHeader('content-security-policy', CSP);
+/** Signed video and poster links come from the recordings storage (Azure Blob or Cloud Storage). */
+export function contentSecurityPolicy(storageOrigin: string = DEFAULT_STORAGE_ORIGIN): string {
+  return [
+    "default-src 'self'",
+    "script-src 'self'",
+    "style-src 'self' 'unsafe-inline'",
+    `img-src 'self' data: ${storageOrigin}`,
+    // Video from signed storage links; audio is fetched through /v1 and played from a blob.
+    `media-src ${storageOrigin} blob:`,
+    "font-src 'self' data:",
+    "connect-src 'self'",
+    "frame-ancestors 'none'",
+    "base-uri 'none'",
+    "form-action 'self'",
+  ].join('; ');
+}
+
+function securityHeaders(res: ServerResponse, csp: string): void {
+  res.setHeader('content-security-policy', csp);
   res.setHeader('x-content-type-options', 'nosniff');
   // The OAuth callback URL carries the authorization code: never send it on as a Referer.
   res.setHeader('referrer-policy', 'no-referrer');
@@ -82,6 +91,11 @@ export function createWebServer(options: WebServerOptions): Server {
   const root = resolve(options.staticDir);
   const api = new URL(options.apiUrl);
   const config = JSON.stringify({ googleClientId: options.googleClientId });
+  const origin = options.storageOrigin;
+  if (origin !== undefined && !/^https:\/\/[a-z0-9.-]+$/i.test(origin)) {
+    throw new Error('STORAGE_ORIGIN must be an https origin without a path');
+  }
+  const csp = contentSecurityPolicy(origin);
 
   async function proxy(req: IncomingMessage, res: ServerResponse, path: string): Promise<void> {
     const headers = new Headers();
@@ -150,7 +164,7 @@ export function createWebServer(options: WebServerOptions): Server {
   }
 
   return createServer((req, res) => {
-    securityHeaders(res);
+    securityHeaders(res, csp);
     const url = new URL(req.url ?? '/', 'http://web.local');
     const handle = async () => {
       if (url.pathname === '/healthz') {
@@ -192,6 +206,7 @@ if (import.meta.main) {
     staticDir: process.env.STATIC_DIR ?? resolve(import.meta.dirname, '../dist'),
     apiUrl: required('API_URL'),
     googleClientId: required('GOOGLE_CLIENT_ID'),
+    ...(process.env.STORAGE_ORIGIN ? { storageOrigin: process.env.STORAGE_ORIGIN } : {}),
   });
   server.listen(port, process.env.HOST ?? '0.0.0.0', () => log('web.listening', { port }));
   process.on('SIGTERM', () => server.close());
