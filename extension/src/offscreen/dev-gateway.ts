@@ -78,7 +78,7 @@ const DevSignedFragments = z.object({
     }),
   ),
   /** Headers every PUT must send (Cloud Storage size range); absent from the dev gateway. */
-  headers: z.record(z.string().regex(/^x-goog-[a-z0-9-]+$/), z.string().max(200)).optional(),
+  headers: z.record(z.string().regex(/^x-(goog|ms)-[a-z0-9-]+$/), z.string().max(200)).optional(),
 });
 
 /**
