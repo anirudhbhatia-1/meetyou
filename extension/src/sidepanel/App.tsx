@@ -40,11 +40,9 @@ export function App() {
   const state = useCaptureState();
   const tabId = usePanelTabId();
   const meet = useMeetInfo(tabId);
-  // "Join the call first" is stale once this tab is in a call: offer Start again instead of the
-  // error (a friend's test, 2026-11-13, kept seeing it after joining).
-  const staleNoCallError =
-    (state.error === 'no_meeting' || state.error === 'not_meet_tab') &&
-    (meet.callState === 'in_call' || meet.callState === 'lobby');
+  // Recordings from before 2026-11-13 could stop with "join the call first"; any Meet page may
+  // record now, so that old error turns back into Start.
+  const staleNoCallError = state.error === 'no_meeting';
   const feed = useLiveFeed(state.startedAt);
   const notes = useNotes(state.sessionId);
   const progress = useMeetingProgress(
@@ -74,9 +72,7 @@ export function App() {
         <DevView state={state} meet={meet} onClose={() => setShowDev(false)} />
       ) : (
         <>
-          {view === 'ready' && (
-            <ReadyView noCall={meet.callState === 'home' || meet.callState === 'ended'} />
-          )}
+          {view === 'ready' && <ReadyView />}
           {elsewhere && <SecondTabView />}
           {view === 'live' && !elsewhere && (
             <LiveView
@@ -99,8 +95,7 @@ export function App() {
               progress={progress}
             />
           )}
-          {view === 'error' &&
-            (staleNoCallError ? <ReadyView noCall={false} /> : <ErrorView state={state} />)}
+          {view === 'error' && (staleNoCallError ? <ReadyView /> : <ErrorView state={state} />)}
         </>
       )}
     </div>

@@ -406,12 +406,9 @@ async function startRecording(tabId: number | undefined, consent?: ConsentChoice
     return;
   }
 
-  // Meet's home page has no call: recording it would capture the landing screen (seen 2026-11-09).
+  // Anywhere on Meet may record, the home page and lobby included (Anirudh, 2026-11-13; the
+  // call-only rule from 2026-11-09 blocked real calls). Null code = not in a call yet.
   const meetingCode = meetingCodeOf(tab.url);
-  if (meetingCode === null) {
-    await applyCaptureEvent({ type: 'failed', error: 'no_meeting' });
-    return;
-  }
   await applyCaptureEvent({
     type: 'start_requested',
     tabId,
@@ -836,12 +833,14 @@ async function stopIfCallLeft(tabId: number, reported: MeetCallState): Promise<v
 
 /**
  * Meet keeps the call URL on its "You left the meeting" screen, so the URL alone cannot tell that a
- * call ended; the adapter's `ended` state does (S1-07). The URL still catches leaving to Meet home
- * or another meeting in the same tab.
+ * call ended; the adapter's `ended` state does (S1-07). The URL still catches leaving Meet, and
+ * leaving a recorded call for Meet home or another meeting in the same tab. A recording started
+ * outside a call (no code) keeps going when that tab joins one.
  */
 async function stopIfMeetingChanged(tabId: number, url: string): Promise<void> {
   const state = await loadCaptureState();
-  if (state.tabId === tabId && meetingCodeOf(url) !== state.meetingCode) {
+  if (state.tabId !== tabId) return;
+  if (!isMeetUrl(url) || (state.meetingCode !== null && meetingCodeOf(url) !== state.meetingCode)) {
     await stopRecording();
   }
 }
