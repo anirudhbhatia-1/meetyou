@@ -15,7 +15,7 @@ resource "azurerm_federated_identity_credential" "github_main" {
   issuer                    = "https://token.actions.githubusercontent.com"
   # The deploy job runs in the "staging" GitHub environment, so its token's subject is the
   # environment, not the branch. Environment protection limits it to main (runbook A.6).
-  subject = "repo:${var.github_repository}:environment:staging"
+  subject = var.github_oidc_subject
 }
 
 resource "azurerm_role_assignment" "deployer_acr_push" {

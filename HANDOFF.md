@@ -6,7 +6,7 @@ pointer to where the full detail lives — the linked document stays the source 
 
 | Field | Value |
 |---|---|
-| Last updated | 2026-11-12 (Anirudh: staging moves from Google Cloud to Azure, ADR-0012) |
+| Last updated | 2026-11-13 (Anirudh: Azure staging built and running; Postgres on Supabase Mumbai) |
 | Updated by | Anirudh (Claude Code) |
 | Repository | [anirudhbhatia-1/meetyou](https://github.com/anirudhbhatia-1/meetyou) — branches `main`, `anirudh`, `Gauravbro` |
 | Current stage | **Stage 4** complete in code; 2026-11-09 audit fixes landed; Stage-5 hardening planned (AUDIT §4); real Chrome/Meet checks pending (§7) |
@@ -206,7 +206,31 @@ Gaurav's S3-07..S3-11 — Gaurav should not start them).** **Stage 4 is complete
 
 Newest first. One entry per working session (either person).
 
-### 2026-11-12 (latest) — Anirudh (Claude Code): staging moves to Azure (ADR-0012)
+### 2026-11-13 (latest) — Anirudh (Claude Code): Azure staging is up
+
+Built from Anirudh's Mac with `az`/`terraform`/`gh` (STAGING_SETUP Part A, ADR-0012 §2.3–2.4).
+- **Subscription limits found:** Azure for Students; five allowed regions; no Postgres
+  Flexible Server (`SkuNotAvailable`) and no small VMs; one Container Apps environment per region,
+  already used by Anirudh's `cae-neighbourhood-test`; azurerm creates Express environments,
+  which cannot run jobs.
+- **Result:** Postgres is **Supabase free, Mumbai** (`nxywvuhpwjsbasmrhkqn`, session pooler,
+  role `meetyou_app` via `infra/azure/create-app-role.mjs`). MeetYou's apps and jobs run in the
+  shared `cae-neighbourhood-test` environment from `meetyou-staging-rg`. Apps:
+  `https://meetyou-staging-{api,web}.bravebay-be9940ed.centralindia.azurecontainerapps.io`.
+- **Checked:** migrations (27 tables owned by `meetyou_app`, RLS forced, no `anon` grants);
+  all health endpoints 200; `gateway.listening` with storage azure, redis and db true;
+  `worker.started`; the smoke job passes; GitHub deploys work end to end, now with a warm-up
+  step before the smoke test (a cold API start timed it out once).
+- **Fixed on the way:** the OIDC subject carries numeric IDs; pool sizes cut to fit Supabase's
+  free pooler (`PG_POOL_MAX=3`, one API and one gateway replica). A targeted Terraform destroy
+  also removed the (empty) storage account; it was recreated.
+- **Extension:** `build:staging` points at the new API and web URLs; tester zip rebuilt.
+- **Open:** Google redirect URI for the new web host (Anirudh); a real recording with video; the
+  60-minute WebSocket test; no log history (shared environment has no workspace); TLS to
+  Supabase is not certificate-checked yet; Supabase must be listed as a sub-processor before
+  outside testers record.
+
+### 2026-11-12 — Anirudh (Claude Code): staging moves to Azure (ADR-0012)
 
 Google Cloud staging went down on 2026-11-11: the billing account was closed and asks for
 account verification and a new payment method, so every service answered 500/503 ("billing is

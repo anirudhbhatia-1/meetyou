@@ -35,10 +35,10 @@ variable "github_repository" {
   default     = "anirudhbhatia-1/meetyou"
 }
 
-variable "db_admin_password" {
-  description = "Postgres administrator password (>= 32 random characters). Used once to create meetyou_app."
+variable "github_oidc_subject" {
+  description = "Exact sub claim of the deploy job's OIDC token. This repository's tokens carry the owner and repository IDs (seen in the 2026-11-13 login error)."
   type        = string
-  sensitive   = true
+  default     = "repo:anirudhbhatia-1@256722165/meetyou@1436821180:environment:staging"
 }
 
 variable "db_app_password" {
@@ -72,4 +72,30 @@ variable "storage_retention_days" {
   description = "Backstop: blobs under ws/ are deleted this many days after creation (the retention job deletes earlier, D-02)."
   type        = number
   default     = 31
+}
+
+variable "database_host" {
+  description = "Supavisor host of the Supabase project, e.g. aws-0-ap-south-1.pooler.supabase.com (Connect → Session pooler)."
+  type        = string
+}
+
+variable "database_user" {
+  description = "Pooler user: meetyou_app.<project ref>."
+  type        = string
+}
+
+variable "database_name" {
+  type    = string
+  default = "postgres"
+}
+
+variable "container_app_environment_name" {
+  description = "Existing Container Apps environment the apps and jobs run in (one per region on this subscription)."
+  type        = string
+  default     = "cae-neighbourhood-test"
+}
+
+variable "container_app_environment_resource_group" {
+  type    = string
+  default = "rg-neighbourhood-test"
 }

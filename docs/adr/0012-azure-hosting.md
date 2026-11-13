@@ -30,8 +30,8 @@ What does **not** move:
 | Concern | Google Cloud (before) | Azure (now) |
 |---|---|---|
 | Region | asia-south1 (Mumbai) | **centralindia (Pune)** |
-| Containers | Cloud Run services + jobs | **Container Apps** (Consumption) apps `api`, `gateway`, `web`, `worker`; **Container Apps Jobs** `migrate`, `smoke` |
-| Postgres | Cloud SQL 16 | **Azure Database for PostgreSQL Flexible Server** 16, `B_Standard_B1ms`, TLS required |
+| Containers | Cloud Run services + jobs | **Container Apps** (Consumption) apps `api`, `gateway`, `web`, `worker`; **Container Apps Jobs** `migrate`, `smoke`. They run in a shared existing environment (§2.4) |
+| Postgres | Cloud SQL 16 | **Supabase** (free plan, Mumbai `ap-south-1`) through Supavisor session mode, see §2.3. Azure Postgres was the plan but the student subscription cannot create it |
 | Redis (gateway sessions) | Memorystore | **Azure Managed Redis** `Balanced_B0`, TLS, non-clustered. Azure Cache for Redis does not accept new customers from 2026-04-01 |
 | Object storage | Cloud Storage bucket | **Blob Storage** account, private container `recordings` |
 | Signed URLs | V4 signed URLs (IAM signBlob) | **User delegation SAS** (managed identity, no account key) |
@@ -39,7 +39,7 @@ What does **not** move:
 | Images | Artifact Registry | **Container Registry** Basic |
 | Runtime identity | One service account per service | One **user-assigned managed identity** for all apps and jobs (staging) |
 | CI/CD | WIF → deployer service account | **GitHub OIDC → federated credential** on a deployer identity |
-| Logs | Cloud Logging | **Log Analytics** workspace (Container Apps console logs) |
+| Logs | Cloud Logging | **Live log streaming only** (`az containerapp logs show`): the shared environment (§2.4) sends logs nowhere. A Log Analytics workspace is follow-up work |
 | Tracing | OTLP → Google Telemetry API | **Off on Azure** (the tracer only starts on Cloud Run). Re-adding it is follow-up work |
 | Terraform | `infra/environments/staging` (google) | **`infra/azure`** (azurerm 5.x). The Google modules stay in the repo, unused, until production hosting is decided |
 
@@ -73,16 +73,56 @@ Storage is provider-neutral behind the existing bucket interface (ARCHITECTURE �
    test. There is no hard request-duration cap on the default ingress like Cloud Run's 3600 s
    **[Verify]**.
 4. **Session affinity** is `session_affinity_enabled` on the gateway's ingress (azurerm 5.13).
-5. **Database connections.** B1ms allows about 50 connections, some of them reserved by Azure
-   **[Verify]** (`show max_connections;`). Use `PG_POOL_MAX=4` per process and at most 2
-   replicas for the API and the gateway.
-6. **Network.** Staging uses public endpoints. Postgres has TLS, a 32+ character password and the
-   "Azure services" firewall rule (Consumption Container Apps have no fixed outbound IP). Redis
+5. **Database connections.** See §2.3: the Supabase pooler's pool size is the limit (about 15
+   on the free plan **[Verify]**). Use `PG_POOL_MAX=3` per process and one replica each for the
+   API and the gateway; the worker has one, and the jobs use 2.
+6. **Network.** Staging uses public endpoints. Postgres (Supabase) has TLS and a 40-character
+   password; Consumption Container Apps have no fixed outbound IP to allow-list. Redis
    has TLS and an access key. Blob has no public access, and every request is signed.
    A VNet with private endpoints is required before production.
 7. **Retention backstop.** A blob lifecycle rule deletes `recordings/ws/` objects 31 days after
    creation, as the GCS rule did. Blob soft delete stays off, so a deletion is final
    (PRD PRV-06).
+
+### 2.3 Postgres on Supabase (2026-11-13)
+
+The subscription is **Azure for Students**. It allows only five regions (Central India among
+them), and creating a Postgres Flexible Server fails with `SkuNotAvailable` for B1ms and B2s in
+Central India and UAE North. Small VM sizes are `NotAvailableForSubscription`. Anirudh chose
+**Supabase free, Mumbai** for the database; everything else stays on Azure.
+- The services connect as `meetyou_app` (no superuser, no BYPASSRLS, owns our tables) through
+  **Supavisor session mode** (`aws-…-ap-south-1.pooler.supabase.com:5432`, user
+  `meetyou_app.<project ref>`). The direct host is IPv6-only on the free plan and Container
+  Apps egress is IPv4. Session mode keeps one server session per client, so graphile-worker's
+  `LISTEN` and the migration runner's advisory lock work.
+- **TLS without certificate checks** (`sslmode=no-verify`) for now: Supabase signs with its own
+  CA. Shipping that CA in the images and verifying it is a follow-up **[Verify]**.
+- **Connection budget:** the pooler's pool size bounds session-mode clients. Keep
+  Σ(replicas × `PG_POOL_MAX`) below the project's pool size (Database settings).
+- **Free-plan limits:** 500 MB of data, no automatic backups, and the project pauses after a week
+  without activity (the worker's queue polling keeps it active **[Verify]**).
+- Supabase's Data API (PostgREST) exposes the `public` schema to the `anon` and `authenticated`
+  roles only through grants. Tables created by `meetyou_app` get none, and the Data API is
+  turned off for this project.
+- Supabase is a new sub-processor for staging data; the legal drafts must list it before anyone
+  outside the team records.
+
+### 2.4 A shared Container Apps environment (2026-11-13)
+
+- An environment created through azurerm without a mode comes up as **Express**, and Express
+  environments cannot run jobs (`ExpressEnvironmentResourceNotSupported`). azurerm 5.13 has no
+  argument for the mode.
+- The subscription allows **one environment per region**
+  (`MaxNumberOfRegionalEnvironmentsInSubExceeded`), and Central India's slot is held by another
+  project's environment, `cae-neighbourhood-test` (WorkloadProfiles mode).
+- Anirudh chose to share it. MeetYou's apps and jobs live in `meetyou-staging-rg`; Terraform reads
+  the environment as a data source (`container_app_environment_name` and its resource group) and
+  never changes it. The apps' host names end in that environment's domain
+  (`bravebay-be9940ed.centralindia.azurecontainerapps.io`).
+- The shared environment has no log destination, so there is no log history: only live streaming.
+- GitHub's OIDC subject for this repository carries numeric IDs
+  (`repo:anirudhbhatia-1@256722165/meetyou@1436821180:environment:staging`). The federated
+  credential matches it exactly (`github_oidc_subject`).
 
 ## 3. Consequences
 
@@ -90,8 +130,8 @@ Storage is provider-neutral behind the existing bucket interface (ARCHITECTURE �
   migrated. Testers sign in again, and their old recordings are gone.
 - The extension needs a new `build:staging`: new API and web URLs, and the new Google OAuth client
   ID if the client is recreated.
-- Cost on a free account: Container Apps' monthly free grant, B1ms Postgres (750 h/month), and
-  5 GB of Blob storage for 12 months. Managed Redis, Container Registry Basic and Log Analytics
+- Cost on the student subscription: Container Apps' monthly free grant and 5 GB of Blob storage;
+  Postgres is on Supabase's free plan. Managed Redis, Container Registry Basic and Log Analytics
   ingestion are paid from the trial credit, then billed **[Verify]** on the pricing page. The
   worker keeps one replica running and is the main compute cost.
 - The **Gemini free-tier rules do not change** (ADR-0001 §7): staging may use the free key only

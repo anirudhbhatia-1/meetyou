@@ -8,7 +8,7 @@
     "typecheck": "pnpm exec tsc -p tsconfig.json",
     "test": "vitest run",
     "build:dev": "MINUTES_GATEWAY_URL=http://127.0.0.1:8787 node scripts/build.mjs",
-    "build:staging": "MINUTES_API_URL=https://meetyou-staging-api-7oflznia2a-el.a.run.app MINUTES_GOOGLE_CLIENT_ID=189397093016-ghfptods39aies7sbt4hnph78nflc0cl.apps.googleusercontent.com MINUTES_WEB_URL=https://meetyou-staging-web-189397093016.asia-south1.run.app node scripts/build.mjs"
+    "build:staging": "MINUTES_API_URL=https://meetyou-staging-api.bravebay-be9940ed.centralindia.azurecontainerapps.io MINUTES_GOOGLE_CLIENT_ID=189397093016-ghfptods39aies7sbt4hnph78nflc0cl.apps.googleusercontent.com MINUTES_WEB_URL=https://meetyou-staging-web.bravebay-be9940ed.centralindia.azurecontainerapps.io node scripts/build.mjs"
   },
   "devDependencies": {
     "@types/react": "19.3.0",

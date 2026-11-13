@@ -1,14 +1,16 @@
 # infra/azure — staging on Azure (ADR-0012)
 
-Central India (Pune). Container Apps (`api`, `gateway`, `web`, `worker`), Container Apps Jobs
-(`migrate`, `smoke`), Postgres Flexible Server 16, Azure Managed Redis, Blob Storage (user
-delegation SAS), Key Vault, Container Registry, Log Analytics, and the GitHub OIDC deployer.
+Central India (Pune). Container Apps (`api`, `gateway`, `web`, `worker`) and Container Apps Jobs
+(`migrate`, `smoke`) in a shared existing environment, Azure Managed Redis, Blob Storage (user
+delegation SAS), Key Vault, Container Registry, and the GitHub OIDC deployer. Postgres is a
+Supabase project (Mumbai) reached through its session pooler; `create-app-role.mjs` makes the
+`meetyou_app` role there.
 
 | File | What |
 |---|---|
-| `main.tf` | resource group, logs, registry, runtime identity, Key Vault, recordings storage |
-| `data.tf` | Postgres and Redis |
-| `apps.tf` | Container Apps environment and apps (env, Key Vault references, probes) |
+| `main.tf` | resource group, registry, runtime identity, Key Vault, recordings storage |
+| `data.tf` | Redis (Postgres is Supabase, see ADR-0012 §2.3) |
+| `apps.tf` | the shared environment (data source) and the apps (env, Key Vault references, probes) |
 | `jobs.tf` | migrate and smoke jobs |
 | `ci.tf` | deployer identity, federated credential, roles |
 

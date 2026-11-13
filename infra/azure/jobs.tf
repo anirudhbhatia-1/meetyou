@@ -26,7 +26,7 @@ resource "azurerm_container_app_job" "job" {
   name                         = "${local.prefix}-${each.key}"
   location                     = azurerm_resource_group.main.location
   resource_group_name          = azurerm_resource_group.main.name
-  container_app_environment_id = azurerm_container_app_environment.main.id
+  container_app_environment_id = data.azurerm_container_app_environment.main.id
   replica_timeout_in_seconds   = each.value.timeout
   replica_retry_limit          = 0 # a failed migration or smoke run must fail the deploy, not retry
 

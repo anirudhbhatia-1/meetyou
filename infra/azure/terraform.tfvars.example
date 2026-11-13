@@ -3,9 +3,12 @@ subscription_id = "00000000-0000-0000-0000-000000000000"
 unique_suffix   = "ab12"                # 4-8 lowercase letters/digits, makes global names unique
 image_tag       = "<commit sha pushed by the first workflow run>"
 
-# openssl rand -base64 36 | tr -d '/+=' (two different values)
-db_admin_password = "<random, >= 32 chars>"
-db_app_password   = "<random, >= 32 chars>"
+# openssl rand -base64 48 | tr -dc 'A-Za-z0-9' | head -c 40
+db_app_password = "<random, alphanumeric, >= 32 chars>"
+
+# Supabase project (Connect → Session pooler)
+database_host = "aws-0-ap-south-1.pooler.supabase.com"
+database_user = "meetyou_app.<project ref>"
 
 google_client_id  = "<id>.apps.googleusercontent.com"
 stream_token_jwks = "{\"keys\":[...]}"  # PUBLIC keys only (runbook A.5)

@@ -1,9 +1,10 @@
-resource "azurerm_container_app_environment" "main" {
-  name                       = "${local.prefix}-env"
-  location                   = azurerm_resource_group.main.location
-  resource_group_name        = azurerm_resource_group.main.name
-  log_analytics_workspace_id = azurerm_log_analytics_workspace.main.id
-  tags                       = local.tags
+# The subscription (Azure for Students) allows one Container Apps environment per region, and the
+# Central India slot is held by another project's environment. MeetYou's apps and jobs live in
+# that environment but in their own resource group (Anirudh, 2026-11-13; ADR-0012 §2.4). An
+# environment created by azurerm without a mode comes up as Express, which cannot run jobs.
+data "azurerm_container_app_environment" "main" {
+  name                = var.container_app_environment_name
+  resource_group_name = var.container_app_environment_resource_group
 }
 
 locals {
@@ -16,7 +17,7 @@ locals {
     web     = "${local.prefix}-web"
     worker  = "${local.prefix}-worker"
   }
-  fqdn = { for k, v in local.app_name : k => "${v}.${azurerm_container_app_environment.main.default_domain}" }
+  fqdn = { for k, v in local.app_name : k => "${v}.${data.azurerm_container_app_environment.main.default_domain}" }
 
   gemini_env = {
     LLM_PROVIDER              = "gemini"
@@ -29,7 +30,7 @@ locals {
     APP_ENV                 = var.environment
     PORT                    = "8080"
     HOST                    = "0.0.0.0"
-    PG_POOL_MAX             = "4"
+    PG_POOL_MAX             = "3"
     AZURE_CLIENT_ID         = azurerm_user_assigned_identity.runtime.client_id
     AZURE_STORAGE_ACCOUNT   = azurerm_storage_account.recordings.name
     AZURE_STORAGE_CONTAINER = azurerm_storage_container.recordings.name
@@ -62,8 +63,9 @@ locals {
 
   # Consumption plan CPU/memory pairs. The worker runs ffmpeg (video.finalize).
   app_size = {
-    api     = { cpu = 0.5, memory = "1Gi", min = 0, max = 2 }
-    gateway = { cpu = 0.5, memory = "1Gi", min = 0, max = 2 }
+    # One replica each: Supabase's free session pooler allows about 15 connections (ADR-0012 §2.3).
+    api     = { cpu = 0.5, memory = "1Gi", min = 0, max = 1 }
+    gateway = { cpu = 0.5, memory = "1Gi", min = 0, max = 1 }
     worker  = { cpu = 1.0, memory = "2Gi", min = 1, max = 1 }
   }
 }
@@ -73,7 +75,7 @@ resource "azurerm_container_app" "backend" {
   for_each = local.app_env
 
   name                         = local.app_name[each.key]
-  container_app_environment_id = azurerm_container_app_environment.main.id
+  container_app_environment_id = data.azurerm_container_app_environment.main.id
   resource_group_name          = azurerm_resource_group.main.name
   revision_mode                = "Single"
   max_inactive_revisions       = 3
@@ -169,7 +171,7 @@ resource "azurerm_container_app" "backend" {
 # The web app: static build plus a /v1 proxy to the API (web/server). No secrets.
 resource "azurerm_container_app" "web" {
   name                         = local.app_name.web
-  container_app_environment_id = azurerm_container_app_environment.main.id
+  container_app_environment_id = data.azurerm_container_app_environment.main.id
   resource_group_name          = azurerm_resource_group.main.name
   revision_mode                = "Single"
   max_inactive_revisions       = 3

@@ -16,16 +16,6 @@ resource "azurerm_resource_group" "main" {
   tags     = local.tags
 }
 
-# Container Apps console and system logs (IDs and counts only, AGENTS §7).
-resource "azurerm_log_analytics_workspace" "main" {
-  name                = "${local.prefix}-logs"
-  location            = azurerm_resource_group.main.location
-  resource_group_name = azurerm_resource_group.main.name
-  sku                 = "PerGB2018"
-  retention_in_days   = 30
-  tags                = local.tags
-}
-
 resource "azurerm_container_registry" "main" {
   name                = local.compact
   location            = azurerm_resource_group.main.location
@@ -90,8 +80,9 @@ locals {
 resource "azurerm_key_vault_secret" "database_url" {
   name         = "database-url"
   key_vault_id = azurerm_key_vault.main.id
-  # pg reads sslmode=require as verify-full; Azure's server certificate chains to a public root.
-  value      = "postgres://meetyou_app:${urlencode(var.db_app_password)}@${azurerm_postgresql_flexible_server.main.fqdn}:5432/${azurerm_postgresql_flexible_server_database.main.name}?sslmode=require"
+  # Supavisor session mode: the user is <role>.<project ref>. sslmode=no-verify keeps TLS on but
+  # skips chain checks: Supabase signs with its own CA, which is not in Node's store [Verify].
+  value      = "postgres://${var.database_user}:${urlencode(var.db_app_password)}@${var.database_host}:5432/${var.database_name}?sslmode=no-verify"
   depends_on = [azurerm_role_assignment.operator_kv_secrets]
 }
 

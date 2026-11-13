@@ -315,8 +315,10 @@ Work like a careful senior engineer pairing with the developer.
 - **2026-11-12 — Staging moves to Azure (Anirudh):** the Google Cloud billing account was closed,
   so staging hosting moves to **Azure Central India (Pune)**
   ([ADR-0012](docs/adr/0012-azure-hosting.md), supersedes ADR-0002 Part B). The stack is
-  Container Apps, Postgres Flexible Server, **Azure Managed Redis**, Blob Storage with user
-  delegation SAS, Key Vault and Container Registry. Terraform lives in `infra/azure`. Google
+  Container Apps (in a shared environment), **Azure Managed Redis**, Blob Storage with user
+  delegation SAS, Key Vault and Container Registry; **Postgres is Supabase free, Mumbai**
+  (2026-11-13: the student subscription cannot create Azure Postgres). Terraform lives in
+  `infra/azure`. Google
   sign-in (a project without billing), Gemini and Deepgram are unchanged.
 
 ### Open (do not assume an answer)

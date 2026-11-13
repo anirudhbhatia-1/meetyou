@@ -22,6 +22,9 @@ backend/apps/gateway/.data/
 **/.terraform/
 *.tfstate
 *.tfstate.*
+# Saved plans can hold secret values in plain text.
+*.plan
+*.tfplan
 crash.log
 crash.*.log
 *.tfvars

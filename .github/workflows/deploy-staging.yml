@@ -79,6 +79,21 @@ jobs:
             az containerapp update --name "$PREFIX-$app" --resource-group "$RG" --image "$REGISTRY/$app:$TAG" -o none
           done
 
+      # The API and gateway scale to zero, and a fresh revision cold-starts: the smoke job's 15 s
+      # request timeout failed on it (2026-11-13). Wait until both answer first.
+      - name: Wait for the new revisions
+        if: steps.apps.outputs.ready == 'true'
+        run: |
+          for app in api gateway; do
+            host=$(az containerapp show --name "$PREFIX-$app" --resource-group "$RG" --query properties.configuration.ingress.fqdn -o tsv)
+            path=$([ "$app" = api ] && echo /health || echo /healthz)
+            for _ in $(seq 1 36); do
+              curl -fsS -m 20 "https://$host$path" >/dev/null && { echo "$app ready"; break; }
+              sleep 5
+            done
+            curl -fsS -m 20 "https://$host$path" >/dev/null || { echo "::error::$app did not become healthy"; exit 1; }
+          done
+
       - name: Smoke test
         if: steps.apps.outputs.ready == 'true'
         run: |

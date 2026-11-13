@@ -5,7 +5,7 @@ terraform {
 
   required_providers {
     azurerm = {
-      source  = "hashicorp/azurerm"
+      source = "hashicorp/azurerm"
       # 5.13 adds session_affinity_enabled on azurerm_container_app (gateway reconnects).
       version = "~> 5.13"
     }

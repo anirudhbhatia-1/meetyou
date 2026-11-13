@@ -10,10 +10,6 @@ output "key_vault" {
   value = azurerm_key_vault.main.name
 }
 
-output "postgres_host" {
-  value = azurerm_postgresql_flexible_server.main.fqdn
-}
-
 output "storage_account" {
   value = azurerm_storage_account.recordings.name
 }
