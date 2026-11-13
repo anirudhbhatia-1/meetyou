@@ -19,12 +19,16 @@ import {
 import { parseParticipants, type ParticipantName } from './speaker-label.ts';
 import { applyTranscript, EMPTY_TRANSCRIPT, type TranscriptView } from './transcript-model.ts';
 
-/** Start recording, with the consent step's answer when it was shown (DESIGN §8.5). */
+/**
+ * Start recording in the panel's own tab, with the consent step's answer when it was shown
+ * (DESIGN §8.5).
+ */
 export function sendStart(consent?: ConsentChoice): void {
   const message: BackgroundMessage = {
     target: 'background',
     type: 'recording.start',
     ...(consent !== undefined ? { consent } : {}),
+    ...(panelTabId !== null ? { tabId: panelTabId } : {}),
   };
   chrome.runtime.sendMessage(message).catch((error: unknown) => {
     console.error('sidepanel: start failed', error);
@@ -61,13 +65,19 @@ export function useCaptureState(): CaptureState {
   return state;
 }
 
+/** The panel's tab, for start requests (set once by usePanelTabId). */
+let panelTabId: number | null = null;
+
 /** Side panels are per tab (configureSidePanel): the panel belongs to the tab active when it opened. */
 export function usePanelTabId(): number | null {
   const [tabId, setTabId] = useState<number | null>(null);
   useEffect(() => {
     chrome.tabs
       .query({ active: true, currentWindow: true })
-      .then(([tab]) => setTabId(tab?.id ?? null))
+      .then(([tab]) => {
+        panelTabId = tab?.id ?? null;
+        setTabId(panelTabId);
+      })
       .catch((error: unknown) => console.error('sidepanel: tab query failed', error));
   }, []);
   return tabId;

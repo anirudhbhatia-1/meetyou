@@ -1086,7 +1086,10 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   switch (parsed.type) {
     case 'recording.start': {
       const consent = parsed.consent;
-      enqueueCapture(async () => startRecording(await activeTabId(), consent));
+      // A Meet page's content script may only start its own tab; the panel names its tab.
+      const fromTab = senderTabId(sender);
+      const requested = fromTab ?? parsed.tabId;
+      enqueueCapture(async () => startRecording(requested ?? (await activeTabId()), consent));
       break;
     }
     case 'recording.stop_delete':

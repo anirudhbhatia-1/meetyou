@@ -40,6 +40,11 @@ export function App() {
   const state = useCaptureState();
   const tabId = usePanelTabId();
   const meet = useMeetInfo(tabId);
+  // "Join the call first" is stale once this tab is in a call: offer Start again instead of the
+  // error (a friend's test, 2026-11-13, kept seeing it after joining).
+  const staleNoCallError =
+    (state.error === 'no_meeting' || state.error === 'not_meet_tab') &&
+    (meet.callState === 'in_call' || meet.callState === 'lobby');
   const feed = useLiveFeed(state.startedAt);
   const notes = useNotes(state.sessionId);
   const progress = useMeetingProgress(
@@ -94,7 +99,8 @@ export function App() {
               progress={progress}
             />
           )}
-          {view === 'error' && <ErrorView state={state} />}
+          {view === 'error' &&
+            (staleNoCallError ? <ReadyView noCall={false} /> : <ErrorView state={state} />)}
         </>
       )}
     </div>

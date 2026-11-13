@@ -195,6 +195,32 @@ describe('Meet speaker signal (S3-04)', () => {
   });
 });
 
+describe('recording.start tab (2026-11-13)', () => {
+  it('keeps the panel tab id and drops anything that is not a tab id', () => {
+    expect(
+      parseBackgroundMessage({ target: 'background', type: 'recording.start', tabId: 42 }),
+    ).toEqual({ target: 'background', type: 'recording.start', tabId: 42 });
+    for (const tabId of [-1, 1.5, '42', null, Number.NaN]) {
+      expect(
+        parseBackgroundMessage({ target: 'background', type: 'recording.start', tabId }),
+      ).toEqual({ target: 'background', type: 'recording.start' });
+    }
+    expect(
+      parseBackgroundMessage({
+        target: 'background',
+        type: 'recording.start',
+        consent: { post: false, text: 'x' },
+        tabId: 7,
+      }),
+    ).toEqual({
+      target: 'background',
+      type: 'recording.start',
+      consent: { post: false, text: 'x' },
+      tabId: 7,
+    });
+  });
+});
+
 describe('consent messages (S4-07)', () => {
   it('carries the consent step answer on recording.start, bounded', () => {
     expect(parseBackgroundMessage({ target: 'background', type: 'recording.start' })).toEqual({

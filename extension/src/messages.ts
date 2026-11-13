@@ -25,7 +25,11 @@ export interface ConsentChoice {
 }
 
 export type BackgroundMessage =
-  | { target: 'background'; type: 'recording.start'; consent?: ConsentChoice }
+  /**
+   * `tabId` is the side panel's own tab. Without it the worker falls back to the active tab of the
+   * last focused window, which can be another tab when several windows are open (2026-11-13).
+   */
+  | { target: 'background'; type: 'recording.start'; consent?: ConsentChoice; tabId?: number }
   /** Processing → Ready (S4-05): the panel saw the meeting's notes settle. */
   | { target: 'background'; type: 'recording.processed' }
   /** Where the last recording's notes are; replies `MeetingProgressReply`. */
@@ -280,6 +284,10 @@ export function parseBackgroundMessage(message: unknown): BackgroundMessage | nu
   }
   if (message.type === 'recording.start') {
     const consent = message.consent;
+    const tabId =
+      Number.isSafeInteger(message.tabId) && (message.tabId as number) >= 0
+        ? { tabId: message.tabId as number }
+        : {};
     if (
       isRecord(consent) &&
       typeof consent.post === 'boolean' &&
@@ -290,9 +298,10 @@ export function parseBackgroundMessage(message: unknown): BackgroundMessage | nu
         target: 'background',
         type: 'recording.start',
         consent: { post: consent.post, text: consent.text },
+        ...tabId,
       };
     }
-    return { target: 'background', type: 'recording.start' };
+    return { target: 'background', type: 'recording.start', ...tabId };
   }
   if (message.type === 'meeting.progress' && typeof message.sessionId === 'string') {
     return { target: 'background', type: 'meeting.progress', sessionId: message.sessionId };
