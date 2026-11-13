@@ -211,9 +211,10 @@ export const SignVideoFragmentsResponse = z.object({
   ),
   /**
    * Headers every PUT must send exactly as given: Cloud Storage checks the signed size range
-   * (`x-goog-content-length-range: 0,8388608`, `@meetyou/storage` signFragmentUploads).
+   * (`x-goog-content-length-range: 0,8388608`); Azure Blob needs `x-ms-blob-type: BlockBlob`
+   * (ADR-0012). Only storage-vendor headers, so a response cannot make the PUT send anything else.
    */
-  headers: z.record(z.string().regex(/^x-goog-[a-z0-9-]+$/), z.string().max(200)),
+  headers: z.record(z.string().regex(/^x-(goog|ms)-[a-z0-9-]+$/), z.string().max(200)),
 });
 
 // GET /v1/meetings/{meetingId}/video
