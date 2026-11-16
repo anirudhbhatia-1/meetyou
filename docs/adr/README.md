@@ -14,7 +14,7 @@ Agents and developers must follow accepted ADRs; changing one requires a new ADR
 | [0007](0007-llm-provider-and-prompt-versions.md) | LLM provider and prompt/version management | Proposed 2026-11-09 — Gemini 3.6 Flash (Gemini API, paid tier for real meetings); evaluation baseline in `tools/summary-eval` |
 | 0008 | Desktop app approach | Not started (Phase 2) |
 | 0009 | Retrieval design | Not started (Phase 2) |
-| 0010 | Meeting bot: buy vs build | Not started (Phase 3) |
+| [0010](0010-meeting-bot.md) | Optional meeting bot ("Send notetaker") next to the extension | Proposed 2026-11-16 — build our own guest bot on the extension's Meet adapter, self-hosted on Azure; no paid vendor (Recall.ai fallback); changes Phase 1 scope only if accepted |
 | [0011](0011-video-screen-recording.md) | Video (meeting screen) recording in Phase 1 | Accepted 2026-11-01 — verification in S1 |
 | [0012](0012-azure-hosting.md) | Move staging hosting from Google Cloud to Azure (Central India) | Accepted 2026-11-12 |
 

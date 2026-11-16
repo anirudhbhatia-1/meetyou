@@ -6,7 +6,7 @@ pointer to where the full detail lives — the linked document stays the source 
 
 | Field | Value |
 |---|---|
-| Last updated | 2026-11-16 (Anirudh: 18-min test meeting — stuck notes, no video; fixes) |
+| Last updated | 2026-11-16 (Anirudh: ADR-0010 meeting bot proposed) |
 | Updated by | Anirudh (Claude Code) |
 | Repository | [anirudhbhatia-1/meetyou](https://github.com/anirudhbhatia-1/meetyou) — branches `main`, `anirudh`, `Gauravbro` |
 | Current stage | **Stage 4** complete in code; 2026-11-09 audit fixes landed; Stage-5 hardening planned (AUDIT §4); real Chrome/Meet checks pending (§7) |
@@ -206,7 +206,18 @@ Gaurav's S3-07..S3-11 — Gaurav should not start them).** **Stage 4 is complete
 
 Newest first. One entry per working session (either person).
 
-### 2026-11-16 (latest) — Anirudh (Claude Code): 18-minute test — no notes, no video, no names
+### 2026-11-16 (latest) — Anirudh (Claude Code): ADR-0010 meeting bot proposed
+
+Anirudh asked for an optional Fireflies-style bot next to the extension, and for "the best free
+option". [ADR-0010](docs/adr/0010-meeting-bot.md) is **Proposed**: build our own guest bot that
+runs the extension's Meet adapter and capture code in a Chromium per meeting (Container Apps Job,
+Central India), audio only, everything in the `them` lane, no contract change. Paid vendors
+(Recall.ai, Meeting BaaS, Skribby, Attendee, Nylas, Vexa) and self-hosted Attendee (ELv2) / Vexa
+were compared; Recall.ai is the fallback. Scope (AGENTS §2, PRD, plan S9-01) changes only if
+Anirudh accepts it. Open: accept and pick a stage; whether the bot posts a join message while the
+Meet chat notice is off. No code or dependencies added.
+
+### 2026-11-16 — Anirudh (Claude Code): 18-minute test — no notes, no video, no names
 
 Anirudh's 18-minute staging call with friends (`…G4RE8B`) got a full transcript (365 lines) but
 no notes, no to-dos, no video, and every speaker showed as "Speaker". Causes, from the database,
