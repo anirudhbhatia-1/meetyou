@@ -51,9 +51,18 @@ export function summarizeTask(deps: {
   /** Queue the batch pass after the first notes (S3-04); off unless a batch provider is set. */
   batch?: boolean;
 }) {
-  return defineTask(MEETING_SUMMARIZE, SummarizePayload, async (payload) => {
+  return defineTask(MEETING_SUMMARIZE, SummarizePayload, async (payload, helpers) => {
     const { workspaceId, meetingId, reason } = payload;
     const meeting = await deps.db.inWorkspace(workspaceId, async (tx) => {
+      // A meeting deleted before its job ran (the smoke test deletes its own) has nothing to
+      // summarize; writing its participant first failed on the foreign key, 8 times (2026-11-13).
+      const live = await tx
+        .selectFrom('meetings')
+        .select('id')
+        .where('id', '=', meetingId)
+        .where('deletedAt', 'is', null)
+        .executeTakeFirst();
+      if (live === undefined) return null;
       await ensureSelfParticipant(tx, workspaceId, meetingId);
       // Speaker names from Meet's signal before the first notes, so owners can be named (S3-04).
       if (reason === 'session_end') await nameLiveClusters(tx, meetingId);
@@ -134,7 +143,11 @@ export function summarizeTask(deps: {
         deps.llm,
       );
     } catch (error) {
+      // The last attempt fails visibly too: an 8-attempt Gemini outage (503, 2026-11-13) left the
+      // meeting "Writing your notes…" forever instead of offering Try again.
+      const lastAttempt = helpers.job.attempts >= helpers.job.max_attempts;
       const final =
+        lastAttempt ||
         error instanceof GenerationFailedError ||
         (error instanceof LlmHttpError && !error.retryable);
       if (!final) throw error; // the queue retries outages with backoff

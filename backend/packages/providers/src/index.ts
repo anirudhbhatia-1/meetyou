@@ -1,3 +1,4 @@
+export * from './llm/fallback.ts';
 export * from './llm/gemini.ts';
 export * from './llm/types.ts';
 export * from './registry.ts';

@@ -11,7 +11,8 @@ import { summarizeTask } from './task.ts';
 describe('meeting.summarize', () => {
   let env: Awaited<ReturnType<typeof createTestDb>>;
   let workspaceId = '';
-  const helpers = {} as JobHelpers;
+  const helpers = { job: { attempts: 1, max_attempts: 8 } } as unknown as JobHelpers;
+  const lastAttempt = { job: { attempts: 8, max_attempts: 8 } } as unknown as JobHelpers;
 
   beforeAll(async () => {
     env = await createTestDb();
@@ -249,6 +250,33 @@ describe('meeting.summarize', () => {
       status: 'processing',
       processingStep: 'summarizing',
     });
+  });
+
+  it('fails visibly when an outage outlasts the last attempt (2026-11-13: stuck forever)', async () => {
+    const { meetingId } = await recorded(['Kuch baat hui.']);
+    const task = summarizeTask({ db: env.db, llm: llm(() => new LlmHttpError(503)) });
+    await task.handle({ workspaceId, meetingId, reason: 'session_end' }, lastAttempt);
+    const r = await row(meetingId);
+    expect(r.meeting.status).toBe('failed');
+    expect(r.summaries.map((x) => x.status)).toEqual(['failed']);
+  });
+
+  it('does nothing for a meeting deleted before its job ran', async () => {
+    const { meetingId } = await recorded(['Smoke test line.']);
+    await env.db.inWorkspace(workspaceId, (tx) =>
+      tx
+        .updateTable('meetings')
+        .set({ deletedAt: new Date() })
+        .where('id', '=', meetingId)
+        .execute(),
+    );
+    const calls: string[] = [];
+    await summarizeTask({ db: env.db, llm: llm(() => new Error('unused'), calls) }).handle(
+      { workspaceId, meetingId, reason: 'session_end' },
+      helpers,
+    );
+    expect(calls).toHaveLength(0);
+    expect((await row(meetingId)).summaries).toEqual([]);
   });
 
   it('marks silent recordings too short, and finishes without notes when no model is set', async () => {

@@ -22,6 +22,13 @@ import {
  * Paid-tier key only for real meetings; the free key is refused outside local/CI (registry.ts).
  */
 export const GEMINI_DEFAULT_MODEL = 'gemini-3.6-flash';
+/**
+ * For outages of the default (registry `withFallback`). Checked 2026-11-16 on the API: requests for
+ * `gemini-3.5-flash` are answered by `gemini-3.6-flash` (same capacity, useless as a fallback) and
+ * `gemini-2.5-flash` is gone (404); `gemini-3.5-flash-lite` is served by itself and accepts our
+ * structured requests. Plainer notes beat none; the same validation applies.
+ */
+export const GEMINI_DEFAULT_FALLBACK_MODEL = 'gemini-3.5-flash-lite';
 const BASE_URL = 'https://generativelanguage.googleapis.com/v1beta/models';
 /** A 60-minute meeting must summarize within the ≤ 40 s LLM budget (ARCHITECTURE §21.2). */
 const TIMEOUT_MS = 90_000;

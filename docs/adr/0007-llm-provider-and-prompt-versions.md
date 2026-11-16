@@ -74,6 +74,13 @@ switch).
   review.
 - Switching vendor = a new adapter behind `LlmProvider` + a full evaluation run; no other code
   changes.
+- **Outage fallback (2026-11-16, Anirudh's staging test):** on `429`/`5xx` from `gemini-3.6-flash`
+  the registry retries the request once on `GEMINI_FALLBACK_MODEL`, default
+  **`gemini-3.5-flash-lite`** (`none` turns it off). Gemini answered `503` for all 8 attempts of an
+  18-minute meeting's summary on 2026-11-13. The API now serves `gemini-3.5-flash` requests with
+  3.6 (same capacity), so the Lite model is the separate one. Stored summaries record the model
+  that answered. **Open:** an `eval:live` run of the fallback model; until then it is used only
+  when the primary is down, and its output passes the same validation chain.
 
 ## 6. Consequences
 

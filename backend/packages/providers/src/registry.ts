@@ -1,6 +1,11 @@
 import { z } from 'zod';
 
-import { GEMINI_DEFAULT_MODEL, geminiProvider } from './llm/gemini.ts';
+import { withFallback } from './llm/fallback.ts';
+import {
+  GEMINI_DEFAULT_FALLBACK_MODEL,
+  GEMINI_DEFAULT_MODEL,
+  geminiProvider,
+} from './llm/gemini.ts';
 import type { LlmProvider } from './llm/types.ts';
 import { deepgramBatchProvider } from './stt/deepgram-batch.ts';
 import { deepgramProvider } from './stt/deepgram-streaming.ts';
@@ -18,6 +23,8 @@ export const ProviderEnv = z.object({
   LLM_PROVIDER: z.enum(['none', 'gemini']).default('none'),
   GEMINI_API_KEY: z.string().optional(),
   GEMINI_MODEL: z.string().min(1).default(GEMINI_DEFAULT_MODEL),
+  /** Answers when GEMINI_MODEL is overloaded or down (429/5xx); `none` turns it off. */
+  GEMINI_FALLBACK_MODEL: z.string().min(1).default(GEMINI_DEFAULT_FALLBACK_MODEL),
   /** Set only for development with synthetic or public data (ADR-0001 §7). */
   GEMINI_FREE_TIER_ACCEPTED: z.enum(['true', 'false']).optional(),
   /**
@@ -46,7 +53,10 @@ export function createLlmProvider(
   if (env.LLM_PROVIDER === 'none') return null;
   const key = env.GEMINI_API_KEY;
   if (key === undefined || key === '') throw new Error('LLM_PROVIDER=gemini needs GEMINI_API_KEY');
-  return geminiProvider(key, { model: env.GEMINI_MODEL, ...deps });
+  const primary = geminiProvider(key, { model: env.GEMINI_MODEL, ...deps });
+  const fallbackModel = env.GEMINI_FALLBACK_MODEL;
+  if (fallbackModel === 'none' || fallbackModel === env.GEMINI_MODEL) return primary;
+  return withFallback(primary, geminiProvider(key, { model: fallbackModel, ...deps }));
 }
 
 /**

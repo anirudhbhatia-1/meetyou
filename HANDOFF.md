@@ -6,7 +6,7 @@ pointer to where the full detail lives — the linked document stays the source 
 
 | Field | Value |
 |---|---|
-| Last updated | 2026-11-13 (Anirudh: Azure staging built and running; Postgres on Supabase Mumbai) |
+| Last updated | 2026-11-16 (Anirudh: 18-min test meeting — stuck notes, no video; fixes) |
 | Updated by | Anirudh (Claude Code) |
 | Repository | [anirudhbhatia-1/meetyou](https://github.com/anirudhbhatia-1/meetyou) — branches `main`, `anirudh`, `Gauravbro` |
 | Current stage | **Stage 4** complete in code; 2026-11-09 audit fixes landed; Stage-5 hardening planned (AUDIT §4); real Chrome/Meet checks pending (§7) |
@@ -206,7 +206,27 @@ Gaurav's S3-07..S3-11 — Gaurav should not start them).** **Stage 4 is complete
 
 Newest first. One entry per working session (either person).
 
-### 2026-11-13 (latest) — Anirudh (Claude Code): Azure staging is up
+### 2026-11-16 (latest) — Anirudh (Claude Code): 18-minute test — no notes, no video, no names
+
+Anirudh's 18-minute staging call with friends (`…G4RE8B`) got a full transcript (365 lines) but
+no notes, no to-dos, no video, and every speaker showed as "Speaker". Causes, from the database,
+queue and Azure storage metrics:
+- **Notes:** Gemini answered `503` on all 8 attempts of `meeting.summarize`; a retryable error was
+  re-thrown even on the last attempt, so the meeting stayed `processing` forever ("Writing your
+  notes…", Share and the template menu disabled, no to-dos). Fixed: the last attempt fails
+  visibly (Try again), and the registry retries outages on `gemini-3.5-flash-lite`
+  (ADR-0007 §5.1; `gemini-3.5-flash` is now served by 3.6).
+- **Queue noise:** the smoke test deletes its meeting; its summary job then hit a participants
+  foreign key 8 times per deploy. Fixed: deleted meetings are skipped.
+- **Video:** the extension rejected Azure's `x-ms-blob-type` sign header, so no fragment ever
+  uploaded (0 of 104); the server marked the video failed after 24 h. Fix 050dace (+76a9bd3) was
+  committed on 2026-11-13 but not pushed — it ships with this push.
+- **Names:** 0 active-speaker signals in every meeting: the Meet selectors were never verified.
+  Waiting for the probe output from a live call.
+- **Open:** recovering `…G4RE8B`'s notes (re-run the job, with Anirudh's OK); its video exists only
+  in the recording browser until ~2026-11-20 and the 24 h upload window has closed.
+
+### 2026-11-13 — Anirudh (Claude Code): Azure staging is up
 
 Built from Anirudh's Mac with `az`/`terraform`/`gh` (STAGING_SETUP Part A, ADR-0012 §2.3–2.4).
 - **Subscription limits found:** Azure for Students; five allowed regions; no Postgres

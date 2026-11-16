@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import { createLlmProvider } from '../registry.ts';
 import {
+  GEMINI_DEFAULT_FALLBACK_MODEL,
   GEMINI_DEFAULT_MODEL,
   geminiProvider,
   geminiRequestBody,
@@ -146,5 +147,35 @@ describe('LLM registry', () => {
         GEMINI_FREE_TIER_ACCEPTED: 'true',
       }),
     ).toThrow(/refused in staging/);
+  });
+
+  it('falls back to the previous Flash model when the default answers 503 (2026-11-13)', async () => {
+    const urls: string[] = [];
+    const fakeFetch = ((url: string) => {
+      urls.push(url);
+      return Promise.resolve(
+        url.includes(GEMINI_DEFAULT_MODEL)
+          ? new Response('{"error":{}}', { status: 503 })
+          : new Response(JSON.stringify(reply('{"title":"x"}'))),
+      );
+    }) as unknown as typeof fetch;
+    const llm = createLlmProvider(
+      { LLM_PROVIDER: 'gemini', GEMINI_API_KEY: 'k' },
+      { fetch: fakeFetch },
+    );
+    const result = await llm?.generateStructured(request);
+    expect(result?.json).toEqual({ title: 'x' });
+    expect(urls.map((u) => u.split('/models/')[1])).toEqual([
+      `${GEMINI_DEFAULT_MODEL}:generateContent`,
+      `${GEMINI_DEFAULT_FALLBACK_MODEL}:generateContent`,
+    ]);
+    // `none` (or the same model twice) turns the fallback off.
+    urls.length = 0;
+    const single = createLlmProvider(
+      { LLM_PROVIDER: 'gemini', GEMINI_API_KEY: 'k', GEMINI_FALLBACK_MODEL: 'none' },
+      { fetch: fakeFetch },
+    );
+    await expect(single?.generateStructured(request)).rejects.toMatchObject({ status: 503 });
+    expect(urls).toHaveLength(1);
   });
 });
