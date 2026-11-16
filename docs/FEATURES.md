@@ -80,7 +80,7 @@ changes per platform (Meet extension, desktop app, bot, file upload).
 | C4 | Resilience: buffering, reconnect, crash recovery | 1 | FR-CAP-07/08, NFR-REL |
 | C5 | File upload / import | 2 | — |
 | C6 | Desktop app capture (macOS, Windows) | 2 | — |
-| C7 | Cloud meeting bot | 3 | — |
+| C7 | Notetaker bot (our own, optional per meeting) | 1 (Stage B) | ADR-0010 |
 | C8 | Mobile and in-person recording | 3+ | — |
 | **D. Transcription** ||||
 | D1 | Live streaming transcription | 1 | FR-LIV-01..07 |
@@ -484,7 +484,8 @@ sleep/wake mid-meeting, and system notification sounds leaking into the recordin
 ---
 
 ### C7. Cloud meeting bot
-**Phase 3 (optional)**
+**Phase 1, optional per meeting (ADR-0010, accepted 2026-11-16; plan Stage B).** Bot video and
+calendar auto-join stay later.
 
 **What.** A bot joins the call as a participant and records audio/video — for users who want video,
 want to record meetings they do not attend, or cannot install software.
@@ -496,9 +497,10 @@ upload media → same pipeline.
 **How others do it.** Fireflies, Otter, Fathom, Read AI, Circleback run bots, often via headless
 Chromium in containers; many companies use **Recall.ai** instead of running their own fleet.
 
-**Best way for us.** **Buy first** (bot API provider) — running bot fleets means fighting platform
-UI changes, login blocks, and container costs. Revisit building only at scale. Bot is opt-in per
-meeting, branded clearly, and always posts a consent notice.
+**Best way for us.** **Build our own, free** ([ADR-0010](adr/0010-meeting-bot.md), superseding
+"buy first" on 2026-11-16): a Chromium per meeting joins as a named guest and runs the extension's
+Meet adapter and capture code, streaming to the same gateway (audio only, `them` lane). Recall.ai is
+only the fallback if the spike fails. Bot is opt-in per meeting, branded clearly, never disguised.
 
 **Pitfalls.** Platform terms (e.g. Zoom's rules for SDK bots joining external meetings) change —
 check before building.

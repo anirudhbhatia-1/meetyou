@@ -48,7 +48,7 @@
 
 | Driver | Architectural consequence |
 |---|---|
-| **Bot-free capture** | Capture runs on the user's device (Chrome extension, later desktop app). The backend never joins meetings in Phase 1. |
+| **Bot-free capture by default** | Capture runs on the user's device (Chrome extension, later desktop app). The backend joins a meeting only when the user sends our notetaker bot for that meeting (ADR-0010, plan Stage B): a new capture adapter on the same gateway. |
 | **Two lanes (`me` / `them`)** | Lanes stay separate end to end: capture, transport, STT sessions, storage, segments. |
 | **Platform-agnostic core** | A strict boundary: *adapters* emit normalized events; the *core* consumes only those events. |
 | **Provider-swappable STT and LLM** | All vendor calls sit behind interfaces with capability descriptors; vendor choice is configuration. |
@@ -984,8 +984,9 @@ interfaces, never implementations; only `providers/` calls vendor APIs.
 - **Retrieval** is built once and serves chat, briefs, live Q&A, and MCP.
 
 ### 24.2 Phase 3 additions
-- **Bot adapter** via a meeting-bot API vendor (buy first): vendor webhooks deliver media and events
-  that are translated into our normalized events.
+- **Bot additions:** the notetaker bot itself moved to Phase 1 as our own self-hosted guest bot
+  ([ADR-0010](adr/0010-meeting-bot.md), plan Stage B; audio only, `them` lane, normalized events).
+  Phase 3 adds bot video, calendar auto-join and other platforms.
 - **Video pipeline additions:** adaptive streaming (HLS) renditions and a clips service cutting
   media by segment timestamps. Basic recording, fragment upload and MP4 playback are Phase 1
   (ADR-0011).
@@ -1036,7 +1037,7 @@ contracts. Changing them requires an ADR and a migration plan.
 | 0007 | LLM provider and prompt/version management | M2 |
 | 0008 | Desktop app approach (native vs cross-platform; build vs SDK) | Phase 2 |
 | 0009 | Retrieval design (chunking, embeddings, hybrid ranking) | Phase 2 |
-| 0010 | Meeting bot: buy vs build | Phase 3 |
+| [0010](adr/0010-meeting-bot.md) | Meeting bot — **Accepted 2026-11-16:** our own guest bot, per-meeting choice; Recall.ai only as fallback | Stage B |
 
 ### 26.2 Open technical questions (answer in the M1 capture spike)
 1. Which UI entry points satisfy the user-gesture requirement for `tabCapture` (toolbar click,

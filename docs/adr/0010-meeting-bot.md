@@ -2,9 +2,9 @@
 
 | Field | Value |
 |---|---|
-| Status | **Proposed** (2026-11-16). Nothing changes in scope, plan or code until Anirudh accepts it |
+| Status | **Accepted** (Anirudh, 2026-11-16): "make our own bot … give option of either use bot or extension to user". Proposed the same day. The spike gate (IMPLEMENTATION_PLAN SB-01) decides go/no-go; a no-go reopens this ADR (§6.4) |
 | Date | 2026-11-16 |
-| Would change | AGENTS §2 out-of-scope item "Cloud meeting bots in Phase 1"; FEATURES C7 "Buy first"; ARCHITECTURE §1 "The backend never joins meetings in Phase 1" and §24.2; IMPLEMENTATION_PLAN S9-01 (see §8) |
+| Changes | AGENTS §2 out-of-scope item "Cloud meeting bots in Phase 1"; FEATURES C7 "Buy first"; ARCHITECTURE §1 "The backend never joins meetings in Phase 1" and §24.2; IMPLEMENTATION_PLAN S9-01 (see §8) |
 | Related | [ADR-0001](0001-stt-provider.md) (Deepgram) · [ADR-0003](0003-audio-transport-format.md) (Opus frames) · [ADR-0004](0004-auth-and-token-model.md) (tokens) · [ADR-0005](0005-job-queue-and-outbox.md) (queue) · [ADR-0011](0011-video-screen-recording.md) (video) · [ADR-0012](0012-azure-hosting.md) (Azure) · FEATURES C7 · PRD §3.3 |
 
 > Facts were read on the vendors' and Google's own pages on 2026-11-16 (§10). Anything marked
@@ -154,7 +154,7 @@ The price is that we own the join flow and Meet's changes to it.
   no account at all. Revisit only if guest admission proves to be the main failure (§6.4).
 - **Meet Media API:** being turned down on 2027-01-15 (§1.2).
 
-## 4. Decision (proposed)
+## 4. Decision
 
 **Option C: build our own guest bot on top of our extension's Meet adapter and capture code,
 self-hosted as one Container Apps Job execution per meeting in Central India.** No paid bot
@@ -320,6 +320,10 @@ paid and would need Anirudh's approval and a sub-processor entry.
 
 ## 7. Rough task list (no product code in this ADR)
 
+The detailed plan with estimates, gate and exit criteria is **Stage B** in
+[IMPLEMENTATION_PLAN.md](../IMPLEMENTATION_PLAN.md) (tasks `SB-01`…); the list below is the
+original outline.
+
 | ID | Task | Owner (proposed) |
 |---|---|---|
 | B-01 | **Spike:** Chromium under Xvfb on Container Apps joins a test Meet as a guest, in-page audio capture works, size and CPU measured; go/no-go for §6.4 | Anirudh |
@@ -333,9 +337,9 @@ paid and would need Anirudh's approval and a sub-processor entry.
 | B-09 | **Consent and legal:** bot name and join message, consent log entry, privacy policy and onboarding text mention the notetaker | Anirudh decides; Gaurav updates legal drafts |
 | B-10 | **Tests:** unit tests for the join state machine and URL validation; a replay test feeding recorded bot frames through the gateway; a manual checklist with two Google accounts | Both |
 
-## 8. Scope change if accepted
+## 8. Scope change (applied 2026-11-16 on acceptance)
 
-Nothing below changes until Anirudh accepts this ADR. On acceptance:
+Anirudh accepted this ADR on 2026-11-16; these edits were made in the same change:
 - **AGENTS §2:** remove "Cloud meeting bots in Phase 1" from out of scope; add a Phase 1 (or
   stage-to-be-decided) bullet: "Optional self-hosted Google Meet notetaker bot, per meeting, guest
   join, audio only ([ADR-0010](0010-meeting-bot.md))". Phase 3's "optional cloud bot" becomes
@@ -356,7 +360,8 @@ Nothing below changes until Anirudh accepts this ADR. On acceptance:
 ## 9. Verification and open questions
 
 ### 9.1 Open (Anirudh decides)
-1. Accept the scope change and which stage the bot lands in.
+1. ~~Accept the scope change and which stage the bot lands in.~~ Accepted 2026-11-16; the bot is
+   Stage B in the plan, after the Stage 5 alpha.
 2. Does the bot post its join message in Meet chat while `MEET_CHAT_NOTICE_ENABLED` is off?
    Recommendation: yes, because a guest named "notetaker" is the main notice, and a separate
    `BOT_JOIN_MESSAGE_ENABLED` flag keeps it independent of the extension's paused notice.

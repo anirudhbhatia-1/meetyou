@@ -3,15 +3,16 @@
 | Field | Value |
 |---|---|
 | Purpose | How the whole product gets built: stages, tasks, the approach for each task, owners, dependencies, and exit criteria |
-| Status | Stages 0–4 complete in code (S4 2026-11-09); 2026-11-09 audit fixes in [AUDIT-2026-11-09.md](AUDIT-2026-11-09.md); Stage-5 hardening listed there |
-| Last updated | 2026-11-10 |
+| Status | Stages 0–4 complete in code (S4 2026-11-09); 2026-11-09 audit fixes in [AUDIT-2026-11-09.md](AUDIT-2026-11-09.md); Stage-5 hardening listed there; **Stage B** (notetaker bot, ADR-0010) added 2026-11-16, starts with the SB-01 spike |
+| Last updated | 2026-11-16 (Stage B: notetaker bot, ADR-0010) |
 | Owners | **Anirudh** (works with Claude Code) · **Gaurav** (works with Google Antigravity) |
 | Related | [PRD.md](PRD.md) · [FEATURES.md](FEATURES.md) · [ARCHITECTURE.md](ARCHITECTURE.md) · [DESIGN.md](DESIGN.md) · [STT_BENCHMARK_PLAN.md](STT_BENCHMARK_PLAN.md) · [STT_PREFLIGHT.md](STT_PREFLIGHT.md) · [adr/](adr/README.md) · [AGENTS.md](../AGENTS.md) |
 
 > **Terminology.** The PRD uses *product phases* (Phase 1 = Meet extension, Phase 2 = breadth and
 > memory, Phase 3 = business). This plan uses **stages** (S0–S9) for the order of work. Stages 0–7
 > deliver product Phase 1 and map to PRD milestones M0–M4; stages 8–9 cover product Phases 2 and 3.
-> Task IDs look like `S2-05`. Durations are **estimates** and will be revised after Stage 1.
+> Task IDs look like `S2-05`. **Stage B** (notetaker bot, `SB-01`…) is a side stage of product
+> Phase 1 that runs after Stage 5 and in parallel with Stage 6. Durations are **estimates** and will be revised after Stage 1.
 
 ---
 
@@ -26,6 +27,7 @@
 7. [Stage 3 — Notes and summaries](#stage-3--notes-and-summaries)
 8. [Stage 4 — Product UI](#stage-4--product-ui)
 9. [Stage 5 — Internal alpha (M2)](#stage-5--internal-alpha-m2)
+   - [Stage B — Notetaker bot (ADR-0010)](#stage-b--notetaker-bot-adr-0010)
 10. [Stage 6 — Private beta (M3)](#stage-6--private-beta-m3)
 11. [Stage 7 — Public launch (M4)](#stage-7--public-launch-m4)
 12. [Stage 8 — Product Phase 2](#stage-8--product-phase-2)
@@ -95,10 +97,11 @@ and breaking changes need an ADR (AGENTS.md §3, ARCHITECTURE §24.3).
 | S3 | Notes and summaries | M2 | 1 | Cited notes, decisions, action items within 60 s; evaluation baseline |
 | S4 | Product UI | M2 | 1 | All Phase 1 screens from DESIGN.md, against mocks then real services |
 | S5 | Internal alpha | M2 exit | 1 | Both developers use it for every Meet call for 2 weeks |
+| SB | Notetaker bot (ADR-0010) | — | 1 | Per meeting, the user picks the extension or our own guest bot; spike gate first |
 | S6 | Private beta | M3 | 1 | 10–30 external users; legal, security, performance ready |
 | S7 | Public launch | M4 | 1 | Chrome Web Store listing live |
 | S8 | Product Phase 2 | — | 2 | Desktop app, upload, calendar, memory, MCP, integrations, billing |
-| S9 | Product Phase 3 | — | 3 | Clips and adaptive video, bot, automations, CRM, analytics, enterprise |
+| S9 | Product Phase 3 | — | 3 | Clips and adaptive video, bot video and calendar auto-join, automations, CRM, analytics, enterprise |
 
 S2, S3, and S4 run **in parallel** after S1; S4 starts on mocks during S1.
 
@@ -319,6 +322,85 @@ checklist passes · no mocks in the production build.
 
 ---
 
+## Stage B — Notetaker bot (ADR-0010)
+
+**Goal:** besides the extension, a user can **send our own notetaker bot** to a Google Meet call and
+gets the same transcript and cited notes. The choice is per meeting (**Use the extension** /
+**Send notetaker**), never a default. The bot is ours and free (no paid vendor): a Chromium per
+live meeting on our Container Apps environment, joining as an honest named guest, running the
+extension's Meet adapter and capture code, audio only in the `them` lane. It is a **new capture
+adapter**: the gateway, pipeline, segment model and `shared/contracts` events and frames do not
+change (AGENTS §3 rules 1–2).
+**When:** after the Stage 5 alpha (the bot reuses the alpha-tested capture code), in parallel with
+Stage 6. SB-01 can start earlier because it touches no product code. Whether the bot ships at the
+Stage 7 launch or later is Anirudh's call at the Stage B exit.
+**Estimate:** a 5-day spike, then about 43 developer-days of build (Anirudh ≈ 30, Gaurav ≈ 13), so
+≈ 6–7 weeks from spike to exit with Anirudh's tasks as the critical path. Effort per task is in
+developer-days (d) and is an **estimate**; revise it with the spike's findings. Owners follow the
+areas in §1.1 (Meet adapter, REST endpoints and infrastructure are Gaurav's).
+
+Markers: **[A]** needs Anirudh's decision · **[Meet]** needs a real Google Meet check by a person
+(two Google accounts, one as host) · **[Dep]** adds a dependency that needs approval (AGENTS §6.7) ·
+**[Schema]** changes the data schema and needs approval.
+
+### B.1 Spike and go/no-go gate
+
+| ID | Task and approach | Owner | Depends on | Effort | Done when |
+|---|---|---|---|---|---|
+| SB-01 | **Bot spike** (throwaway code on a spike branch, not merged). A Chromium (headful under Xvfb) in a container on our Container Apps environment: (1) opens a Meet link, sets the guest name, turns camera and mic off, presses *Ask to join*; (2) detects lobby, admitted, denied, and "guests not allowed"; (3) captures the remote audio in the page (wrapped `RTCPeerConnection` tracks mixed in an `AudioContext`; PulseAudio as the fallback) into our 100 ms frames; (4) streams to the **staging gateway** with a dev stream token and gets a live transcript; (5) leaves on Stop, call ended, alone 2 min, and a time cap. Measures CPU, memory, start latency and egress per bot-hour at 2 vCPU / 4 GiB. Also checks: an empty `me` lane through the assembler, speaker resolution and summary; Container Apps Job replica timeout; core quota; unprivileged Xvfb and `/dev/shm`. **[Meet] [Dep]** (Playwright on the spike branch only) | Anirudh | ADR-0010 | 5 d | Go/no-go report in ADR-0010 §9.2 with numbers; Anirudh decides |
+
+**Go/no-go gate (end of SB-01).** **Go** only if all of these hold:
+1. **Honest guest join** from Container Apps egress is admitted in at least 9 of 10 attempts in
+   meetings that allow guests, with no CAPTCHA or block, and without hiding that it is a bot (no
+   fingerprint spoofing, no human-looking name).
+2. **Admission states** (lobby, admitted, denied, guests not allowed, lobby timeout) are detected
+   correctly every time.
+3. **Audio:** a 60-minute meeting streams with no gap longer than 1 s and a live Deepgram transcript
+   on staging; transcript quality is in line with the extension's `them` lane on the same call.
+4. **Leave:** the bot leaves within 30 s of Stop, call end, or being alone, and on removal by the
+   host.
+5. **Size and cost:** one bot fits in ≤ 2 vCPU / 4 GiB (or ≤ 4 vCPU / 8 GiB if Anirudh accepts
+   about $0.43 per bot-hour of compute), and the subscription quota allows at least 2 concurrent
+   bots.
+6. **No core change:** the gateway and pipeline accept a `them`-only session, or need only a small
+   empty-lane fix in a consumer, not a contract change.
+
+**No-go:** stop Stage B. Anirudh decides between (a) the documented fallback, **Recall.ai** behind
+the same adapter boundary (paid, about $0.50 per bot-hour; amends ADR-0010 and adds a sub-processor),
+or (b) dropping the bot. **[A]** A partial result (for example, guest joins work but capture needs
+PulseAudio) is a go with the fallback approach written into ADR-0010.
+
+### B.2 Build (after a go)
+
+| ID | Task and approach | Owner | Depends on | Effort | Done when |
+|---|---|---|---|---|---|
+| SB-02 | **Shared Meet adapter package:** move the parts of `extension/src/adapters/meet/` the bot needs (selectors, detector, metadata, participants, speaker and caption signals, chat) into a workspace package both the extension and the bot import. No behaviour change in the extension; the core never imports it (adapter-only) | Gaurav | SB-01 go | 3 d | Extension tests pass unchanged; bot imports the package |
+| SB-03 | **Shared capture package:** move the PCM worklet, PCM framer, WebCodecs Opus encoder and stream client (acks, replay, `hello.resumeFrom`) out of `extension/src/offscreen/` so a page script in the bot can run them; the bot supplies a mixed remote-audio source instead of `tabCapture` | Anirudh | SB-01 go | 3 d | Extension tests pass unchanged; a bot test streams frames to a local gateway |
+| SB-04 | **Contracts:** REST DTOs in `shared/contracts` for bot sessions (create request with `meetingUrl`, `title?`; status enum *requested · launching · waiting_admission · recording · leaving · ended · not_admitted · guests_not_allowed · failed*; leave reasons). `capture_source` (`extension` \| `bot`) on meeting DTOs. **No change to capture events or audio frames** | Anirudh | SB-01 go | 1 d | Schemas + tests merged; both approvals (§1.2) |
+| SB-05 | **Data:** migration adding `sessions.capture_source`, a `bot_runs` table (`workspace_id`, RLS, status, requested/admitted/left timestamps, leave reason, bot compute seconds) and bot minutes in usage records (AGENTS §3 rule 10). No meeting URL or names in logs **[Schema]** | Anirudh | SB-04 | 1.5 d | Migration + tenancy tests pass on staging |
+| SB-06 | **Bot adapter:** inside the bot, translate the shared Meet adapter's signals into normalized events (`session.started` with `platform: 'google_meet'`, `participant.joined/left`, `speaker.active`, optional `caption.observed`, `consent.notice`, `session.ended`) and the capture package's frames, all audio on the `them` lane (`resumeFrom.me = -1`, no `mic.mute_changed`). Exchanges a single-use launch token for a stream token (ADR-0004 pattern) | Anirudh | SB-02, SB-03, SB-04 | 3 d | Replay test: a recorded synthetic bot session through the gateway produces segments with speaker names |
+| SB-07 | **Bot runner app** (`backend/apps/bot`): browser lifecycle, join state machine (from SB-01), lobby timeout 10 min, leave rules (Stop, call ended, alone 2 min, removed by host, 3 h cap), crash and disconnect handling, status reports to the API, content-free logs. Image: Chromium, Xvfb, fonts, non-root user **[Dep]** (Playwright or `playwright-core`) | Anirudh | SB-06 | 5 d | Unit tests for the state machine; joins a real meeting from a local container **[Meet]** |
+| SB-08 | **Launch orchestration:** `bot.launch` and `bot.stop` jobs in the worker (graphile-worker, ADR-0005): start a Container Apps Job execution through the Azure management API with the managed identity, pass only the bot-run ID and launch token, retry once, time out a run stuck in *launching* after 2 min; status from the runner updates `bot_runs` | Anirudh | SB-05, SB-07 | 2 d | A run goes requested → recording → ended on staging; a killed runner ends as `failed` |
+| SB-09 | **Azure hosting:** Container Apps **Job** `bot` in `infra/azure` (manual trigger, one execution per live meeting, 2 vCPU / 4 GiB from SB-01, replica timeout ≈ 3.5 h), image in our Container Registry, role assignment so the worker can start executions. **Cost guard:** a global concurrent-bot limit (start: 2), per-user one live bot, per-workspace daily bot-hours cap, a `BOT_ENABLED` kill switch, and an Azure budget alert on the subscription. Note: Azure for Students is for non-commercial use; real customers need a paid subscription **[A]** | Gaurav | SB-01 go | 3 d | `terraform apply` creates the job; limits enforced in a test; budget alert fires in a dry run |
+| SB-10 | **API endpoints:** `POST /v1/bot-sessions` (`meetingUrl` must match `https://meet.google.com/abc-defg-hij` after normalising; anything else is rejected, so the bot only ever opens Meet), `GET /v1/bot-sessions/{id}` (status for the UI), `POST /v1/bot-sessions/{id}/leave`. Requires sign-in and the consent acknowledgement (FR-ONB-06); enforces the SB-09 limits; creates the meeting and session (`capture_source = 'bot'`) and enqueues `bot.launch`; meeting cost includes bot compute minutes | Gaurav | SB-04, SB-05, SB-08 | 3 d | Endpoint tests incl. bad links, limits, other-workspace access; works with the web UI on staging |
+| SB-11 | **Consent:** bot display name "{First name}'s notetaker (Minutes)" (final wording in DESIGN), camera off, mic muted; join chat message behind its own flag `BOT_JOIN_MESSAGE_ENABLED` **[A]** (whether it posts while `MEET_CHAT_NOTICE_ENABLED` is off); a `consent.notice` event per run so the consent log works when it is turned back on; onboarding and privacy-policy text mention the notetaker | Anirudh (product, code) / Gaurav (legal drafts) | SB-07 | 1.5 d | Name and message seen in a real call **[Meet]**; legal drafts updated |
+| SB-12 | **DESIGN.md:** a "Record a meeting" choice (**Use the extension** / **Send notetaker**) on Home and Meetings with the Meet-link field; bot status states on the meeting page (*Joining · Waiting to be let in · Recording · Processing · Ready*; errors *Not let in · This meeting doesn't allow guests · Couldn't join*) with a Stop button; "Recorded by notetaker" / "Recorded in Chrome" badge; "No video for notetaker recordings"; side panel option; all strings. Design source rule: DESIGN.md + the design artifact only (AGENTS §2) **[A]** (wording) | Anirudh | SB-01 go | 2 d | DESIGN.md section merged before SB-13/SB-14 start |
+| SB-13 | **Web UI:** the "Record a meeting" choice and link field, bot status on the meeting page (polls `GET /v1/bot-sessions/{id}`), Stop, badges, error and empty states, dark mode; against the mock API first, then real endpoints | Anirudh | SB-12, SB-10 (mock first) | 4 d | All DESIGN states built; a11y checks pass; works on staging |
+| SB-14 | **Extension option:** in the side panel's Ready state (DESIGN §8.5) and the Meet prompt (§8.2), "Send notetaker instead" calls the API with the current meeting link and does not start tab capture; the panel then shows the bot status and a link to the meeting page | Anirudh | SB-12, SB-10 | 2 d | Works in Chrome on a real call **[Meet]**; extension recording unaffected |
+| SB-15 | **Tests:** unit (join state machine, link validation, limits, status transitions), contract tests for the DTOs, a synthetic replay of a bot session through gateway → segments → summary (no real meeting data), tenancy tests for `bot_runs`; all in `pnpm check` | Anirudh / Gaurav (each for own tasks) | SB-06..SB-10 | 3 d | CI green; coverage of the gate's states |
+| SB-16 | **Staging checks (manual checklist)** **[Meet]**: guest admitted; not admitted (lobby timeout); meeting that blocks guests; host removes the bot; Stop from the web and the side panel; 60-minute call; two bots at once; Hinglish speakers with correct names; notes generated; cost per bot-hour (compute + STT) measured against ADR-0010 §5 | Anirudh | SB-13, SB-14, SB-09 | 2 d | Checklist signed off by both; numbers recorded in ADR-0010 |
+| SB-17 | **Canary:** a scheduled run that joins a test meeting and checks the join flow still works after Meet or Chromium changes; alerts on failure. Whether a test meeting can admit the bot without a person (Meet access settings) is **[Verify]**; if not, the canary checks only up to the lobby | Gaurav | SB-09, SB-07 | 2 d | Canary runs daily; a broken selector raises an alert |
+| SB-18 | **Docs:** ARCHITECTURE (bot container and flow in §3/§24, driver §1), PRD FR-BOT requirements, FEATURES C7, STAGING_SETUP (bot job), selector-change runbook shared with the extension, HANDOFF | Anirudh / Gaurav (STAGING_SETUP) | SB-16 | 1.5 d | Docs match what shipped |
+
+**Exit criteria:** a signed-in user can choose per meeting between the extension and the notetaker
+· the bot joins as a named guest, records, and leaves on every rule in SB-07 · notes with speaker
+names arrive like extension recordings · every failure state is visible in the web app · the cost
+guard and kill switch work · no change to the gateway, pipeline, capture events or audio frames
+beyond an empty-lane fix · SB-16 checklist signed off · Anirudh decides whether the bot ships at
+launch **[A]**.
+
+---
+
 ## Stage 6 — Private beta (M3)
 
 **Goal:** 10–30 external users with legal, security, and performance readiness.
@@ -392,7 +474,7 @@ beta data; ADRs listed must be accepted first.
 
 | ID | Task and approach | Owner | Refs |
 |---|---|---|---|
-| S9-01 | **ADR-0010 and bot adapter** via a meeting-bot API vendor (webhooks → normalized events) | Anirudh | FEATURES C7 |
+| S9-01 | ~~**ADR-0010 and bot adapter** via a meeting-bot API vendor~~ — **moved 2026-11-16** to Stage B (our own bot, ADR-0010). Phase 3 keeps bot video, calendar auto-join and other platforms | Anirudh | FEATURES C7 |
 | S9-02 | **Video additions:** adaptive streaming (HLS) renditions; **clips service** (basic recording and playback are Phase 1, S1-13 / S2-14) | Anirudh | FEATURES K2 |
 | S9-03 | **Clip UI** on the Phase 1 player | Gaurav | DESIGN §22 |
 | S9-04 | **Automation engine:** triggers, conditions, actions, run log, replay, preview on past meetings | Anirudh | FEATURES I5 |
@@ -426,6 +508,9 @@ beta data; ADRs listed must be accepted first.
 | Gaurav → Anirudh | API scaffold conventions (errors, idempotency, pagination) | S3-03 SSE endpoint | — |
 | Gaurav → Anirudh | REST endpoints the UI uses (meetings, notes, summary, action items, search, settings, export) | S4-14 | Mock API (S4-01) |
 | Gaurav → Anirudh | Consent chat notice in Meet (S4-07) | S4-05 | Copy-to-clipboard fallback |
+| Gaurav → Anirudh | Shared Meet adapter package (SB-02) | SB-06 | The extension's adapter imported by path in the spike |
+| Anirudh → Gaurav | Bot-session DTOs and `bot_runs` schema (SB-04, SB-05) | SB-10 | — |
+| Gaurav → Anirudh | Bot-session endpoints (SB-10) and bot job infra (SB-09) | SB-13, SB-14, SB-16 | Mock API (S4-01) |
 | Gaurav → Anirudh | Benchmark recordings, references (clips 1–10), batch results | S0-08, S0-09 | — |
 
 ---
@@ -440,6 +525,9 @@ S0 benchmark (S0-01 → S0-04/05 → S0-06..09) → ADR-0001 → S2-03 provider 
 Parallel tracks: S0-15/16 → S1 capture spike → S2-01/02 data + auth
                  S0-17 → S4-01/02 → S4-03..13 UI on mocks
 ```
+Stage B (notetaker bot) is off the critical path: it starts after S5, runs next to S6, and its
+SB-01 spike can run earlier because it touches no product code.
+
 Anything on the critical path that slips by more than one week triggers a plan update (§18).
 
 ### 15.2 Indicative timeline (weeks)
@@ -490,6 +578,8 @@ A task is done when:
 | Cloud Run 60-minute reconnects hurt continuity | Move only the gateway to VM/GKE (ADR-0002 fallback) | Anirudh proposes, both approve |
 | Meet DOM signals unreliable for speaker names | Rely on batch diarization + user rename; captions as optional signal | Both, after S1-12 |
 | Summary P95 above 60 s | Faster model for first pass, refine in background; reduce prompt size | Anirudh proposes, both approve |
+| Notetaker spike fails the SB-01 gate | Stop Stage B; Recall.ai behind the same adapter (paid, ADR-0010 amendment and sub-processor) or drop the bot | Anirudh |
+| Meet blocks or CAPTCHAs honest guest bots after launch | `BOT_ENABLED` off, UI points users to the extension; never disguise the bot; revisit ADR-0010 | Anirudh |
 | UI ahead of backend | Continue on mocks; move S4-14 later; no change to contracts | Gaurav |
 | Backend ahead of UI | Anirudh adds test tooling and failure drills (S5-02) early | Anirudh |
 

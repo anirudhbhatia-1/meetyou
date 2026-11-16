@@ -120,7 +120,8 @@ conversations, without a bot in the call and without paying US-level prices.*
 
 ### 3.3 Non-goals (Phase 1)
 - Clips and highlight reels (video of the meeting screen **is** in Phase 1 since 2026-11-01 — [ADR-0011](adr/0011-video-screen-recording.md)).
-- Cloud meeting bots.
+- Paid meeting-bot vendors and signed-in bots (our own optional guest notetaker bot is in since
+  2026-11-16 — [ADR-0010](adr/0010-meeting-bot.md); FR-BOT requirements come with plan SB-18).
 - Zoom, Teams, Webex, Slack Huddles, or in-person recording.
 - CRM, ATS, or project-management integrations.
 - Conversation analytics (talk ratios, coaching scores).
@@ -226,7 +227,7 @@ was said.
 
 ### Phase 3 — Business features
 - Clips, highlight reels, adaptive-streaming video playback (basic video recording and playback moved to Phase 1).
-- Optional cloud bot (own or via a bot API) for users who want it.
+- Notetaker bot additions: video, calendar auto-join, other platforms (the bot itself is Phase 1, ADR-0010).
 - CRM/ATS/project-tool integrations and workflow automations.
 - Conversation analytics.
 - Team workspaces, sharing permissions, SSO, admin controls, audit logs, SOC 2 readiness.

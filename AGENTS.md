@@ -12,7 +12,8 @@ single source of truth for scope, architecture, and working style. If a rule her
 agent's default behavior, this file wins.
 
 > **Project status: Stage 4 (UI) complete in code (2026-11-09) after Stage 3; real Chrome/Meet
-> checks, staging verification and templates v2 pending (HANDOFF §7).** Live S2 tests (gateway failover, worker
+> checks, staging verification and templates v2 pending (HANDOFF §7). Notetaker bot accepted
+> 2026-11-16 (ADR-0010, plan Stage B, starts with the SB-01 spike).** Live S2 tests (gateway failover, worker
 > crash, 60-min video sync) are still to run. Create other product code only for
 > IMPLEMENTATION_PLAN tasks your developer has started.
 
@@ -41,7 +42,11 @@ files it lists: no other design sources or UI kits (Anirudh, 2026-11-05). This s
 short version.
 
 ### Phase 1 — Google Meet Chrome extension (current target)
-- Chrome Manifest V3 extension, **no meeting bot**.
+- Chrome Manifest V3 extension, bot-free by default.
+- **Optional notetaker bot, our own** (ADR-0010, accepted 2026-11-16): per meeting the user picks
+  **Use the extension** or **Send notetaker**; the bot joins Meet as a named guest, records audio
+  only (all in the `them` lane) and streams it to the same gateway as a new capture adapter.
+  Built in plan Stage B after a go/no-go spike.
 - **Audio in two separate lanes**, plus **video of the meeting screen** (ADR-0011):
   - `me` — the user's microphone
   - `them` — the Meet tab audio (remote participants)
@@ -60,12 +65,13 @@ Desktop app (macOS first) for Zoom/Teams native apps; cross-meeting search and c
 and pre-meeting briefs; sharing to Slack/Notion/email; MCP server.
 
 ### Phase 3
-Clips and adaptive video streaming; optional cloud bot; CRM sync and workflow automations; talk-time
+Clips and adaptive video streaming; notetaker bot video, calendar auto-join and other platforms; CRM sync and workflow automations; talk-time
 analytics; team workspaces, SSO, admin controls.
 
 ### Explicitly out of scope (do not build without a decision recorded in `docs/`)
 - Clips, highlight reels, or adaptive-streaming video in Phase 1 (screen video itself is in, ADR-0011)
-- Cloud meeting bots in Phase 1
+- Paid meeting-bot vendors (Recall.ai etc.) and signed-in bots on Google accounts in Phase 1 (our own
+  guest bot is in, ADR-0010; Recall.ai is only the documented fallback if the SB-01 spike fails)
 - Caption-scraping as the *only* transcript source
 - Voiceprint / biometric speaker identification
 - Emotion or sentiment inferred from voice or video
@@ -320,6 +326,15 @@ Work like a careful senior engineer pairing with the developer.
   (2026-11-13: the student subscription cannot create Azure Postgres). Terraform lives in
   `infra/azure`. Google
   sign-in (a project without billing), Gemini and Deepgram are unchanged.
+
+- **2026-11-16 — Our own notetaker bot (Anirudh):** [ADR-0010](docs/adr/0010-meeting-bot.md)
+  accepted. Besides the extension, the user can **send a notetaker bot** to a Meet call; the choice
+  is per meeting (Use the extension / Send notetaker), never a default. The bot is **ours and
+  free**: a Chromium per meeting on our Container Apps environment, joining as an honest named
+  guest (no Google account, no disguise), running the extension's Meet adapter and capture code,
+  audio only in the `them` lane, no core or contract change. No paid bot vendor; **Recall.ai is
+  only the documented fallback** if the spike (plan SB-01) fails its go/no-go gate. Open: whether
+  the bot posts a join message while `MEET_CHAT_NOTICE_ENABLED` is off.
 
 ### Open (do not assume an answer)
 - LLM for summaries (D-04): [ADR-0007](docs/adr/0007-llm-provider-and-prompt-versions.md)

@@ -6,7 +6,7 @@ pointer to where the full detail lives — the linked document stays the source 
 
 | Field | Value |
 |---|---|
-| Last updated | 2026-11-16 (Anirudh: ADR-0010 meeting bot proposed) |
+| Last updated | 2026-11-16 (Anirudh: ADR-0010 accepted; plan Stage B notetaker bot) |
 | Updated by | Anirudh (Claude Code) |
 | Repository | [anirudhbhatia-1/meetyou](https://github.com/anirudhbhatia-1/meetyou) — branches `main`, `anirudh`, `Gauravbro` |
 | Current stage | **Stage 4** complete in code; 2026-11-09 audit fixes landed; Stage-5 hardening planned (AUDIT §4); real Chrome/Meet checks pending (§7) |
@@ -69,7 +69,7 @@ All dated 2026-10-28 unless noted.
 | Decision | Detail | Where |
 |---|---|---|
 | Start with Google Meet only | Other platforms later through new adapters | PRD §7, AGENTS §2 |
-| Chrome extension, no bot | Bot is optional in product Phase 3, and we buy (bot API vendor) before building | FEATURES C1, C7 |
+| Chrome extension, bot-free by default | Since 2026-11-16 an optional notetaker bot of our own (per-meeting choice, guest join, audio only) is in Phase 1 as plan Stage B; no paid vendor, Recall.ai only as fallback | FEATURES C1, C7, [ADR-0010](docs/adr/0010-meeting-bot.md) |
 | Phase 1 records audio **and the meeting screen** (2026-11-01) | Meet tab video with a playback mix; clips and adaptive streaming stay in Phase 3 | [ADR-0011](docs/adr/0011-video-screen-recording.md), PRD FR-CAP-12..15 |
 | Two lanes (`me` / `them`) end to end | Never mixed before transcription | ARCHITECTURE §1 |
 | Take the best ideas from competitors, not everything | Phased list; features and ideas only — no copied code, UI, or branding | FEATURES §1, appendix in PRD |
@@ -206,7 +206,17 @@ Gaurav's S3-07..S3-11 — Gaurav should not start them).** **Stage 4 is complete
 
 Newest first. One entry per working session (either person).
 
-### 2026-11-16 (latest) — Anirudh (Claude Code): ADR-0010 meeting bot proposed
+### 2026-11-16 (latest) — Anirudh (Claude Code): ADR-0010 accepted, Stage B planned
+
+Anirudh accepted ADR-0010 ("make our own bot … give option of either use bot or extension"). The
+ADR is Accepted; AGENTS §2/§9, ARCHITECTURE §1/§24/§26, PRD §3.3, FEATURES C7 and §4.1 here are
+updated. IMPLEMENTATION_PLAN has a new **Stage B** (SB-01..SB-18): a 5-day spike with a go/no-go
+gate (honest guest join 9/10, admission states, 60-min audio with no gap > 1 s, clean leave, fits
+2 vCPU / 4 GiB, no core change), then the build (~43 developer-days). Open for Anirudh: join
+message while the chat notice is off, bot name wording, and a paid subscription before real
+customers. Docs only; no code or dependencies.
+
+### 2026-11-16 — Anirudh (Claude Code): ADR-0010 meeting bot proposed
 
 Anirudh asked for an optional Fireflies-style bot next to the extension, and for "the best free
 option". [ADR-0010](docs/adr/0010-meeting-bot.md) is **Proposed**: build our own guest bot that
