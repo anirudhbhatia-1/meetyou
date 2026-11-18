@@ -182,6 +182,9 @@ importers:
 
   backend/apps/worker:
     dependencies:
+      '@meetyou/auth':
+        specifier: workspace:*
+        version: link:../../packages/auth
       '@meetyou/db':
         specifier: workspace:*
         version: link:../../packages/db
@@ -258,6 +261,9 @@ importers:
 
   backend/packages/pipeline:
     dependencies:
+      '@meetyou/auth':
+        specifier: workspace:*
+        version: link:../auth
       '@meetyou/contracts':
         specifier: workspace:*
         version: link:../../../shared/contracts

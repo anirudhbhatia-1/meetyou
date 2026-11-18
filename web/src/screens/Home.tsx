@@ -12,6 +12,7 @@ import {
 } from '../lib/format.ts';
 import { href, navigate } from '../lib/router.ts';
 import { useAsync } from '../lib/useAsync.ts';
+import { UpNext } from './Calendar.tsx';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -36,7 +37,7 @@ function SetupCard({
   const steps = [
     {
       title: 'Sign in with Google',
-      line: "Only your name and email. We don't read your calendar or Gmail.",
+      line: 'Only your name and email. We read your calendar only if you connect it in Settings, and never your Gmail.',
       done: true,
     },
     {
@@ -159,6 +160,7 @@ export function Home({ onActionsChanged }: { onActionsChanged: () => void }) {
           now={now}
         />
       )}
+      <UpNext now={now} />
       <div className="home-columns">
         <Card>
           <div className="card-head">

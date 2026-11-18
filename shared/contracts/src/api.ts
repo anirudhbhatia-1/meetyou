@@ -185,6 +185,61 @@ export const FolderRequest = z.object({ name: FolderName });
 export type FolderRequest = z.infer<typeof FolderRequest>;
 // POST /v1/meetings/{id}/folder-suggestion:dismiss answers 204 (DESIGN §11.2).
 
+// ---------- Calendar (ADR-0013, DESIGN §10.1, §15.7) ----------
+
+/** Read-only events; requested only when the user connects (never at sign-in, FR-ONB-02). */
+export const CALENDAR_SCOPE = 'https://www.googleapis.com/auth/calendar.events.readonly';
+/** The web app's OAuth redirect for connecting the calendar (SPA route). */
+export const CALENDAR_CALLBACK_PATH = '/calendar/callback';
+
+// GET /v1/calendar
+export const CalendarStatus = z.object({
+  connected: z.boolean(),
+  /** The Google account the calendar belongs to; null when not connected. */
+  accountEmail: z.string().nullable(),
+  /** needs_reconnect: Google refused the stored access (revoked, expired). */
+  status: z.enum(['active', 'needs_reconnect']).nullable(),
+  lastSyncedAt: IsoDateTime.nullable(),
+});
+export type CalendarStatus = z.infer<typeof CalendarStatus>;
+
+// POST /v1/calendar/connect: the web app's authorization code (PKCE) → stored, sealed access.
+export const ConnectCalendarRequest = z.object({
+  code: z.string().min(1).max(2000),
+  codeVerifier: z.string().min(43).max(128),
+  redirectUri: z.url(),
+});
+export type ConnectCalendarRequest = z.infer<typeof ConnectCalendarRequest>;
+// DELETE /v1/calendar answers 204: access revoked at Google, events and their notes deleted.
+
+export const UpcomingMeeting = z.object({
+  id: z.string().min(1),
+  title: z.string(),
+  startsAt: IsoDateTime,
+  endsAt: IsoDateTime,
+  /** abc-defg-hij; the web app links to meet.google.com/{code}. */
+  meetCode: z.string().nullable(),
+  /** Everyone but the user, by name (or the email's name part when the invite has no name). */
+  attendeeNames: z.array(z.string()),
+  /** Notes written before the call (DESIGN §10.1). */
+  noteCount: z.number().int().nonnegative(),
+  /** The recording made on this event, once there is one. */
+  meetingId: z.string().nullable(),
+});
+export type UpcomingMeeting = z.infer<typeof UpcomingMeeting>;
+// GET /v1/calendar/upcoming: today and tomorrow, events with a Meet link, soonest first.
+export const UpcomingResponse = z.object({
+  calendar: CalendarStatus,
+  meetings: z.array(UpcomingMeeting),
+});
+export type UpcomingResponse = z.infer<typeof UpcomingResponse>;
+
+// GET/PUT /v1/calendar/events/{id}/notes: one line per note, in order.
+export const EventNotes = z.object({
+  notes: z.array(z.string().trim().min(1).max(2000)).max(30),
+});
+export type EventNotes = z.infer<typeof EventNotes>;
+
 // ---------- Glossary (GET/PUT /v1/glossary) ----------
 
 // Validated against the STT provider's limits (Deepgram keyterm: ≤ 50 terms recommended,

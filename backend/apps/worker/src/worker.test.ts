@@ -47,6 +47,7 @@ describe('lifecycle jobs (S2-10)', () => {
       'meeting.summarize',
       'meeting.retranscribe',
       'meeting.suggest_folder',
+      'calendar.sync',
       'video.finalize',
       'meeting.delete',
       'account.delete',

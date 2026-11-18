@@ -14,7 +14,8 @@ export type AuthErrorCode =
   | 'refresh_expired'
   | 'refresh_revoked'
   | 'refresh_reused'
-  | 'no_workspace';
+  | 'no_workspace'
+  | 'scope_denied';
 
 export class AuthError extends Error {
   readonly code: AuthErrorCode;

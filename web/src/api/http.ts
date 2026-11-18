@@ -22,7 +22,14 @@ import {
   RenameSpeakerResponse,
   Folder,
   FolderListResponse,
+  CALENDAR_CALLBACK_PATH,
+  CALENDAR_SCOPE,
+  CalendarStatus,
+  EventNotes,
+  UpcomingResponse,
 } from '@meetyou/contracts';
+
+import { startCalendarConnect } from './auth.ts';
 
 import type { WebAuth } from './auth.ts';
 import type { FolderSaveResult, LibraryApi, MeetingFilter, MeetingSummary } from './types.ts';
@@ -73,7 +80,10 @@ function toMeetingSummary(body: MeetingSummaryResponse): MeetingSummary | null {
 /** DESIGN §11.3: meetings load 50 at a time. */
 const PAGE = 50;
 
-export function createHttpApi(auth: WebAuth): LibraryApi {
+export function createHttpApi(
+  auth: WebAuth,
+  options: { googleClientId?: string } = {},
+): LibraryApi {
   const get = async (path: string): Promise<unknown> => {
     const res = await auth.authorized(path, { headers: { accept: 'application/json' } });
     if (res.status === 404) return null;
@@ -163,6 +173,56 @@ export function createHttpApi(auth: WebAuth): LibraryApi {
         body: JSON.stringify({ title }),
       });
       if (!res.ok) throw new Error(`rename failed (${res.status})`);
+    },
+
+    async getCalendar() {
+      return CalendarStatus.parse(await get('/v1/calendar'));
+    },
+
+    async startCalendarConnect(loginHint) {
+      if (options.googleClientId === undefined) throw new Error('no Google client configured');
+      await startCalendarConnect(options.googleClientId, {
+        scope: CALENDAR_SCOPE,
+        callbackPath: CALENDAR_CALLBACK_PATH,
+        ...(loginHint !== undefined ? { loginHint } : {}),
+      });
+    },
+
+    async connectCalendar(payload) {
+      const res = await auth.authorized('/v1/calendar/connect', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+      if (res.ok) return { ok: true, calendar: CalendarStatus.parse(await res.json()) };
+      return { ok: false, error: res.status === 403 ? 'denied' : 'failed' };
+    },
+
+    async disconnectCalendar() {
+      const res = await auth.authorized('/v1/calendar', { method: 'DELETE' });
+      if (!res.ok) throw new Error(`calendar disconnect failed (${res.status})`);
+    },
+
+    async upcoming(from, to) {
+      const q = new URLSearchParams({ from: from.toISOString(), to: to.toISOString() });
+      return UpcomingResponse.parse(await get(`/v1/calendar/upcoming?${q.toString()}`));
+    },
+
+    async getEventNotes(eventId) {
+      const body = await get(`/v1/calendar/events/${encodeURIComponent(eventId)}/notes`);
+      return body === null ? [] : EventNotes.parse(body).notes;
+    },
+
+    async saveEventNotes(eventId, notes) {
+      const res = await auth.authorized(
+        `/v1/calendar/events/${encodeURIComponent(eventId)}/notes`,
+        {
+          method: 'PUT',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ notes }),
+        },
+      );
+      if (!res.ok) throw new Error(`notes not saved (${res.status})`);
     },
 
     async listFolders() {

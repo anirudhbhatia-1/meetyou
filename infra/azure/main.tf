@@ -73,7 +73,9 @@ resource "azurerm_role_assignment" "operator_kv_secrets" {
 
 locals {
   # Names in Key Vault, and the Container Apps secret names that reference them.
-  manual_secrets = ["deepgram-api-key", "gemini-api-key", "auth-signing-jwks", "google-client-secret"]
+  # calendar-token-keys (ADR-0013): create it in Key Vault before `terraform apply`, or the api
+  # and worker revisions fail to resolve the reference (STAGING_SETUP A.11).
+  manual_secrets = ["deepgram-api-key", "gemini-api-key", "auth-signing-jwks", "google-client-secret", "calendar-token-keys"]
   kv_secret_url  = { for name in concat(local.manual_secrets, ["database-url", "redis-url"]) : name => "${azurerm_key_vault.main.vault_uri}secrets/${name}" }
 }
 

@@ -17,6 +17,33 @@ export const ME = { firstName: 'Asha', name: 'Asha Rao', email: 'asha@example.co
 let segCounter = 0;
 const segId = () => `seg_01JD${String(++segCounter).padStart(22, '0')}`;
 
+/** DESIGN §10.1 Up next (ADR-0013): synthetic calendar events relative to page load. */
+const todayAt = (hour: number, minute = 0) => {
+  const d = new Date(now);
+  d.setHours(hour, minute, 0, 0);
+  return d.getTime();
+};
+export const calendarEvents = [
+  {
+    id: 'cev_pricing',
+    title: 'Pricing review with Acme',
+    startsAt: new Date(Math.max(todayAt(16), now + 40 * 60_000)).toISOString(),
+    endsAt: new Date(Math.max(todayAt(16, 30), now + 70 * 60_000)).toISOString(),
+    meetCode: 'qwe-rtyu-iop',
+    attendeeNames: ['Vikram (Acme)', 'Rahul Mehta'],
+    meetingId: null,
+  },
+  {
+    id: 'cev_standup',
+    title: 'Daily standup',
+    startsAt: new Date(todayAt(9, 30) + DAY).toISOString(),
+    endsAt: new Date(todayAt(9, 45) + DAY).toISOString(),
+    meetCode: 'asd-fghj-klz',
+    attendeeNames: ['Rahul Mehta', 'Sameer K.', 'Priya S.', 'Neha Kapoor'],
+    meetingId: null,
+  },
+];
+
 /** DESIGN §11.1 folders (counts are recomputed by the mock API). */
 export const folders: Omit<Folder, 'meetingCount'>[] = [
   { id: 'fld_clients', name: 'Clients' },

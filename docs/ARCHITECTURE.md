@@ -594,6 +594,7 @@ REST over HTTPS, JSON, versioned under `/v1`. Realtime uses the WebSocket protoc
 | Meetings | `GET /v1/meetings` · `GET/PATCH/DELETE /v1/meetings/{id}` · `POST /v1/meetings/{id}:restore` (within the delete grace period) |
 | Action items | `GET /v1/action-items?status=open\|done\|all&owner=me\|any&cursor=` · status, owner, and due changes via `PATCH /v1/summary-items/{id}` |
 | Glossary | `GET /v1/glossary` · `PUT /v1/glossary` (replace list; validated against provider limits) |
+| Calendar (ADR-0013) | `GET /v1/calendar` · `POST /v1/calendar/connect` (PKCE code from the web app) · `DELETE /v1/calendar` · `GET /v1/calendar/upcoming?from=&to=` · `GET/PUT /v1/calendar/events/{id}/notes`; worker job `calendar.sync` re-queues itself every ~15 min; `POST /v1/sessions` links the event (title, notes, keyterms) |
 | Folders (DESIGN §11.1–11.2) | `GET/POST /v1/folders` · `PATCH/DELETE /v1/folders/{id}` (delete unfiles) · `GET /v1/meetings?folder={id}\|none` · move via `PATCH /v1/meetings/{id}` `{ folderId }` · `POST /v1/meetings/{id}/folder-suggestion:dismiss`; the worker job `meeting.suggest_folder` runs once after the first notes |
 | Transcript | `GET /v1/meetings/{id}/segments?cursor=` · `PATCH /v1/meetings/{id}/speakers/{clusterId}` |
 | Notes | `GET/PUT /v1/meetings/{id}/notes` |

@@ -113,6 +113,23 @@ Logs are live only (no workspace on the shared environment). Still to run by han
 recording with video (fragments PUT 201 to `*.blob.core.windows.net`, `video.finalized`, the web
 player plays) and a 60-minute recording on one WebSocket (ADR-0012 §4).
 
+### A.11 Google Calendar (ADR-0013, 2026-11-18)
+In this order (the apps reference the new secret, so it must exist before `apply`):
+1. **(you)** Google Cloud project of the OAuth client: APIs & Services → enable **Google Calendar
+   API**; OAuth consent screen → Data access → add `.../auth/calendar.events.readonly`; Audience →
+   add each tester as a **test user** (Testing mode: grants expire after 7 days → Reconnect).
+2. **(you)** Credentials → the web OAuth client → add the redirect URI
+   `https://<web FQDN>/calendar/callback`.
+3. **(you)** The sealing key, never printed:
+   `printf 'k1:%s' "$(openssl rand -base64 32)" | az keyvault secret set --vault-name meetyou-sta-xv9znw --name calendar-token-keys --file /dev/stdin -o none`.
+   To rotate: put a new `k2:…` first and keep `k1:…` after it (comma-separated) until every
+   connection has been reconnected or re-sealed.
+4. `terraform apply` (api gets `CALENDAR_TOKEN_KEYS` and the extra redirect URI; the worker gets
+   `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `CALENDAR_TOKEN_KEYS`). The next deploy runs
+   migration `0012`.
+5. Check: Settings → Google Calendar → Connect; Home shows **Up next** within a minute; the worker
+   logs `calendar.synced`.
+
 ### A.10 Cost and shutting down
 - Portal → Cost Management → **Budgets**: monthly budget with alerts at 50 % and 90 %.
 - Always on: worker (1 replica), Managed Redis (~$12/month), registry (~$5/month). The other

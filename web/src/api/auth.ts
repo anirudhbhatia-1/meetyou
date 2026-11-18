@@ -35,6 +35,56 @@ function randomString(): string {
   return base64url(crypto.getRandomValues(new Uint8Array(32)));
 }
 
+const CALENDAR_PENDING_KEY = 'minutes.calendar';
+
+/**
+ * ADR-0013: sends the browser to Google's consent for read-only calendar events (separate from
+ * sign-in, FR-ONB-02). The callback page (`/calendar/callback`) reads it with
+ * `takeCalendarCallback` and posts the code to `POST /v1/calendar/connect`.
+ */
+export async function startCalendarConnect(
+  clientId: string,
+  options: { scope: string; callbackPath: string; loginHint?: string },
+): Promise<void> {
+  const pending = { state: randomString(), verifier: randomString() };
+  sessionStorage.setItem(CALENDAR_PENDING_KEY, JSON.stringify(pending));
+  const url = new URL(GOOGLE_AUTHORIZE);
+  url.search = new URLSearchParams({
+    client_id: clientId,
+    redirect_uri: `${window.location.origin}${options.callbackPath}`,
+    response_type: 'code',
+    // openid email: the API shows which account the calendar belongs to.
+    scope: `openid email ${options.scope}`,
+    access_type: 'offline',
+    // A refresh token is issued only on a fresh consent.
+    prompt: 'consent',
+    include_granted_scopes: 'true',
+    code_challenge: await pkceChallenge(pending.verifier),
+    code_challenge_method: 'S256',
+    state: pending.state,
+    ...(options.loginHint !== undefined ? { login_hint: options.loginHint } : {}),
+  }).toString();
+  window.location.assign(url.toString());
+}
+
+/** The code from the calendar callback URL, or null when it is not ours (state) or was refused. */
+export function takeCalendarCallback(
+  callback: URL,
+): { code: string; codeVerifier: string; redirectUri: string } | null {
+  const raw = sessionStorage.getItem(CALENDAR_PENDING_KEY);
+  sessionStorage.removeItem(CALENDAR_PENDING_KEY);
+  const pending = raw === null ? null : (JSON.parse(raw) as { state: string; verifier: string });
+  const code = callback.searchParams.get('code');
+  if (pending === null || code === null || callback.searchParams.get('state') !== pending.state) {
+    return null;
+  }
+  return {
+    code,
+    codeVerifier: pending.verifier,
+    redirectUri: `${callback.origin}${callback.pathname}`,
+  };
+}
+
 /** RFC 7636 S256 challenge. */
 export async function pkceChallenge(verifier: string): Promise<string> {
   const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(verifier));

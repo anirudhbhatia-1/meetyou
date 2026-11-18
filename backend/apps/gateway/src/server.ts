@@ -4,7 +4,13 @@ import type { Duplex } from 'node:stream';
 
 import type { StreamTokenVerification } from '@meetyou/auth';
 import { newUlid, SignVideoFragmentsRequest } from '@meetyou/contracts';
-import { createMeetingForSession, glossaryTerms, meetingForSession, type Db } from '@meetyou/db';
+import {
+  calendarAttendees,
+  createMeetingForSession,
+  glossaryTerms,
+  meetingForSession,
+  type Db,
+} from '@meetyou/db';
 import type { DisplayTextPolicy } from '@meetyou/hinglish';
 import { recordSpan } from '@meetyou/tracing';
 import { WebSocketServer } from 'ws';
@@ -15,7 +21,7 @@ import { errorCode, log } from './log.ts';
 import { MemorySessionRegistry, type SessionRecord, type SessionRegistry } from './registry.ts';
 import { videoExtension } from './session-check.ts';
 import { StreamSession } from './session.ts';
-import type { SttProvider } from '@meetyou/providers';
+import { calendarKeyterms, type SttProvider } from '@meetyou/providers';
 import { DbSink, FileSink, type SessionSink } from './sinks.ts';
 import { DevTokenIssuer, DevVideoSigner } from './tokens.ts';
 
@@ -299,7 +305,10 @@ export function createGateway(options: GatewayOptions): Gateway {
           endedAt: null,
           stt: 'ok',
           needsBatch: false,
-          keyterms: await db.inWorkspace(tokenWorkspace, glossaryTerms),
+          // Glossary plus the calendar invite's names and companies (ADR-0013).
+          keyterms: await db.inWorkspace(tokenWorkspace, async (tx) =>
+            calendarKeyterms(await glossaryTerms(tx), await calendarAttendees(tx, meeting.id)),
+          ),
           createdAt: Date.now(),
         };
         await registry.create(record);

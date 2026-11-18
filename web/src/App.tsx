@@ -1,6 +1,9 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 
-import { CALLBACK_PATH, WebAuth } from './api/auth.ts';
+import { CALENDAR_CALLBACK_PATH } from '@meetyou/contracts';
+
+import { CALLBACK_PATH, takeCalendarCallback, WebAuth } from './api/auth.ts';
+import { setPendingCalendarConnect } from './lib/calendar-connect.ts';
 import { createHttpApi } from './api/http.ts';
 import type { LibraryApi } from './api/types.ts';
 import { Banner, Button, SkeletonRows, ToastProvider } from '@meetyou/ui';
@@ -62,8 +65,19 @@ export function App() {
         return;
       }
       setClientId(config.googleClientId);
-      const ready = () => setBoot({ state: 'ready', api: createHttpApi(auth) });
+      const ready = () =>
+        setBoot({
+          state: 'ready',
+          api: createHttpApi(auth, { googleClientId: config.googleClientId }),
+        });
       try {
+        if (window.location.pathname === CALENDAR_CALLBACK_PATH) {
+          // ADR-0013: back from the calendar consent; Settings posts the code (or says it failed).
+          setPendingCalendarConnect(
+            takeCalendarCallback(new URL(window.location.href)) ?? 'failed',
+          );
+          window.history.replaceState(null, '', '/#/settings');
+        }
         if (window.location.pathname === CALLBACK_PATH) {
           const returnTo = await auth.completeSignIn(new URL(window.location.href));
           window.history.replaceState(null, '', `/${returnTo}`);

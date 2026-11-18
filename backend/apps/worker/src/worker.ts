@@ -1,8 +1,10 @@
+import type { SealingKey } from '@meetyou/auth';
 import { createServer, type Server } from 'node:http';
 
 import { Db } from '@meetyou/db';
 import { createLogger, errorCode } from '@meetyou/log';
 import {
+  calendarSyncTask,
   exportExpireTask,
   exportTask,
   retranscribeTask,
@@ -58,6 +60,11 @@ export function workerTasks(deps: {
   llm?: LlmProvider | null;
   /** Batch STT for the post-meeting pass (S3-04); null keeps the live transcript. */
   batchStt?: SttBatchProvider | null;
+  /** ADR-0013 calendar sync; absent turns the job into a no-op. */
+  calendar?: {
+    google: { clientId: string; clientSecret: string } | null;
+    sealingKeys: SealingKey[];
+  };
 }): TaskDefinition[] {
   const storage = bucketCleanup(deps.bucket);
   const batchStt = deps.batchStt ?? null;
@@ -70,6 +77,12 @@ export function workerTasks(deps: {
     }),
     retranscribeTask({ db: deps.db, bucket: deps.bucket, stt: batchStt }),
     suggestFolderTask({ db: deps.db, llm: deps.llm ?? null }),
+    calendarSyncTask({
+      db: deps.db,
+      google: deps.calendar?.google ?? null,
+      sealingKeys: deps.calendar?.sealingKeys ?? [],
+      schedule: true,
+    }),
     videoFinalizeTask({
       db: deps.db,
       store: new ObjectVideoStore(deps.bucket),
@@ -122,6 +135,10 @@ export async function runWorker(options: {
   queueSampleMs?: number;
   llm?: LlmProvider | null;
   batchStt?: SttBatchProvider | null;
+  calendar?: {
+    google: { clientId: string; clientSecret: string } | null;
+    sealingKeys: SealingKey[];
+  };
 }): Promise<RunningWorker> {
   const db = new Db(options.pool);
   await db.assertRowSecurityEnforced();
@@ -133,6 +150,7 @@ export async function runWorker(options: {
       bucket: options.bucket,
       llm: options.llm ?? null,
       batchStt: options.batchStt ?? null,
+      ...(options.calendar !== undefined ? { calendar: options.calendar } : {}),
       ...(options.tools !== undefined ? { tools: options.tools } : {}),
     }),
     concurrency: options.concurrency ?? 2,

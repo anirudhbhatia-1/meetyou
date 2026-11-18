@@ -7,3 +7,4 @@ export * from './stt/deepgram-streaming.ts';
 export * from './stt/keyterms.ts';
 export * from './stt/types.ts';
 export * from './transliteration/types.ts';
+export * from './calendar/google-calendar.ts';

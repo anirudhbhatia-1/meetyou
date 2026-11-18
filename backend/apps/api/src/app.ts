@@ -1,6 +1,12 @@
 import Fastify, { type FastifyInstance, type FastifyServerOptions } from 'fastify';
 import fastifyCors from '@fastify/cors';
-import { TokenService, generateSigningJwk, loadKeyRing, type AuthService } from '@meetyou/auth';
+import {
+  TokenService,
+  generateSigningJwk,
+  loadKeyRing,
+  type AuthService,
+  type GoogleDeps,
+} from '@meetyou/auth';
 import type { Db } from '@meetyou/db';
 import type { LlmProvider } from '@meetyou/providers';
 import {
@@ -21,6 +27,7 @@ import { askRoutes } from './routes/ask.ts';
 import { audioRoutes } from './routes/audio.ts';
 import { exportRoutes, type SignExportDownload } from './routes/exports.ts';
 import { speakersRoutes } from './routes/speakers.ts';
+import { calendarRoutes } from './routes/calendar.ts';
 import { folderRoutes } from './routes/folders.ts';
 import { glossaryRoutes } from './routes/glossary.ts';
 import { searchRoutes } from './routes/search.ts';
@@ -53,6 +60,8 @@ export interface BuildAppOptions {
   signExportDownload?: SignExportDownload;
   /** Recordings for audio playback; the GCS bucket when absent (tests pass a memory bucket). */
   recordings?: ObjectBucket;
+  /** Tests replace Google's token endpoint and keys for the calendar connection (ADR-0013). */
+  calendarGoogleDeps?: GoogleDeps;
 }
 
 /**
@@ -165,6 +174,10 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
   await app.register(searchRoutes);
   await app.register(glossaryRoutes);
   await app.register(folderRoutes);
+  await app.register(calendarRoutes, {
+    config,
+    ...(options.calendarGoogleDeps !== undefined ? { googleDeps: options.calendarGoogleDeps } : {}),
+  });
 
   await app.register(sessionsRoutes, {
     tokens,

@@ -521,18 +521,41 @@ Layout: column, gap 36, max width 1080.
 2. **Recovery banner** if any (§9).
 3. **Setup card** (A3): H2 "Get set up in three steps" (→ "You're all set"), "{n} of 3 done",
    160×4 progress bar. Step tiles (`repeat(auto-fit,minmax(220px,1fr))`, gap 14, radius 12, padding 18):
-   1. *Sign in with Google* — "Only your name and email. We don't read your calendar or Gmail."
+   1. *Sign in with Google* — "Only your name and email. We read your calendar only if you
+      connect it in Settings, and never your Gmail."
    2. *Allow your microphone* — "So your own voice is in the notes, labelled as you."
    3. *Record your first meeting* — "Join any Google Meet call and press Start in the small prompt at
       the top right." + **How recording works** (opens the tutorial preview).
    Marker 26 px: done = olive fill + ✓; pending = olive outline + number. First incomplete step is
    "current" (`olive-line` border, `olive-wash` bg, shows CTA). Step 3 completes after the first
    recording reaches Ready. The card hides permanently 7 days after completion.
-4. **Two columns** (`1.4fr / 1fr`, gap 28):
+4. **Up next** [SPEC] (§10.1) — only when a calendar is connected; above the two columns.
+5. **Two columns** (`1.4fr / 1fr`, gap 28):
    - **Recent meetings:** H2 + "See all" → Meetings. 4 rows: title 15/500, status pill, meta
      "When · Length · People" 13 `muted`. Hover `#fafaf5`. Click → detail.
    - **Your to-dos:** H2 + "See all" → Action items. Up to 4 open items owned by the user: checkbox +
      text 14 + "{due} · from {meeting}" 12 `muted`. Empty: "You're all caught up."
+
+### 10.1 Up next and notes before the call [SPEC] (ADR-0013, 2026-11-18)
+
+Shown only when Google Calendar is connected (§15.7). Lists today's and tomorrow's events that
+have a Google Meet link, soonest first, at most 5 (+ "{n} more tomorrow" muted).
+
+- Card H2 "Up next" + meta "From your Google Calendar · updated {time}". Row: time 14 tabular
+  ("10:00–10:30", "Tomorrow 09:30") · title 15/500 · "{names}" 13 `muted` (first 3, "+{n}") ·
+  notes count chip "{n} notes" when any · **Join** (ghost, opens `meet.google.com/{code}` in a new
+  tab) · **Notes** (ghost) → sheet below. A row whose recording exists shows "Recorded" and opens
+  the meeting.
+- **Notes before the call** sheet: title "Notes for {title}", helper "What do you want to cover?
+  Each line becomes a heading in your notes, and the summary fills it in." TextArea (one note per
+  line, up to 30 lines, `aria-label` "Notes before the call"), footer **Cancel** · **Save**; toast
+  "Notes saved". When the recording starts in Meet, these lines appear in the side panel as your
+  first notes (sessionMs 0) and anchor the summary like any other note (F2).
+- Empty: "No Meet calls today or tomorrow." Needs reconnect: `warning` Banner "Your calendar
+  stopped syncing. Reconnect it in Settings." with **Settings**.
+- Recordings on a calendar meeting take the event's title; the AI title never replaces it.
+  Attendee names (and company names from their email domains) are sent to the transcription as
+  keyterms from the first second, so names are spelled right before anyone speaks.
 
 ---
 
@@ -850,6 +873,17 @@ limit.
 ### 15.6 Account
 Name, email (read-only), Sign out.
 
+### 15.7 Calendar [SPEC] (ADR-0013)
+Row "Google Calendar" with helper "See your upcoming Meet calls on Home, write notes before them,
+and get names right from the start. Read-only; we never change your calendar."
+- Not connected: **Connect** (secondary) → Google consent for read-only events only (separate
+  from sign-in). Back on Settings: toast "Calendar connected".
+- Connected: "Connected as {email} · synced {time}" + **Disconnect** (ghost, danger text) →
+  AlertDialog "Disconnect Google Calendar?" — "We stop reading it and delete the events and the
+  notes you wrote before calls. Your recordings stay." **Disconnect**.
+- Needs reconnect: `warning` text "Google stopped our access." + **Reconnect**.
+- Errors: "Couldn't connect your calendar. Try again." (consent cancelled or failed).
+
 **Appearance:** follows system light/dark (UI-03); no in-app toggle in Phase 1.
 
 ---
@@ -895,6 +929,8 @@ The Meet overlay always uses the light glass (Meet's UI is dark).
 | Processing steps | meetings (status, processing_step) | SSE `GET /v1/meetings/{id}/events` (fallback: poll `GET /v1/meetings/{id}`) | — |
 | Notification "Notes ready" | — | — | Service worker `notifications` |
 | Home recent / Meetings list | meetings | `GET /v1/meetings?cursor=&template=&folder=` | — |
+| Home Up next, notes before the call | calendar_events, calendar_event_notes | `GET /v1/calendar/upcoming` · `GET/PUT /v1/calendar/events/{id}/notes` | — |
+| Settings Calendar | calendar_connections | `GET /v1/calendar` · `POST /v1/calendar/connect` · `DELETE /v1/calendar` | Google OAuth redirect `/calendar/callback` |
 | Folder chips, new/rename/delete folder | folders | `GET/POST /v1/folders`, `PATCH/DELETE /v1/folders/{id}` | — |
 | Move to folder, folder suggestion | meetings.folder_id, meetings.suggested_folder_id | `PATCH /v1/meetings/{id}` (`folderId`) · `POST /v1/meetings/{id}/folder-suggestion:dismiss` | — |
 | Search | segments, notes, summary_items | `GET /v1/search?q=` | — |
@@ -1055,7 +1091,7 @@ Same shell and components; add sidebar items only when a feature ships.
 
 | Feature | UI |
 |---|---|
-| B2 Calendar sync | Settings → Connected apps "Google Calendar · Connect" (separate consent); Home "Up next" list above Recent |
+| B2 Calendar sync | **Built 2026-11-18 (ADR-0013):** Settings §15.7 "Google Calendar · Connect" (separate consent); Home "Up next" §10.1 with notes before the call |
 | B3 Recording rules | Settings → Recording → Rules builder (when → Prompt / Auto-start); auto-start only for meetings you own with consent note on |
 | B4 Pre-meeting brief | Side panel "Before you start" card; every line cites a past meeting |
 | C5 File upload | Meetings → "Upload recording" sheet (drop zone, participant names, language); status "Transcribing…" |

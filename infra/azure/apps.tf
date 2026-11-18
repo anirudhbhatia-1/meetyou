@@ -38,15 +38,15 @@ locals {
 
   # env name => Key Vault secret name, per app.
   app_secrets = {
-    api     = { DATABASE_URL = "database-url", AUTH_SIGNING_JWKS = "auth-signing-jwks", GOOGLE_CLIENT_SECRET = "google-client-secret", GEMINI_API_KEY = "gemini-api-key" }
+    api     = { DATABASE_URL = "database-url", AUTH_SIGNING_JWKS = "auth-signing-jwks", GOOGLE_CLIENT_SECRET = "google-client-secret", GEMINI_API_KEY = "gemini-api-key", CALENDAR_TOKEN_KEYS = "calendar-token-keys" }
     gateway = { DATABASE_URL = "database-url", REDIS_URL = "redis-url", DEEPGRAM_API_KEY = "deepgram-api-key" }
-    worker  = { DATABASE_URL = "database-url", DEEPGRAM_API_KEY = "deepgram-api-key", GEMINI_API_KEY = "gemini-api-key" }
+    worker  = { DATABASE_URL = "database-url", DEEPGRAM_API_KEY = "deepgram-api-key", GEMINI_API_KEY = "gemini-api-key", GOOGLE_CLIENT_SECRET = "google-client-secret", CALENDAR_TOKEN_KEYS = "calendar-token-keys" }
   }
 
   app_env = {
     api = merge(local.common_env, local.gemini_env, local.gemini_staging_env, {
       GOOGLE_CLIENT_ID      = var.google_client_id
-      ALLOWED_REDIRECT_URIS = "https://${var.extension_id}.chromiumapp.org/oauth2,https://${local.fqdn.web}/auth/callback"
+      ALLOWED_REDIRECT_URIS = "https://${var.extension_id}.chromiumapp.org/oauth2,https://${local.fqdn.web}/auth/callback,https://${local.fqdn.web}/calendar/callback"
       GATEWAY_WS_URL        = "wss://${local.fqdn.gateway}/v1/stream"
     })
     gateway = merge(local.common_env, {
@@ -58,6 +58,8 @@ locals {
     worker = merge(local.common_env, local.gemini_env, local.gemini_staging_env, {
       STT_PROVIDER        = "deepgram"
       BATCH_TRANSCRIPTION = "on"
+      # calendar.sync refreshes Google access with the same OAuth client (ADR-0013).
+      GOOGLE_CLIENT_ID = var.google_client_id
     })
   }
 

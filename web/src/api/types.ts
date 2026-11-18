@@ -1,10 +1,12 @@
 import type {
   AskUsage,
+  CalendarStatus,
   ConsentLogEntry,
   ExportView,
   Folder,
   PatchSettingsRequest,
   ProductEvent,
+  UpcomingMeeting,
   UserSettings,
   Meeting,
   MeetingProgress,
@@ -17,6 +19,8 @@ import type {
 
 export type {
   AskUsage,
+  CalendarStatus,
+  UpcomingMeeting,
   ConsentLogEntry,
   ExportView,
   Folder,
@@ -114,6 +118,24 @@ export interface LibraryApi {
   moveMeeting(id: string, folderId: string | null): Promise<void>;
   /** DESIGN §11.2: the suggestion is not shown again. */
   dismissFolderSuggestion(id: string): Promise<void>;
+  /** ADR-0013, DESIGN §15.7: whether Google Calendar is connected. */
+  getCalendar(): Promise<CalendarStatus>;
+  /** Sends the browser to Google's calendar consent (the page leaves; resolves only on failure). */
+  startCalendarConnect(loginHint?: string): Promise<void>;
+  /** Posts the code from `/calendar/callback`. */
+  connectCalendar(payload: {
+    code: string;
+    codeVerifier: string;
+    redirectUri: string;
+  }): Promise<{ ok: true; calendar: CalendarStatus } | { ok: false; error: 'denied' | 'failed' }>;
+  disconnectCalendar(): Promise<void>;
+  /** DESIGN §10.1: Meet calls between `from` and `to` (local day bounds from the page). */
+  upcoming(
+    from: Date,
+    to: Date,
+  ): Promise<{ calendar: CalendarStatus; meetings: UpcomingMeeting[] }>;
+  getEventNotes(eventId: string): Promise<string[]>;
+  saveEventNotes(eventId: string, notes: string[]): Promise<void>;
   /** DESIGN §12.4 item 7 inline edit, §12.6 owner and due pickers. */
   editSummaryItem(
     id: string,

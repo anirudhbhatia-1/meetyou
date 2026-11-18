@@ -5,3 +5,4 @@ export * from './folder-task.ts';
 export * from './export/index.ts';
 export * from './batch/index.ts';
 export * from './retention.ts';
+export * from './calendar.ts';

@@ -1,5 +1,6 @@
 import process from 'node:process';
 
+import { parseSealingKeys } from '@meetyou/auth';
 import { createPgPool } from '@meetyou/db';
 import { createLogger } from '@meetyou/log';
 import { createLlmProvider, createProviders } from '@meetyou/providers';
@@ -37,6 +38,13 @@ const worker = await runWorker({
   // LLM_PROVIDER / GEMINI_* (STAGING_SETUP §9.4); the free-key guard runs here (ADR-0001 §7).
   llm: createLlmProvider(process.env),
   batchStt,
+  calendar: {
+    google:
+      env.GOOGLE_CLIENT_ID !== undefined && env.GOOGLE_CLIENT_SECRET !== undefined
+        ? { clientId: env.GOOGLE_CLIENT_ID, clientSecret: env.GOOGLE_CLIENT_SECRET }
+        : null,
+    sealingKeys: parseSealingKeys(env.CALENDAR_TOKEN_KEYS),
+  },
 });
 createLogger('worker').log('worker.started', { appEnv: env.APP_ENV, port: env.PORT });
 await worker.runner.promise;

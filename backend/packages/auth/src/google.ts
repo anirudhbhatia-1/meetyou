@@ -79,11 +79,19 @@ export async function exchangeGoogleCode(
     throw new AuthError('google_exchange_failed');
   }
   if (typeof body.id_token !== 'string') throw new AuthError('google_exchange_failed');
+  return verifyGoogleIdToken(body.id_token, config, deps);
+}
 
+/** Signature, issuer, audience, expiry, and a verified email (ADR-0004 §4.1 step 5). */
+export async function verifyGoogleIdToken(
+  idToken: string,
+  config: Pick<GoogleConfig, 'clientId'>,
+  deps: GoogleDeps = {},
+): Promise<GoogleProfile> {
   let payload: Record<string, unknown>;
   try {
     googleKeys ??= createRemoteJWKSet(new URL(GOOGLE_JWKS_URL));
-    const verified = await jwtVerify(body.id_token, deps.keys ?? googleKeys, {
+    const verified = await jwtVerify(idToken, deps.keys ?? googleKeys, {
       issuer: GOOGLE_ISSUERS,
       audience: config.clientId,
       algorithms: ['RS256'],

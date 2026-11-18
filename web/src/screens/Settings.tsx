@@ -23,6 +23,7 @@ import { useAnalytics } from '../lib/analytics.ts';
 import { useApi } from '../lib/api-context.ts';
 import { TEMPLATE_LABEL, type TemplateId } from '../lib/format.ts';
 import { useAsync } from '../lib/useAsync.ts';
+import { takePendingCalendarConnect } from '../lib/calendar-connect.ts';
 import { DataExport } from './DataExport.tsx';
 import { Vocabulary } from './Vocabulary.tsx';
 
@@ -425,6 +426,10 @@ export function Settings({ onSignOut }: { onSignOut: () => void }) {
         />
       </Section>
 
+      <Section title="Calendar">
+        <CalendarRow loginHint={me.data?.email} />
+      </Section>
+
       <Section title="Account">
         <Row
           title={me.data?.name ?? ' '}
@@ -471,5 +476,104 @@ export function Settings({ onSignOut }: { onSignOut: () => void }) {
         />
       )}
     </div>
+  );
+}
+
+/**
+ * DESIGN §15.7 (ADR-0013): connect Google Calendar (read-only, separate consent), see which account
+ * it is, disconnect. Back from Google's consent, the pending code is posted here once.
+ */
+function CalendarRow({ loginHint }: { loginHint: string | undefined }) {
+  const api = useApi();
+  const toast = useToast();
+  const status = useAsync(() => api.getCalendar(), []);
+  const [busy, setBusy] = useState(false);
+  const [failed, setFailed] = useState(false);
+  const [confirm, setConfirm] = useState(false);
+
+  useEffect(() => {
+    const pending = takePendingCalendarConnect();
+    if (pending === null) return;
+    if (pending === 'failed') {
+      setFailed(true);
+      return;
+    }
+    setBusy(true);
+    void api.connectCalendar(pending).then((result) => {
+      setBusy(false);
+      if (result.ok) {
+        toast({ message: 'Calendar connected' });
+        status.reload();
+      } else {
+        setFailed(true);
+      }
+    });
+    // Runs once per visit; the pending code can be used only once.
+  }, []);
+
+  const connect = () => {
+    setBusy(true);
+    setFailed(false);
+    api.startCalendarConnect(loginHint).catch(() => {
+      setBusy(false);
+      setFailed(true);
+    });
+  };
+  const s = status.data;
+  const synced =
+    s?.lastSyncedAt != null
+      ? ` · synced ${new Date(s.lastSyncedAt).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })}`
+      : '';
+  return (
+    <>
+      <Row
+        title="Google Calendar"
+        helper={
+          <>
+            {s?.connected === true
+              ? s.status === 'needs_reconnect'
+                ? 'Google stopped our access.'
+                : `Connected as ${s.accountEmail ?? ''}${synced}`
+              : 'See your upcoming Meet calls on Home, write notes before them, and get names right from the start. Read-only; we never change your calendar.'}
+            {failed && (
+              <span className="field-error" role="alert">
+                {' '}
+                Couldn’t connect your calendar. Try again.
+              </span>
+            )}
+          </>
+        }
+        control={
+          s === undefined ? null : !s.connected ? (
+            <Button disabled={busy} onClick={connect}>
+              Connect
+            </Button>
+          ) : s.status === 'needs_reconnect' ? (
+            <Button disabled={busy} onClick={connect}>
+              Reconnect
+            </Button>
+          ) : (
+            <Button variant="ghost" onClick={() => setConfirm(true)}>
+              Disconnect
+            </Button>
+          )
+        }
+      />
+      {confirm && (
+        <AlertDialog
+          title="Disconnect Google Calendar?"
+          body="We stop reading it and delete the events and the notes you wrote before calls. Your recordings stay."
+          confirmLabel="Disconnect"
+          failedText="That didn’t work. Try again."
+          onCancel={() => setConfirm(false)}
+          onConfirm={async () => {
+            await api.disconnectCalendar();
+            setConfirm(false);
+            status.reload();
+            toast({ message: 'Calendar disconnected' });
+          }}
+        />
+      )}
+    </>
   );
 }

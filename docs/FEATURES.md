@@ -269,7 +269,8 @@ the Meet home page.
 ---
 
 ### B2. Calendar sync
-**Phase 2**
+**Built 2026-11-18, first version ([ADR-0013](adr/0013-google-calendar-sync.md))**: Google only,
+read-only events, window polling (push channels and Microsoft later).
 
 **What.** Read the user's calendar to know upcoming meetings, titles, attendees, and links.
 

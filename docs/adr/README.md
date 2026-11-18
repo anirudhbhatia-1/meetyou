@@ -17,6 +17,7 @@ Agents and developers must follow accepted ADRs; changing one requires a new ADR
 | [0010](0010-meeting-bot.md) | Optional meeting bot ("Send notetaker") next to the extension | Accepted 2026-11-16 — our own free guest bot ("Send notetaker") on the extension's Meet adapter, self-hosted on Azure; user picks bot or extension per meeting; Recall.ai only if the spike fails (plan Stage B) |
 | [0011](0011-video-screen-recording.md) | Video (meeting screen) recording in Phase 1 | Accepted 2026-11-01 — verification in S1 |
 | [0012](0012-azure-hosting.md) | Move staging hosting from Google Cloud to Azure (Central India) | Accepted 2026-11-12 |
+| [0013](0013-google-calendar-sync.md) | Google Calendar sync (opt-in, read-only) | Accepted 2026-11-18 — separate consent from Settings, sealed refresh token, window polling, Up next, names and titles from invites, notes before the call |
 
 **Statuses:** Not started → Proposed → Accepted → (Superseded by NNNN / Rejected)
 

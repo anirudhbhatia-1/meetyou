@@ -5,7 +5,7 @@ import {
   StartSessionResponse,
   newUlid,
 } from '@meetyou/contracts';
-import { createMeetingForSession, meetingForSession } from '@meetyou/db';
+import { createMeetingForSession, linkCalendarEvent, meetingForSession } from '@meetyou/db';
 import type { TokenService } from '@meetyou/auth';
 import { recordSpan } from '@meetyou/tracing';
 
@@ -74,7 +74,7 @@ export const sessionsRoutes: FastifyPluginAsync<SessionsRoutesOptions> = async (
         body.recordVideo;
 
       // Create meeting record in DB scoped to workspace (RLS)
-      await request.inWorkspace(async (tx) => {
+      const calendar = await request.inWorkspace(async (tx) => {
         await createMeetingForSession(tx, {
           id: meetingId,
           workspaceId,
@@ -82,6 +82,16 @@ export const sessionsRoutes: FastifyPluginAsync<SessionsRoutesOptions> = async (
           externalMeetingCode: body.meetingCode,
           title: body.title,
           startedAt,
+        });
+        // ADR-0013: the calendar event on now with this Meet code gives the title and the
+        // notes written before the call.
+        const linked = await linkCalendarEvent(tx, {
+          meetingId,
+          workspaceId,
+          userId,
+          meetCode: body.meetingCode ?? null,
+          at: startedAt,
+          newId: () => `note_${newUlid()}`,
         });
 
         if (allowVideo) {
@@ -104,6 +114,7 @@ export const sessionsRoutes: FastifyPluginAsync<SessionsRoutesOptions> = async (
             })
             .execute();
         }
+        return linked;
       });
 
       // Issue single-use stream JWT token for connecting to realtime gateway
@@ -125,6 +136,16 @@ export const sessionsRoutes: FastifyPluginAsync<SessionsRoutesOptions> = async (
           channels: 1,
           frameMs: 100,
         },
+        ...(calendar !== null && calendar.notes.length > 0
+          ? {
+              notes: calendar.notes.map((n) => ({
+                id: n.id,
+                sessionMs: 0,
+                marker: null,
+                text: n.text,
+              })),
+            }
+          : {}),
         video: allowVideo
           ? {
               fragmentMs: 10_000,

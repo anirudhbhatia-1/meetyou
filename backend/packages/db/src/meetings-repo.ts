@@ -1,4 +1,5 @@
 import type { Lane, Segment } from '@meetyou/contracts';
+import { sql } from 'kysely';
 
 import type { WorkspaceTx } from './db.ts';
 
@@ -220,4 +221,85 @@ export async function upsertVideoAsset(tx: WorkspaceTx, row: VideoAssetRow): Pro
 export async function glossaryTerms(tx: WorkspaceTx): Promise<string[]> {
   const rows = await tx.selectFrom('glossaryTerms').select('term').orderBy('term').execute();
   return rows.map((r) => r.term);
+}
+
+/** A recording starts this close to its calendar event's times (ADR-0013). */
+const EVENT_MATCH_MS = 30 * 60 * 1000;
+
+/**
+ * ADR-0013: links a new recording to the user's calendar event with the same Meet code that is on
+ * now (or within 30 minutes), takes the event's title, and copies the notes written before the
+ * call into the meeting's notes (session time 0). Returns those notes, or null without a match.
+ */
+export async function linkCalendarEvent(
+  tx: WorkspaceTx,
+  input: {
+    meetingId: string;
+    workspaceId: string;
+    userId: string;
+    meetCode: string | null;
+    at: Date;
+    newId: () => string;
+  },
+): Promise<{ eventId: string; notes: { id: string; text: string }[] } | null> {
+  if (input.meetCode === null) return null;
+  const event = await tx
+    .selectFrom('calendarEvents as e')
+    .innerJoin('calendarConnections as c', 'c.id', 'e.connectionId')
+    .select(['e.id', 'e.title', 'e.startsAt'])
+    .where('c.userId', '=', input.userId)
+    .where('e.meetCode', '=', input.meetCode)
+    .where('e.startsAt', '<=', new Date(input.at.getTime() + EVENT_MATCH_MS))
+    .where('e.endsAt', '>=', new Date(input.at.getTime() - EVENT_MATCH_MS))
+    .orderBy(sql`abs(extract(epoch from (e.starts_at - ${input.at.toISOString()}::timestamptz)))`)
+    .limit(1)
+    .executeTakeFirst();
+  if (event === undefined) return null;
+  await tx
+    .updateTable('meetings')
+    .set({
+      calendarEventId: event.id,
+      // The event's name wins over what Meet shows; the AI title never replaces either.
+      ...(event.title.trim() !== '' ? { title: event.title.slice(0, 200) } : {}),
+    })
+    .where('id', '=', input.meetingId)
+    .execute();
+  const pre = await tx
+    .selectFrom('calendarEventNotes')
+    .select('text')
+    .where('eventId', '=', event.id)
+    .orderBy('order')
+    .execute();
+  const notes = pre.map((n) => ({ id: input.newId(), text: n.text }));
+  for (const [order, note] of notes.entries()) {
+    await tx
+      .insertInto('notes')
+      .values({
+        id: note.id,
+        workspaceId: input.workspaceId,
+        meetingId: input.meetingId,
+        text: note.text,
+        sessionMs: 0,
+        marker: null,
+        order,
+      })
+      .execute();
+  }
+  return { eventId: event.id, notes };
+}
+
+/** The other attendees of the recording's calendar event, for keyterms and naming (ADR-0013). */
+export async function calendarAttendees(
+  tx: WorkspaceTx,
+  meetingId: string,
+): Promise<{ name: string | null; email: string | null }[]> {
+  const row = await tx
+    .selectFrom('meetings as m')
+    .innerJoin('calendarEvents as e', 'e.id', 'm.calendarEventId')
+    .select('e.attendees')
+    .where('m.id', '=', meetingId)
+    .executeTakeFirst();
+  return (row?.attendees ?? [])
+    .filter((a) => !a.self)
+    .map((a) => ({ name: a.name, email: a.email }));
 }

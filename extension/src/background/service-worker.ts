@@ -323,6 +323,13 @@ async function startCloudSession(
       recordVideo,
       extensionVersion: chrome.runtime.getManifest().version,
     });
+    // Notes written before the call on the calendar event (ADR-0013): the side panel starts with
+    // them, so its first save keeps them.
+    if (started.notes !== undefined && started.notes.length > 0) {
+      await chrome.storage.local
+        .set({ [notesKey(started.sessionId)]: started.notes })
+        .catch((error: unknown) => logError('pre-call notes not stored', error));
+    }
     return {
       sessionId: started.sessionId,
       meetingId: started.meetingId,

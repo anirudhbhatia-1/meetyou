@@ -11,6 +11,11 @@ import { afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 
 import { AuthError } from './errors.ts';
 import { exchangeGoogleCode, GOOGLE_TOKEN_ENDPOINT, type GoogleConfig } from './google.ts';
+import {
+  CalendarAccessRevokedError,
+  exchangeCalendarCode,
+  refreshCalendarAccess,
+} from './google-calendar.ts';
 import { generateSigningJwk, loadKeyRing } from './keys.ts';
 import { authenticate } from './middleware.ts';
 import { AuthService, hashRefreshToken } from './service.ts';
@@ -305,5 +310,58 @@ describe('authenticate', () => {
     await expect(authenticate('Bearer a.b.c', tokens)).rejects.toMatchObject({
       code: 'invalid_token',
     });
+  });
+});
+
+describe('Google Calendar grant (ADR-0013)', () => {
+  const SCOPE = 'https://www.googleapis.com/auth/calendar.events.readonly';
+  const tokenFetch = (
+    body: Record<string, unknown>,
+    status = 200,
+    requests: URLSearchParams[] = [],
+  ) =>
+    (async (url: string | URL | Request, init?: RequestInit) => {
+      requests.push(new URLSearchParams(String(init?.body)));
+      return new Response(JSON.stringify(body), { status, headers: { url: String(url) } });
+    }) as typeof fetch;
+
+  it('stores the refresh token only when the calendar scope was granted', async () => {
+    const requests: URLSearchParams[] = [];
+    const grant = await exchangeCalendarCode({ ...code, requiredScope: SCOPE }, google, {
+      fetch: tokenFetch(
+        { id_token: await idToken({}), refresh_token: '1//r', scope: `openid email ${SCOPE}` },
+        200,
+        requests,
+      ),
+      keys: googleKeys,
+    });
+    expect(grant).toMatchObject({ refreshToken: '1//r', profile: { email: 'asha@example.com' } });
+    expect(requests[0]?.get('code_verifier')).toBe(code.codeVerifier);
+    expect(requests[0]?.get('client_secret')).toBe('test-secret');
+
+    await expect(
+      exchangeCalendarCode({ ...code, requiredScope: SCOPE }, google, {
+        fetch: tokenFetch({ id_token: await idToken({}), refresh_token: '1//r', scope: 'openid' }),
+        keys: googleKeys,
+      }),
+    ).rejects.toMatchObject({ code: 'scope_denied' });
+    await expect(
+      exchangeCalendarCode(
+        { ...code, redirectUri: 'https://evil.example/cb', requiredScope: SCOPE },
+        google,
+      ),
+    ).rejects.toMatchObject({ code: 'redirect_uri_not_allowed' });
+  });
+
+  it('turns invalid_grant into a reconnect, other failures into errors', async () => {
+    await expect(
+      refreshCalendarAccess('1//r', google, { fetch: tokenFetch({ error: 'invalid_grant' }, 400) }),
+    ).rejects.toBeInstanceOf(CalendarAccessRevokedError);
+    await expect(
+      refreshCalendarAccess('1//r', google, { fetch: tokenFetch({ error: 'x' }, 500) }),
+    ).rejects.not.toBeInstanceOf(CalendarAccessRevokedError);
+    expect(
+      await refreshCalendarAccess('1//r', google, { fetch: tokenFetch({ access_token: 'ya29' }) }),
+    ).toBe('ya29');
   });
 });

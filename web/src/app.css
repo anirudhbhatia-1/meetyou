@@ -1574,3 +1574,42 @@ mark.match-current {
   color: var(--olive);
   text-align: center;
 }
+
+/* Up next (DESIGN §10.1) */
+.up-next {
+  display: grid;
+  gap: 12px;
+}
+.up-next .card-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.up-next-row {
+  display: grid;
+  grid-template-columns: 120px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 16px;
+  padding: 10px 0;
+  border-top: 1px solid var(--hairline-2);
+}
+.up-next-row:first-child {
+  border-top: 0;
+}
+.up-next-time {
+  font-size: 14px;
+  color: var(--ink-3);
+}
+.up-next-actions {
+  display: inline-flex;
+  gap: 6px;
+  align-items: center;
+}
+@media (max-width: 640px) {
+  .up-next-row {
+    grid-template-columns: 1fr;
+    gap: 6px;
+  }
+}

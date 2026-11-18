@@ -11,6 +11,8 @@ export interface ApiConfig {
   authSigningJwks?: string;
   googleClientId?: string;
   googleClientSecret?: string;
+  /** ADR-0013: `id:base64,…` AES-256 keys (Key Vault) sealing calendar refresh tokens. */
+  calendarTokenKeys?: string;
   allowedRedirectUris: string[];
   gatewayWsUrl: string;
   /** Recordings bucket (video upload and playback URLs, S2-14). */
@@ -52,8 +54,9 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): ApiConfig {
     : [
         // Pinned Extension ID redirect URI (ADR-0004 §4.1, STAGING_SETUP §4)
         'https://hjimcofnjnikbeepahmclaniopbnhbbe.chromiumapp.org/oauth2',
-        // Local dev callback
+        // Local dev callbacks: sign-in and the calendar connection (ADR-0013)
         'http://localhost:5173/auth/callback',
+        'http://localhost:5173/calendar/callback',
       ];
 
   // The gateway accepts WebSockets on /v1/stream only (backend/apps/gateway server.ts).
@@ -72,6 +75,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): ApiConfig {
     authSigningJwks: env.AUTH_SIGNING_JWKS,
     googleClientId: env.GOOGLE_CLIENT_ID,
     googleClientSecret: env.GOOGLE_CLIENT_SECRET,
+    calendarTokenKeys: env.CALENDAR_TOKEN_KEYS,
     allowedRedirectUris,
     gatewayWsUrl,
   };

@@ -88,6 +88,51 @@ export interface MeetingsTable extends Audit {
     'suggested' | 'none' | 'dismissed' | null | undefined,
     'suggested' | 'none' | 'dismissed' | null
   >;
+  /** ADR-0013: the calendar event this recording was made on. */
+  calendarEventId: ColumnType<string | null, string | null | undefined, string | null>;
+}
+
+/** ADR-0013: one Google Calendar per user; the refresh token is sealed (`auth/sealed.ts`). */
+export interface CalendarConnectionsTable extends Audit {
+  id: string;
+  workspaceId: string;
+  userId: string;
+  provider: Generated<'google'>;
+  accountEmail: string;
+  refreshTokenSealed: string;
+  scope: string;
+  status: Generated<'active' | 'needs_reconnect'>;
+  lastSyncedAt: NullableTimestamp;
+  lastErrorCode: ColumnType<string | null, string | null | undefined, string | null>;
+}
+
+export interface CalendarAttendee {
+  name: string | null;
+  email: string | null;
+  self: boolean;
+  organizer: boolean;
+}
+
+export interface CalendarEventsTable extends Audit {
+  id: string;
+  workspaceId: string;
+  connectionId: string;
+  externalId: string;
+  title: Generated<string>;
+  startsAt: Timestamp;
+  endsAt: Timestamp;
+  meetCode: ColumnType<string | null, string | null | undefined, string | null>;
+  attendees: ColumnType<CalendarAttendee[], string | undefined, string>;
+  /** Returned by the last poll (stale rows keep their notes but are not shown). */
+  syncedAt: ColumnType<Date, Date | string | undefined, Date | string>;
+}
+
+export interface CalendarEventNotesTable extends Audit {
+  id: string;
+  workspaceId: string;
+  eventId: string;
+  text: string;
+  order: Generated<number>;
 }
 
 export interface FoldersTable extends Audit {
@@ -337,6 +382,9 @@ export interface Database {
   userSettings: UserSettingsTable;
   meetings: MeetingsTable;
   folders: FoldersTable;
+  calendarConnections: CalendarConnectionsTable;
+  calendarEvents: CalendarEventsTable;
+  calendarEventNotes: CalendarEventNotesTable;
   participants: ParticipantsTable;
   speakerClusters: SpeakerClustersTable;
   audioAssets: AudioAssetsTable;

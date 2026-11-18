@@ -1,6 +1,14 @@
 import { ASK_LIMITS, DEFAULT_USER_SETTINGS, MAX_FOLDERS, type Meeting } from '@meetyou/contracts';
 
-import { folders, ME, meetings, participants, segments, summaries } from './fixtures.ts';
+import {
+  calendarEvents,
+  folders,
+  ME,
+  meetings,
+  participants,
+  segments,
+  summaries,
+} from './fixtures.ts';
 import type {
   ActionItemRow,
   ExportView,
@@ -52,6 +60,17 @@ export function createMockApi(options: { latencyMs?: number } = {}): LibraryApi 
     };
   };
 
+  const calendar = { connected: true, syncedAt: new Date().toISOString() };
+  const eventNotes = new Map<string, string[]>([['cev_pricing', ['Discount for annual plan']]]);
+  const calendarStatus = () =>
+    calendar.connected
+      ? {
+          connected: true,
+          accountEmail: ME.email,
+          status: 'active' as const,
+          lastSyncedAt: calendar.syncedAt,
+        }
+      : { connected: false, accountEmail: null, status: null, lastSyncedAt: null };
   const folderList = () =>
     [...folders]
       .sort((a, b) => a.name.localeCompare(b.name))
@@ -132,6 +151,38 @@ export function createMockApi(options: { latencyMs?: number } = {}): LibraryApi 
     renameMeeting: (id, title) => {
       const m = meetings.find((x) => x.id === id);
       if (m !== undefined) m.title = title;
+      return wait(undefined);
+    },
+    getCalendar: () => wait(calendarStatus()),
+    startCalendarConnect: () => {
+      // No Google in the mock: connecting succeeds at once.
+      calendar.connected = true;
+      return wait(undefined);
+    },
+    connectCalendar: () => {
+      calendar.connected = true;
+      return wait({ ok: true as const, calendar: calendarStatus() });
+    },
+    disconnectCalendar: () => {
+      calendar.connected = false;
+      eventNotes.clear();
+      return wait(undefined);
+    },
+    upcoming: (from, to) =>
+      wait({
+        calendar: calendarStatus(),
+        meetings: calendar.connected
+          ? calendarEvents
+              .filter(
+                (e) =>
+                  Date.parse(e.endsAt) > from.getTime() && Date.parse(e.startsAt) < to.getTime(),
+              )
+              .map((e) => ({ ...e, noteCount: eventNotes.get(e.id)?.length ?? 0 }))
+          : [],
+      }),
+    getEventNotes: (id) => wait(eventNotes.get(id) ?? []),
+    saveEventNotes: (id, notes) => {
+      eventNotes.set(id, notes);
       return wait(undefined);
     },
     listFolders: () => wait(folderList()),

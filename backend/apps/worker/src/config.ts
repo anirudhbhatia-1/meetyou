@@ -15,6 +15,11 @@ export const WorkerEnv = z.object({
   /** S3-04 batch pass after the first notes: paid STT minutes, so off unless set (with
    * STT_PROVIDER and its key). */
   BATCH_TRANSCRIPTION: z.enum(['off', 'on']).default('off'),
+  /** ADR-0013 calendar sync: the Google OAuth client and the token sealing keys (Key Vault).
+   * All three or the sync job does nothing. */
+  GOOGLE_CLIENT_ID: z.string().min(1).optional(),
+  GOOGLE_CLIENT_SECRET: z.string().min(1).optional(),
+  CALENDAR_TOKEN_KEYS: z.string().min(1).optional(),
 });
 export type WorkerEnv = z.infer<typeof WorkerEnv>;
 

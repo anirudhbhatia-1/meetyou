@@ -6,7 +6,7 @@ pointer to where the full detail lives — the linked document stays the source 
 
 | Field | Value |
 |---|---|
-| Last updated | 2026-11-18 (Anirudh: folders with an AI-suggested folder) |
+| Last updated | 2026-11-18 (Anirudh: Google Calendar sync, ADR-0013) |
 | Updated by | Anirudh (Claude Code) |
 | Repository | [anirudhbhatia-1/meetyou](https://github.com/anirudhbhatia-1/meetyou) — branches `main`, `anirudh`, `Gauravbro` |
 | Current stage | **Stage 4** complete in code; 2026-11-09 audit fixes landed; Stage-5 hardening planned (AUDIT §4); real Chrome/Meet checks pending (§7) |
@@ -206,7 +206,22 @@ Gaurav's S3-07..S3-11 — Gaurav should not start them).** **Stage 4 is complete
 
 Newest first. One entry per working session (either person).
 
-### 2026-11-18 (latest) — Anirudh (Claude Code): folders with a suggested folder
+### 2026-11-18 (latest) — Anirudh (Claude Code): Google Calendar sync (ADR-0013)
+
+Anirudh chose the Google Calendar API with all four first-version features. Built end to end:
+ADR-0013; DESIGN §10.1 (Up next, notes before the call) and §15.7 (Settings row); migration
+**0012** (connections with a sealed refresh token, events, event notes, `meetings.calendar_event_id`);
+`auth/sealed.ts` (AES-256-GCM) and `auth/google-calendar.ts` (exchange with PKCE + secret, refresh,
+revoke); `providers/calendar` (events.list window, Meet code, names/companies from emails);
+`pipeline/calendar.ts` (`calendar.sync`, self-scheduling, needs_reconnect on `invalid_grant`);
+API `/v1/calendar*`; `POST /v1/sessions` links the event (title, notes returned and stored for the
+side panel); gateway keyterms from the invite; web Settings Connect/Disconnect, `/calendar/callback`,
+Home Up next and the notes sheet. Checked on the mock API in the browser. `pnpm check` passes.
+**Before it works on staging (ADR-0013 §4):** enable the Calendar API and the scope on the consent
+screen, add test users and the `/calendar/callback` redirect URI, put `CALENDAR_TOKEN_KEYS` in Key
+Vault for api + worker (worker also needs `GOOGLE_CLIENT_ID/SECRET`), run migration 0012.
+
+### 2026-11-18 — Anirudh (Claude Code): folders with a suggested folder
 
 Anirudh picked folders (and calendar sync, next) from the Yogurt comparison. Built end to end:
 DESIGN §11.1–11.2 first; contracts (`Folder`, `FolderRequest`, `Meeting.folderId`,

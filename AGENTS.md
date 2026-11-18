@@ -342,6 +342,14 @@ Work like a careful senior engineer pairing with the developer.
   0011, job `meeting.suggest_folder`, one small Gemini call per meeting, cost recorded). Idea from
   the open-source Yogurt recorder. Team folders and permissions stay Phase 3 (FEATURES G4).
 
+- **2026-11-18 — Google Calendar sync, opt-in (Anirudh):** [ADR-0013](docs/adr/0013-google-calendar-sync.md).
+  Connect from Settings (separate consent, `calendar.events.readonly`; sign-in still asks for
+  name and email only). Refresh tokens sealed (AES-256-GCM, `CALENDAR_TOKEN_KEYS` in Key Vault),
+  revoked on disconnect. Up next on Home, notes before the call (copied into the meeting and the
+  side panel at start), event titles, and invite names/companies as keyterms. Window polling via
+  the self-scheduling `calendar.sync` job; push later. Google verification needed before public
+  users; Testing-mode grants expire every 7 days.
+
 ### Open (do not assume an answer)
 - LLM for summaries (D-04): [ADR-0007](docs/adr/0007-llm-provider-and-prompt-versions.md)
   **Proposed** 2026-11-09 — Gemini 3.6 Flash on the Gemini API (evaluation baseline in

@@ -185,6 +185,11 @@ export const StartSessionResponse = z.object({
   streamToken: z.string().min(1),
   expiresAt: IsoDateTime,
   audioFormat: AudioFormat,
+  /**
+   * Notes written before the call on the matching calendar event (ADR-0013): the side panel starts
+   * with them, so its first save keeps them. Absent when there are none.
+   */
+  notes: z.array(Note).max(30).optional(),
   /** Null when the server does not accept video for this session (setting off, immediate retention). */
   video: z
     .object({

@@ -1,3 +1,5 @@
+import { companyFromEmail, nameFromEmail } from '../calendar/google-calendar.ts';
+
 /**
  * Vocabulary for STT (live stream and batch pass): the workspace glossary plus the names of people Meet showed in
  * the call, so they are spelled right (idea from the open-source Yogurt recorder, MIT,
@@ -34,4 +36,21 @@ export function sessionKeyterms(glossary: readonly string[], names: Iterable<str
   for (const term of glossary) add(term);
   for (const name of names) for (const term of nameKeyterms(name)) add(term);
   return out;
+}
+
+/**
+ * ADR-0013: the glossary plus the calendar invite's people (their names, or the name part of the
+ * email) and their companies (from work email domains), so names are right before anyone speaks.
+ */
+export function calendarKeyterms(
+  glossary: readonly string[],
+  attendees: readonly { name: string | null; email: string | null }[],
+): string[] {
+  const names = attendees
+    .map((a) => a.name ?? (a.email !== null ? nameFromEmail(a.email) : ''))
+    .filter((n) => n.trim() !== '');
+  const companies = attendees
+    .map((a) => (a.email !== null ? companyFromEmail(a.email) : null))
+    .filter((c): c is string => c !== null);
+  return sessionKeyterms([...glossary], [...names, ...companies]);
 }
