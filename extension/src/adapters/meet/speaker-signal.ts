@@ -71,7 +71,8 @@ function extractTileIdentity(tile: Element): ActiveSpeakerInfo | null {
   // Check self indicator
   const hasSelfAttr =
     tile.getAttribute('data-self-name') !== null ||
-    tile.querySelector('div[data-self-name]') !== null;
+    tile.querySelector('div[data-self-name]') !== null ||
+    tile.querySelector('[aria-label*="Backgrounds" i], [aria-label*="Reframe" i]') !== null;
 
   // 2. Extract display name from tile label buttons or text
   let displayName: string | undefined;
@@ -79,8 +80,8 @@ function extractTileIdentity(tile: Element): ActiveSpeakerInfo | null {
 
   for (const selector of PARTICIPANT_SELECTORS.tileNameLabel.selectors) {
     try {
-      const labelEl = tile.querySelector(selector);
-      if (labelEl !== null) {
+      const elements = tile.querySelectorAll(selector);
+      for (const labelEl of elements) {
         const raw =
           labelEl.getAttribute('data-self-name') ??
           labelEl.getAttribute('aria-label') ??
@@ -93,6 +94,9 @@ function extractTileIdentity(tile: Element): ActiveSpeakerInfo | null {
           }
           break;
         }
+      }
+      if (displayName !== undefined) {
+        break;
       }
     } catch {
       continue;

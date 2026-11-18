@@ -9,7 +9,7 @@
  * fallbacks and version tags. DOM text read from Meet is untrusted input.
  */
 
-export const MEET_SELECTORS_VERSION = '2026-11-09';
+export const MEET_SELECTORS_VERSION = '2026-11-17';
 
 export interface SelectorDescriptor {
   readonly id: string;
@@ -153,7 +153,9 @@ export const PARTICIPANT_SELECTORS = {
     id: 'participants.tile-name',
     description: 'Participant name label on video tiles',
     selectors: [
+      '[aria-label*="More options for " i]',
       'button[aria-label*="More options for " i]',
+      'span.notranslate:not(i):not(.google-symbols):not(.google-material-icons)',
       'div[data-self-name]',
       'div[data-participant-id] [data-self-name]',
       'div[data-participant-id] div[aria-label]',
@@ -178,11 +180,16 @@ export const SPEAKER_SELECTORS = {
   speakingIndicator: {
     id: 'speaker.active-indicator',
     description: 'Visual speaking wave or volume meter indicator on a participant tile',
-    // `v5h6Xc` is the CSS class Meet puts on the talking participant's tile, measured in
-    // October 2026 by the open-source Yogurt recorder (MIT, FrigadeHQ/yogurt, callNames/parse.ts):
-    // it sits on one tile and moves to whoever talks. A build name Google changes between
-    // releases, so [Verify] on a live call; the attribute selectors stay as fallbacks.
+    // Visual speaking indicator classes:
+    // - `.sxlEM` (volume wave) and `.BlxGDf` (halo glow) verified live on Google Meet (2026-11-17).
+    // - `.v5h6Xc` from Yogurt recorder (October 2026 build name fallback).
+    // - Attribute selectors stay as resilient fallbacks.
     selectors: [
+      'div.sxlEM',
+      'div.BlxGDf',
+      '[jsname="QgSmzd"].sxlEM',
+      '.sxlEM',
+      '.BlxGDf',
       '.v5h6Xc',
       'div[data-is-speaking="true"]',
       'div[jsname="x3Eknd"]',
@@ -197,6 +204,7 @@ export const SPEAKER_SELECTORS = {
     description: 'Video or avatar tile container for an individual participant',
     selectors: [
       'div[data-participant-id]',
+      'div.oZRSLe',
       'div[data-requested-participant-id]',
       'div[jscontroller="e6S21b"]',
       'div[data-allocation-id]',
