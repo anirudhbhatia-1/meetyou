@@ -63,6 +63,10 @@ export function deepgramStreamUrl(
     punctuate: 'true',
     smart_format: 'true',
     mip_opt_out: 'true',
+    // Keyterms carry names from the call and the glossary: keep them out of Deepgram's usage
+    // records (reference/speech-to-text/listen-streaming, checked 2026-11-18). Whether this also
+    // covers keyterms sent later in `Configure` is not documented [Verify].
+    redact_usage: 'true',
     interim_results: 'true',
     endpointing: '100',
   });
@@ -149,6 +153,86 @@ export function parseDeepgramMessage(raw: string): SttResult | null {
 }
 
 const HANDSHAKE_TIMEOUT_MS = 10_000;
+/** A Configure without a reply after this long is taken as lost, so updates are not stuck. */
+const CONFIGURE_REPLY_MS = 15_000;
+
+const DgConfigureReply = z.discriminatedUnion('type', [
+  z.object({ type: z.literal('ConfigureSuccess') }),
+  z.object({ type: z.literal('ConfigureFailure'), code: z.string().optional() }),
+]);
+
+/**
+ * Mid-stream keyterm updates (developers.deepgram.com/docs/configure, checked 2026-11-18): a
+ * `Configure` message replaces the whole list; only one may be pending, so newer lists wait and
+ * only the latest is sent. Every list goes through `keytermsWithinBudget`, because sources
+ * disagree on what an over-limit update does (a `ConfigureFailure` per the docs, a stopped
+ * stream closed with 1011 per the 2026-10-08 changelog): it must never be sent.
+ */
+export class KeytermUpdates {
+  #active: string[];
+  #pending: { terms: string[]; since: number } | null = null;
+  #next: string[] | null = null;
+  readonly #send: (json: string) => void;
+  readonly #onRejected: (code: string) => void;
+  readonly #now: () => number;
+
+  constructor(options: {
+    initial: readonly string[];
+    send: (json: string) => void;
+    onRejected?: (code: string) => void;
+    now?: () => number;
+  }) {
+    this.#active = keytermsWithinBudget(options.initial);
+    this.#send = options.send;
+    this.#onRejected = options.onRejected ?? (() => undefined);
+    this.#now = options.now ?? Date.now;
+  }
+
+  /** The list Deepgram confirmed last (or the one the stream opened with). */
+  get active(): readonly string[] {
+    return this.#active;
+  }
+
+  update(terms: readonly string[]): void {
+    const list = keytermsWithinBudget(terms);
+    if (this.#pending !== null && this.#now() - this.#pending.since > CONFIGURE_REPLY_MS) {
+      this.#pending = null;
+    }
+    if (this.#pending !== null) {
+      this.#next = same(list, this.#pending.terms) ? null : list;
+      return;
+    }
+    if (same(list, this.#active)) return;
+    this.#pending = { terms: list, since: this.#now() };
+    this.#send(JSON.stringify({ type: 'Configure', keyterms: list }));
+  }
+
+  /** True when `raw` was a reply to a Configure (and is consumed here). */
+  handle(raw: string): boolean {
+    let json: unknown;
+    try {
+      json = JSON.parse(raw);
+    } catch {
+      return false;
+    }
+    const reply = DgConfigureReply.safeParse(json);
+    if (!reply.success) return false;
+    const pending = this.#pending;
+    this.#pending = null;
+    if (reply.data.type === 'ConfigureSuccess') {
+      if (pending !== null) this.#active = pending.terms;
+    } else {
+      this.#onRejected(reply.data.code ?? 'unknown');
+    }
+    const next = this.#next;
+    this.#next = null;
+    if (next !== null) this.update(next);
+    return true;
+  }
+}
+
+const same = (a: readonly string[], b: readonly string[]): boolean =>
+  a.length === b.length && a.every((t, i) => t === b[i]);
 
 /** Deepgram Nova-3 as documented (STT_PREFLIGHT §3): keyterms only, no weights; diarization live. */
 export const DEEPGRAM_CAPABILITIES: SttCapabilities = {
@@ -186,6 +270,13 @@ export function deepgramProvider(apiKey: string): SttStreamingProvider {
       let lastSend = Date.now();
       let lastMessage = Date.now();
       let closing = false;
+      const keyterms = new KeytermUpdates({
+        initial: options.keyterms ?? [],
+        send: (json) => {
+          if (ws.readyState === WebSocket.OPEN && !closing) ws.send(json);
+        },
+        onRejected: (code) => handlers.onKeytermsRejected?.(code),
+      });
       const keepAlive = setInterval(() => {
         if (Date.now() - lastSend > 3000 && ws.readyState === WebSocket.OPEN) {
           ws.send(JSON.stringify({ type: 'KeepAlive' }));
@@ -194,7 +285,9 @@ export function deepgramProvider(apiKey: string): SttStreamingProvider {
       ws.on('message', (data, isBinary) => {
         lastMessage = Date.now();
         if (isBinary) return;
-        const result = parseDeepgramMessage(data.toString());
+        const raw = data.toString();
+        if (keyterms.handle(raw)) return;
+        const result = parseDeepgramMessage(raw);
         if (result !== null) handlers.onResult(result);
       });
       ws.on('error', () => undefined);
@@ -209,6 +302,9 @@ export function deepgramProvider(apiKey: string): SttStreamingProvider {
         send(bytes) {
           lastSend = Date.now();
           if (ws.readyState === WebSocket.OPEN) ws.send(bytes);
+        },
+        updateKeyterms(terms) {
+          keyterms.update(terms);
         },
         async close() {
           closing = true;

@@ -263,12 +263,14 @@ describe('meeting.retranscribe', () => {
   function stt(
     byLane: Record<'me' | 'them', BatchResult['segments']>,
     calls: boolean[] = [],
+    keyterms: (readonly string[] | undefined)[] = [],
   ): SttBatchProvider {
     return {
       name: 'fake',
       usdPerMinute: 0.01,
       async transcribe(_audio, options) {
         calls.push(options?.diarize === true);
+        keyterms.push(options?.keyterms);
         return {
           segments: options?.diarize === true ? byLane.them : byLane.me,
           durationMs: 10_000,
@@ -317,6 +319,7 @@ describe('meeting.retranscribe', () => {
     const bucket = new MemoryBucket();
     const { meetingId, live } = await finished(bucket);
     const calls: boolean[] = [];
+    const keyterms: (readonly string[] | undefined)[] = [];
     await retranscribeTask({
       db: env.db,
       bucket,
@@ -341,8 +344,12 @@ describe('meeting.retranscribe', () => {
           ],
         },
         calls,
+        keyterms,
       ),
     }).handle({ workspaceId, meetingId }, helpers);
+    // The participant's name goes to the batch model as a keyterm; "You" (the user) does not.
+    expect(keyterms[0]).toEqual(expect.arrayContaining(['Neha Kapoor', 'Neha']));
+    expect(keyterms[0]).not.toContain('You');
     expect(calls).toEqual([false, true]); // diarization on the `them` lane only
 
     const after = await state(meetingId);

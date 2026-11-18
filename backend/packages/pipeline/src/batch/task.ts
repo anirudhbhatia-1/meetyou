@@ -1,7 +1,7 @@
 import { newUlid, type Lane, type Segment } from '@meetyou/contracts';
-import { storeSegments, type Db } from '@meetyou/db';
+import { glossaryTerms, storeSegments, type Db } from '@meetyou/db';
 import { createLogger, errorCode } from '@meetyou/log';
-import type { BatchSegment, SttBatchProvider } from '@meetyou/providers';
+import { sessionKeyterms, type BatchSegment, type SttBatchProvider } from '@meetyou/providers';
 import { defineTask, enqueue, jobKey } from '@meetyou/queue';
 import type { ObjectBucket } from '@meetyou/storage';
 import { z } from 'zod';
@@ -143,6 +143,21 @@ export function retranscribeTask(deps: {
       // `too_short`: the live transcript failed or was empty; the stored audio may still have speech.
       if (!['ready', 'updated', 'too_short'].includes(meeting.status)) return;
 
+      // The glossary and the names Meet showed, so the batch model spells them right too.
+      const keyterms = await deps.db.inWorkspace(workspaceId, async (tx) => {
+        const names = await tx
+          .selectFrom('participants')
+          .select('displayName')
+          .where('meetingId', '=', meetingId)
+          .where('isSelf', '=', false)
+          .orderBy('createdAt')
+          .execute();
+        return sessionKeyterms(
+          await glossaryTerms(tx),
+          names.map((n) => n.displayName),
+        );
+      });
+
       const fresh: NewSegment[] = [];
       /** Lanes the batch model actually re-read: only their live segments are replaced. */
       const lanes: Lane[] = [];
@@ -153,7 +168,7 @@ export function retranscribeTask(deps: {
         try {
           result = await deps.stt.transcribe(
             { kind: 'bytes', bytes: audio.ogg, contentType: 'audio/ogg' },
-            { diarize: lane === 'them' },
+            { diarize: lane === 'them', keyterms },
           );
         } catch (error) {
           if (!permanent(error)) throw error; // outage: the queue retries with backoff

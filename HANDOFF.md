@@ -206,7 +206,18 @@ Gaurav's S3-07..S3-11 — Gaurav should not start them).** **Stage 4 is complete
 
 Newest first. One entry per working session (either person).
 
-### 2026-11-18 (latest) — Anirudh (Claude Code): ideas from the Yogurt recorder
+### 2026-11-18 (latest) — Anirudh (Claude Code): participant names as Deepgram keyterms
+
+Names Meet shows (`participant.joined`) now reach Deepgram: the gateway sends the glossary plus
+each name (and a first name of 3+ letters) to both open streams with a mid-stream `Configure`
+(`KeytermUpdates`: whole list, one pending, newest waiting list only, always within the 500-token
+budget); reopened streams start with them, and the batch pass passes them too. Streaming and batch
+URLs add `redact_usage=true` so keyterms stay out of Deepgram's usage records. Verified against
+developers.deepgram.com (configure, keyterm, listen-streaming, listen-pre-recorded, changelog) on
+2026-11-18. **[Verify]** on staging: a `stt.keyterms_rejected` log never appears, and a name is
+spelled right after the person joins. `pnpm check` passes.
+
+### 2026-11-18 — Anirudh (Claude Code): ideas from the Yogurt recorder
 
 Studied [FrigadeHQ/yogurt](https://github.com/FrigadeHQ/yogurt) (MIT, local desktop recorder) and
 took over what it does better than our code, with credit comments:

@@ -33,12 +33,20 @@ export interface SttStream {
   send(bytes: Uint8Array): void;
   /** Closes after the provider has returned its last results. */
   close(): Promise<void>;
+  /**
+   * Replaces the stream's vocabulary (glossary plus names heard in the call) for audio not yet
+   * transcribed. Present only when `capabilities.vocabulary.midStreamUpdate` is true; the adapter
+   * trims the list to its limits and sends at most one update at a time.
+   */
+  updateKeyterms?(terms: readonly string[]): void;
 }
 
 export interface SttStreamHandlers {
   onResult(result: SttResult): void;
   /** The provider stream ended unexpectedly; the session may open a new one. */
   onClosed(reason: string): void;
+  /** A vocabulary update was refused; the stream keeps its previous terms. `code` is the vendor's. */
+  onKeytermsRejected?(code: string): void;
 }
 
 /**
@@ -107,5 +115,8 @@ export type BatchAudio =
 export interface SttBatchProvider {
   readonly name: string;
   readonly usdPerMinute: number | null;
-  transcribe(audio: BatchAudio, options?: { diarize?: boolean }): Promise<BatchResult>;
+  transcribe(
+    audio: BatchAudio,
+    options?: { diarize?: boolean; keyterms?: readonly string[] },
+  ): Promise<BatchResult>;
 }

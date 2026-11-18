@@ -23,7 +23,12 @@ import { LatencyHistogram } from './latency.ts';
 import { LaneChunker, type PendingChunk } from './lane-chunker.ts';
 import { errorCode, log } from './log.ts';
 import { DEFAULT_PRE_SKIP, oggOpusFile, OggOpusWriter } from '@meetyou/storage';
-import type { SttProvider, SttResult, SttStream } from '@meetyou/providers';
+import {
+  sessionKeyterms,
+  type SttProvider,
+  type SttResult,
+  type SttStream,
+} from '@meetyou/providers';
 import type { SessionPatch } from './registry.ts';
 import { FileSink, type SessionSink, type SessionTarget } from './sinks.ts';
 import { StreamTimeline } from './timeline.ts';
@@ -108,7 +113,9 @@ export class StreamSession {
   #lastActivityAt = Date.now();
   readonly #onEnded: (() => void) | undefined;
   readonly #onState: (patch: SessionPatch) => void;
-  readonly #keyterms: readonly string[];
+  readonly #glossary: readonly string[];
+  /** Participant names seen in this call, by lowercase name (never logged, AGENTS §7). */
+  readonly #names = new Map<string, string>();
   #sttHealth: SttHealth = 'ok';
   #openFailures = 0;
   #needsBatch = false;
@@ -139,7 +146,7 @@ export class StreamSession {
     this.workspaceId = options.workspaceId;
     this.meetingId = options.meetingId ?? options.sessionId;
     this.#onState = options.onState ?? (() => undefined);
-    this.#keyterms = options.keyterms ?? [];
+    this.#glossary = options.keyterms ?? [];
     this.#codec = options.resume?.codec ?? null;
     this.#needsBatch = options.resume?.needsBatch ?? false;
     this.#store = options.store;
@@ -451,6 +458,7 @@ export class StreamSession {
       this.#toSink('video', (t) => this.#sink.videoPart(t, { partId, fragments, stoppedAtMs: at }));
     } else if (event.type === 'participant.joined') {
       const { participantId, displayName, at } = event;
+      this.#learnName(displayName);
       this.#toSink('speakers', async (t) =>
         this.#sink.speaker?.(t, {
           kind: 'joined',
@@ -465,6 +473,24 @@ export class StreamSession {
         this.#sink.speaker?.(t, { kind: 'active', externalId: participantId, atMs: at }),
       );
     }
+  }
+
+  /** Glossary plus the names seen so far (keyterms.ts). */
+  #keyterms(): string[] {
+    return sessionKeyterms(this.#glossary, this.#names.values());
+  }
+
+  /**
+   * A new name in the call goes to the open STT streams as a mid-stream vocabulary update, so later
+   * mentions are spelled right; streams opened later start with it.
+   */
+  #learnName(displayName: string): void {
+    const key = displayName.trim().toLowerCase();
+    if (key === '' || this.#names.has(key)) return;
+    this.#names.set(key, displayName.trim());
+    if (this.#stt?.capabilities.vocabulary.midStreamUpdate !== true) return;
+    const terms = this.#keyterms();
+    for (const lane of ['me', 'them'] as const) this.#laneStt[lane].stream?.updateKeyterms?.(terms);
   }
 
   async #end(socket: WebSocket): Promise<void> {
@@ -593,6 +619,9 @@ export class StreamSession {
         packets === null ? 'pcm16' : 'ogg_opus',
         {
           onResult: (result) => this.#onSttResult(lane, timeline, result),
+          onKeytermsRejected: (code) => {
+            log('stt.keyterms_rejected', { sessionId: this.sessionId, lane, code });
+          },
           onClosed: (reason) => {
             log('stt.closed', { sessionId: this.sessionId, lane, reason });
             // `#closeStt` clears `stream` before closing, so only an unexpected close backs off.
@@ -606,7 +635,7 @@ export class StreamSession {
             }
           },
         },
-        { diarize: lane === 'them', keyterms: this.#keyterms },
+        { diarize: lane === 'them', keyterms: this.#keyterms() },
       )
       .then((stream) => {
         stt.stream = stream;

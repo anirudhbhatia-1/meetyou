@@ -1,6 +1,6 @@
 import { z } from 'zod';
 
-import { DEEPGRAM_USD_PER_MINUTE } from './deepgram-streaming.ts';
+import { DEEPGRAM_USD_PER_MINUTE, keytermsWithinBudget } from './deepgram-streaming.ts';
 import type { BatchAudio, BatchResult, BatchSegment, SttBatchProvider } from './types.ts';
 
 const TIMEOUT_MS = 10 * 60 * 1000;
@@ -14,7 +14,7 @@ const TIMEOUT_MS = 10 * 60 * 1000;
  * Content-Type, as the S0 benchmark did for WAV. Ogg Opus as the batch pass joins it (S3-04) checked
  * 2026-11-09 on the synthetic fixture: accepted, duration matches, diarized words returned.
  */
-export function deepgramBatchUrl(diarize: boolean): string {
+export function deepgramBatchUrl(diarize: boolean, keyterms: readonly string[] = []): string {
   const p = new URLSearchParams({
     model: 'nova-3',
     language: 'multi',
@@ -22,10 +22,15 @@ export function deepgramBatchUrl(diarize: boolean): string {
     smart_format: 'true',
     utterances: 'true',
     mip_opt_out: 'true',
+    // Keyterms (glossary, participant names) stay out of usage records; listed for pre-recorded
+    // in reference/speech-to-text/listen-pre-recorded (checked 2026-11-18).
+    redact_usage: 'true',
   });
   p.append('language_hint', 'hi');
   p.append('language_hint', 'en');
   if (diarize) p.set('diarize_model', 'latest');
+  // Repeated `keyterm` parameters, Nova-3 only, 500 tokens per request (same page).
+  for (const term of keytermsWithinBudget(keyterms)) p.append('keyterm', term);
   return `https://api.deepgram.com/v1/listen?${p}`;
 }
 
@@ -122,7 +127,7 @@ export function deepgramBatchProvider(
               headers: { Authorization: `Token ${apiKey}`, 'Content-Type': audio.contentType },
               body: audio.bytes,
             };
-      const response = await doFetch(deepgramBatchUrl(options.diarize === true), {
+      const response = await doFetch(deepgramBatchUrl(options.diarize === true, options.keyterms), {
         method: 'POST',
         ...init,
         signal: AbortSignal.timeout(TIMEOUT_MS),

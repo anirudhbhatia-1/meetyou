@@ -9,6 +9,7 @@ import {
 } from './stt/deepgram-batch.ts';
 import {
   deepgramStreamUrl,
+  KeytermUpdates,
   keytermsWithinBudget,
   MAX_KEYTERMS,
   parseDeepgramMessage,
@@ -60,6 +61,7 @@ describe('deepgramStreamUrl', () => {
   it('always opts out of model improvement and hints Hindi and English', () => {
     const url = new URL(deepgramStreamUrl('ogg_opus'));
     expect(url.searchParams.get('mip_opt_out')).toBe('true');
+    expect(url.searchParams.get('redact_usage')).toBe('true');
     expect(url.searchParams.get('model')).toBe('nova-3');
     expect(url.searchParams.getAll('language_hint')).toEqual(['hi', 'en']);
     expect(url.searchParams.has('encoding')).toBe(false);
@@ -95,12 +97,83 @@ const batchResponse = {
   },
 };
 
+describe('KeytermUpdates (mid-stream Configure)', () => {
+  const setup = (initial: string[] = ['Minutes']) => {
+    const sent: unknown[] = [];
+    const rejected: string[] = [];
+    let now = 0;
+    const updates = new KeytermUpdates({
+      initial,
+      send: (json) => sent.push(JSON.parse(json)),
+      onRejected: (code) => rejected.push(code),
+      now: () => now,
+    });
+    return { updates, sent, rejected, advance: (ms: number) => (now += ms) };
+  };
+
+  it('sends the whole list, one Configure at a time, and only the newest waiting list', () => {
+    const { updates, sent } = setup();
+    updates.update(['Minutes', 'Neha Kapoor']);
+    updates.update(['Minutes', 'Neha Kapoor', 'Rohan']);
+    updates.update(['Minutes', 'Neha Kapoor', 'Rohan', 'Asha']);
+    expect(sent).toEqual([{ type: 'Configure', keyterms: ['Minutes', 'Neha Kapoor'] }]);
+    expect(updates.handle(JSON.stringify({ type: 'ConfigureSuccess', request_id: 'r' }))).toBe(
+      true,
+    );
+    expect(updates.active).toEqual(['Minutes', 'Neha Kapoor']);
+    expect(sent[1]).toEqual({
+      type: 'Configure',
+      keyterms: ['Minutes', 'Neha Kapoor', 'Rohan', 'Asha'],
+    });
+    expect(sent).toHaveLength(2);
+  });
+
+  it('skips a list that is already active and keeps the old list on failure', () => {
+    const { updates, sent, rejected } = setup();
+    updates.update(['Minutes']);
+    expect(sent).toHaveLength(0);
+    updates.update(['Minutes', 'Neha']);
+    updates.handle(
+      JSON.stringify({
+        type: 'ConfigureFailure',
+        code: 'CONFIGURE_INTERNAL_ERROR',
+        request_id: 'r',
+      }),
+    );
+    expect(rejected).toEqual(['CONFIGURE_INTERNAL_ERROR']);
+    expect(updates.active).toEqual(['Minutes']);
+  });
+
+  it('never sends more than the token budget and recovers from a lost reply', () => {
+    const { updates, sent, advance } = setup([]);
+    const many = Array.from({ length: 200 }, (_, i) => `Participant name number ${i}`);
+    updates.update(many);
+    const first = sent[0] as { keyterms: string[] };
+    expect(first.keyterms).toEqual(keytermsWithinBudget(many));
+    advance(16_000);
+    updates.update(['Neha']);
+    expect(sent).toHaveLength(2);
+  });
+
+  it('leaves transcript results to the result parser', () => {
+    const { updates } = setup();
+    expect(updates.handle(JSON.stringify({ type: 'Results' }))).toBe(false);
+    expect(updates.handle('not json')).toBe(false);
+  });
+});
+
 describe('deepgram batch (pre-recorded)', () => {
+  it('passes keyterms as repeated parameters', () => {
+    const url = new URL(deepgramBatchUrl(false, ['Neha Kapoor', 'Minutes']));
+    expect(url.searchParams.getAll('keyterm')).toEqual(['Neha Kapoor', 'Minutes']);
+  });
+
   it('asks for utterances, Nova-3 multilingual and the opt-out', () => {
     const url = new URL(deepgramBatchUrl(true));
     expect(url.searchParams.get('utterances')).toBe('true');
     expect(url.searchParams.get('language')).toBe('multi');
     expect(url.searchParams.get('mip_opt_out')).toBe('true');
+    expect(url.searchParams.get('redact_usage')).toBe('true');
     expect(url.searchParams.get('diarize_model')).toBe('latest');
     expect(new URL(deepgramBatchUrl(false)).searchParams.has('diarize_model')).toBe(false);
   });

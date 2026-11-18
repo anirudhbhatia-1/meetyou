@@ -296,12 +296,14 @@ describe('production stream path (JWT + Postgres, S2-04/S2-05/S2-07)', () => {
       });
       const streamTokens = new TokenService(await loadKeyRing([await generateSigningJwk('k1')]));
       const opened: { keyterms?: readonly string[] }[] = [];
+      const updates: (readonly string[])[] = [];
       const stt = scriptedStt();
       const recordingStt: SttProvider = {
         ...stt,
-        open: (input, handlers, options) => {
+        open: async (input, handlers, options) => {
           opened.push(options ?? {});
-          return stt.open(input, handlers, options);
+          const stream = await stt.open(input, handlers, options);
+          return { ...stream, updateKeyterms: (terms) => updates.push(terms) };
         },
       };
       const store = new MemoryChunkStore();
@@ -367,6 +369,8 @@ describe('production stream path (JWT + Postgres, S2-04/S2-05/S2-07)', () => {
       await expect(replay.opened).rejects.toThrow('401');
 
       expect(opened[0]?.keyterms).toEqual(['Minutes']);
+      // Names seen in the call reach the open stream as vocabulary updates (glossary first).
+      expect(updates.at(-1)).toEqual(['Minutes', 'Neha', 'Neha K']);
       const rows = await env.db.inWorkspace(workspaceId, async (tx) => ({
         segments: await tx
           .selectFrom('transcriptSegments')

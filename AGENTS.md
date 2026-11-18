@@ -359,7 +359,10 @@ Work like a careful senior engineer pairing with the developer.
 **STT and LLM vendors**
 Full provider research: [docs/STT_PREFLIGHT.md](docs/STT_PREFLIGHT.md).
 - Deepgram Nova-3 uses `keyterm` (not `keywords`), passed as repeated query parameters (500-token
-  limit, no weights). Mid-stream updates use a `Configure` message with a `keyterms` array. Send
+  limit, no weights). Mid-stream updates use a `Configure` message with a `keyterms` array that
+  replaces the whole list; one may be pending at a time (reply `ConfigureSuccess`/`ConfigureFailure`),
+  and an over-limit list must never be sent (docs and changelog disagree on what happens). Keyterms
+  hold names, so add `redact_usage=true` (checked 2026-11-18). Send
   `KeepAlive` every 3–5 s during silence or the connection closes after ~10 s. Add
   `mip_opt_out=true` to every request.
 - Gemini free tier: Google may train on the data and humans may review it, and its terms forbid

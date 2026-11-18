@@ -12,7 +12,12 @@ import { LaneChunker } from './lane-chunker.ts';
 import { createGateway, SUBPROTOCOL, tokenFromProtocols, type Gateway } from './server.ts';
 import { checkLane } from './session-check.ts';
 import { EchoDetector, echoThreshold, echoTokens, wordSimilarity } from './echo.ts';
-import { DEEPGRAM_CAPABILITIES, deepgramStreamUrl } from '@meetyou/providers';
+import {
+  DEEPGRAM_CAPABILITIES,
+  deepgramStreamUrl,
+  nameKeyterms,
+  sessionKeyterms,
+} from '@meetyou/providers';
 import { clusterId, splitBySpeaker } from './speakers.ts';
 import type { SttInput, SttProvider, SttResult } from '@meetyou/providers';
 import { StreamTimeline } from './timeline.ts';
@@ -493,5 +498,23 @@ describe('splitBySpeaker', () => {
   it('asks Deepgram for streaming diarization only when requested', () => {
     expect(deepgramStreamUrl('pcm16', true)).toContain('diarize_model=latest');
     expect(deepgramStreamUrl('pcm16')).not.toContain('diarize');
+  });
+});
+
+describe('participant names as keyterms', () => {
+  it('uses the full name and a first name of three letters or more', () => {
+    expect(nameKeyterms('Neha Kapoor')).toEqual(['Neha Kapoor', 'Neha']);
+    expect(nameKeyterms('Om Prakash')).toEqual(['Om Prakash']);
+    expect(nameKeyterms('Rohan (Presenting)')).toEqual(['Rohan']);
+    expect(nameKeyterms('  ')).toEqual([]);
+  });
+
+  it('puts the glossary first and drops repeats', () => {
+    expect(sessionKeyterms(['Minutes', 'neha'], ['Neha Kapoor', 'Rohan'])).toEqual([
+      'Minutes',
+      'neha',
+      'Neha Kapoor',
+      'Rohan',
+    ]);
   });
 });
