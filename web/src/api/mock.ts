@@ -1,9 +1,10 @@
-import { ASK_LIMITS, DEFAULT_USER_SETTINGS, type Meeting } from '@meetyou/contracts';
+import { ASK_LIMITS, DEFAULT_USER_SETTINGS, MAX_FOLDERS, type Meeting } from '@meetyou/contracts';
 
-import { ME, meetings, participants, segments, summaries } from './fixtures.ts';
+import { folders, ME, meetings, participants, segments, summaries } from './fixtures.ts';
 import type {
   ActionItemRow,
   ExportView,
+  FolderSaveResult,
   LibraryApi,
   MeetingFilter,
   MeetingQuestion,
@@ -51,9 +52,46 @@ export function createMockApi(options: { latencyMs?: number } = {}): LibraryApi 
     };
   };
 
+  const folderList = () =>
+    [...folders]
+      .sort((a, b) => a.name.localeCompare(b.name))
+      .map((f) => ({
+        ...f,
+        meetingCount: meetings.filter((m) => m.folderId === f.id && !deleted.has(m.id)).length,
+      }));
+  const saveFolder = (id: string | null, raw: string): FolderSaveResult => {
+    const name = raw.trim();
+    if (name.length < 1 || name.length > 60) return { ok: false, error: 'invalid' };
+    if (folders.some((f) => f.id !== id && f.name.toLowerCase() === name.toLowerCase())) {
+      return { ok: false, error: 'exists' };
+    }
+    if (id === null) {
+      if (folders.length >= MAX_FOLDERS) return { ok: false, error: 'too_many' };
+      const folder = { id: `fld_mock_${Date.now()}`, name };
+      folders.push(folder);
+      return { ok: true, folder: { ...folder, meetingCount: 0 } };
+    }
+    const folder = folders.find((f) => f.id === id);
+    if (folder === undefined) return { ok: false, error: 'failed' };
+    folder.name = name;
+    return {
+      ok: true,
+      folder: folderList().find((f) => f.id === id) ?? { ...folder, meetingCount: 0 },
+    };
+  };
+
   const matches = (meeting: Meeting, filter: MeetingFilter): boolean => {
     if (deleted.has(meeting.id)) return false;
     if (filter.template !== 'all' && meeting.template !== filter.template) return false;
+    if (filter.folder === 'none' && meeting.folderId !== null) return false;
+    if (
+      filter.folder !== undefined &&
+      filter.folder !== 'all' &&
+      filter.folder !== 'none' &&
+      meeting.folderId !== filter.folder
+    ) {
+      return false;
+    }
     const q = filter.query.trim().toLowerCase();
     if (q === '') return true;
     const haystack = [
@@ -94,6 +132,31 @@ export function createMockApi(options: { latencyMs?: number } = {}): LibraryApi 
     renameMeeting: (id, title) => {
       const m = meetings.find((x) => x.id === id);
       if (m !== undefined) m.title = title;
+      return wait(undefined);
+    },
+    listFolders: () => wait(folderList()),
+    createFolder: (name) => wait(saveFolder(null, name)),
+    renameFolder: (id, name) => wait(saveFolder(id, name)),
+    deleteFolder: (id) => {
+      const i = folders.findIndex((f) => f.id === id);
+      if (i >= 0) folders.splice(i, 1);
+      for (const m of meetings) {
+        if (m.folderId === id) m.folderId = null;
+        if (m.suggestedFolderId === id) m.suggestedFolderId = null;
+      }
+      return wait(undefined);
+    },
+    moveMeeting: (id, folderId) => {
+      const m = meetings.find((x) => x.id === id);
+      if (m !== undefined) {
+        m.folderId = folderId;
+        m.suggestedFolderId = null;
+      }
+      return wait(undefined);
+    },
+    dismissFolderSuggestion: (id) => {
+      const m = meetings.find((x) => x.id === id);
+      if (m !== undefined) m.suggestedFolderId = null;
       return wait(undefined);
     },
     editSummaryItem: (id, patch) => {

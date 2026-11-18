@@ -2,6 +2,7 @@ import type {
   AskUsage,
   ConsentLogEntry,
   ExportView,
+  Folder,
   PatchSettingsRequest,
   ProductEvent,
   UserSettings,
@@ -18,6 +19,7 @@ export type {
   AskUsage,
   ConsentLogEntry,
   ExportView,
+  Folder,
   PatchSettingsRequest,
   UserSettings,
   Meeting,
@@ -81,7 +83,13 @@ export interface ActionItemRow {
 export interface MeetingFilter {
   query: string;
   template: Meeting['template'] | 'all';
+  /** DESIGN §11.1: a folder ID, `none` for unfiled, or all folders (default). */
+  folder?: string | 'none' | 'all';
 }
+
+/** Why a folder was not saved (DESIGN §11.1 sheet errors). */
+export type FolderSaveError = 'exists' | 'invalid' | 'too_many' | 'failed';
+export type FolderSaveResult = { ok: true; folder: Folder } | { ok: false; error: FolderSaveError };
 
 /** What the library screens need from the API (ARCHITECTURE §12.1, DESIGN §17). */
 export interface LibraryApi {
@@ -96,6 +104,16 @@ export interface LibraryApi {
   ): Promise<{ meetings: Meeting[]; more: boolean }>;
   /** DESIGN §12.3 rename. */
   renameMeeting(id: string, title: string): Promise<void>;
+  /** DESIGN §11.1 folders, A→Z with meeting counts. */
+  listFolders(): Promise<Folder[]>;
+  createFolder(name: string): Promise<FolderSaveResult>;
+  renameFolder(id: string, name: string): Promise<FolderSaveResult>;
+  /** Unfiles its meetings. */
+  deleteFolder(id: string): Promise<void>;
+  /** DESIGN §11.1 item 4: `null` = No folder. */
+  moveMeeting(id: string, folderId: string | null): Promise<void>;
+  /** DESIGN §11.2: the suggestion is not shown again. */
+  dismissFolderSuggestion(id: string): Promise<void>;
   /** DESIGN §12.4 item 7 inline edit, §12.6 owner and due pickers. */
   editSummaryItem(
     id: string,

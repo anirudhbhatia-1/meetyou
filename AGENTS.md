@@ -336,6 +336,12 @@ Work like a careful senior engineer pairing with the developer.
   only the documented fallback** if the spike (plan SB-01) fails its go/no-go gate. Open: whether
   the bot posts a join message while `MEET_CHAT_NOTICE_ENABLED` is off.
 
+- **2026-11-18 — Personal folders in Phase 1 (Anirudh):** the library gets folders (one per
+  meeting, unique names, deleting a folder unfiles its meetings) and, after the first notes, an
+  AI-suggested existing folder that the user confirms or dismisses (DESIGN §11.1–11.2, migration
+  0011, job `meeting.suggest_folder`, one small Gemini call per meeting, cost recorded). Idea from
+  the open-source Yogurt recorder. Team folders and permissions stay Phase 3 (FEATURES G4).
+
 ### Open (do not assume an answer)
 - LLM for summaries (D-04): [ADR-0007](docs/adr/0007-llm-provider-and-prompt-versions.md)
   **Proposed** 2026-11-09 — Gemini 3.6 Flash on the Gemini API (evaluation baseline in

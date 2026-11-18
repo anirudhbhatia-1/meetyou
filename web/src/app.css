@@ -1519,3 +1519,58 @@ mark.match-current {
   font-weight: 500;
   vertical-align: 2px;
 }
+
+/* Folders (DESIGN §11.1) */
+.folder-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+.folder-form {
+  display: grid;
+  gap: 8px;
+}
+.field-error {
+  margin: 0;
+  font-size: 13px;
+  color: var(--danger);
+}
+.folder-pick {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 2px;
+}
+.folder-pick-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  min-height: 44px;
+  padding: 10px 12px;
+  border: 0;
+  border-radius: var(--radius-row);
+  background: transparent;
+  color: var(--ink);
+  font: inherit;
+  font-size: 15px;
+  text-align: left;
+  cursor: pointer;
+}
+.folder-pick-row:hover {
+  background: var(--paper-2);
+}
+.folder-pick-row:focus-visible {
+  outline: 2px solid var(--olive-line);
+  outline-offset: 2px;
+}
+.folder-pick-row[aria-checked='true'] {
+  font-weight: 500;
+}
+.folder-pick-mark {
+  width: 16px;
+  color: var(--olive);
+  text-align: center;
+}

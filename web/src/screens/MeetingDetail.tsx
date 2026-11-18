@@ -24,6 +24,7 @@ import { useAsync } from '../lib/useAsync.ts';
 import { AskTab, type AskCitation } from './AskTab.tsx';
 import { ActionItemsCard, CitationCard } from './CitationRail.tsx';
 import { ConsentLogSheet } from './ConsentLogSheet.tsx';
+import { MoveToFolderSheet } from './Folders.tsx';
 import { MoreMenu, useDeleteMeeting } from './MeetingMenu.tsx';
 import { NotesTab } from './NotesTab.tsx';
 import { ShareSheet } from './ShareSheet.tsx';
@@ -58,6 +59,9 @@ export function MeetingDetail({
   const summary = useAsync(() => api.getSummary(meetingId), [meetingId]);
   const segments = useAsync(() => api.getSegments(meetingId), [meetingId]);
   const people = useAsync(() => api.getParticipants(meetingId), [meetingId]);
+  /** Folder names for the meta line and the suggestion (DESIGN §11.1–11.2). */
+  const folders = useAsync(() => api.listFolders(), [meetingId]);
+  const [moving, setMoving] = useState(false);
   const [selected, setSelected] = useState<SummaryItem | null>(null);
   const opened = useRef(false);
   useEffect(() => {
@@ -181,6 +185,10 @@ export function MeetingDetail({
   }
 
   const rec = recordingLabel(m.recordingExpiresAt, now);
+  const folderName = (id: string | null) =>
+    id === null ? null : (folders.data?.find((f) => f.id === id)?.name ?? null);
+  const filedIn = folderName(m.folderId);
+  const suggested = m.folderId === null ? folderName(m.suggestedFolderId) : null;
   return (
     <div className="detail">
       {remove.alert}
@@ -209,6 +217,7 @@ export function MeetingDetail({
           <MoreMenu
             onDelete={() => remove.request(meetingId)}
             onRename={() => setRenaming(true)}
+            onMove={() => setMoving(true)}
             {...(MEET_CHAT_NOTICE_ENABLED ? { onConsentLog: () => setSheet('consent') } : {})}
             {...(summary.data != null
               ? {
@@ -236,6 +245,7 @@ export function MeetingDetail({
           <p className="meta">
             {formatWhen(m.startedAt, now)} · {formatLength(m.startedAt, m.endedAt)} ·{' '}
             {m.participantNames.length === 0 ? 'You' : `${m.participantNames.join(', ')} and you`}
+            {filedIn !== null && ` · ${filedIn}`}
             {rec !== null && ` · ${rec}`}
           </p>
           {renaming ? (
@@ -271,6 +281,45 @@ export function MeetingDetail({
           />
         )}
         {sheet === 'consent' && <ConsentLogSheet meeting={m} onClose={() => setSheet(null)} />}
+        {moving && (
+          <MoveToFolderSheet
+            meetingId={meetingId}
+            current={m.folderId}
+            onClose={() => setMoving(false)}
+            onMoved={() => {
+              meeting.reload();
+              folders.reload();
+            }}
+          />
+        )}
+        {suggested !== null && m.suggestedFolderId !== null && (
+          <Banner
+            tone="info"
+            action={
+              <Button
+                size="sm"
+                onClick={() => {
+                  const target = m.suggestedFolderId;
+                  if (target === null) return;
+                  api.moveMeeting(meetingId, target).then(
+                    () => {
+                      toast({ message: `Moved to ${suggested}` });
+                      meeting.reload();
+                    },
+                    () => toast({ message: 'Couldn’t move the meeting. Try again.' }),
+                  );
+                }}
+              >
+                Move
+              </Button>
+            }
+            onDismiss={() => {
+              api.dismissFolderSuggestion(meetingId).then(meeting.reload, () => meeting.reload());
+            }}
+          >
+            Looks like this belongs in <strong>{suggested}</strong>.
+          </Banner>
+        )}
         <>
           <div className="tabs" role="tablist" aria-label="Meeting">
             {(m.status === 'recording'

@@ -78,6 +78,23 @@ export interface MeetingsTable extends Audit {
   status: Generated<'recording' | 'processing' | 'ready' | 'updated' | 'failed' | 'too_short'>;
   processingStep: 'finalizing' | 'summarizing' | 'validating' | 'done' | null;
   deletedAt: NullableTimestamp;
+  /** DESIGN §11.1 (`0011`); null when unfiled. */
+  folderId: ColumnType<string | null, string | null | undefined, string | null>;
+  /** DESIGN §11.2: the AI's suggestion, shown while the meeting is unfiled. */
+  suggestedFolderId: ColumnType<string | null, string | null | undefined, string | null>;
+  /** Whether the suggestion was decided; null until the job ran. */
+  folderSuggestion: ColumnType<
+    'suggested' | 'none' | 'dismissed' | null,
+    'suggested' | 'none' | 'dismissed' | null | undefined,
+    'suggested' | 'none' | 'dismissed' | null
+  >;
+}
+
+export interface FoldersTable extends Audit {
+  id: string;
+  workspaceId: string;
+  name: string;
+  createdBy: string | null;
 }
 
 export interface ParticipantsTable extends Audit {
@@ -319,6 +336,7 @@ export interface Database {
   memberships: MembershipsTable;
   userSettings: UserSettingsTable;
   meetings: MeetingsTable;
+  folders: FoldersTable;
   participants: ParticipantsTable;
   speakerClusters: SpeakerClustersTable;
   audioAssets: AudioAssetsTable;

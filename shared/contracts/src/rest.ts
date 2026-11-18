@@ -50,6 +50,10 @@ export const Meeting = z.object({
   participantNames: z.array(z.string()),
   /** When the retention policy deletes the recordings (audio and video). */
   recordingExpiresAt: IsoDateTime.nullable(),
+  /** The meeting's folder (DESIGN §11.1); null when unfiled. */
+  folderId: z.string().min(1).nullable(),
+  /** A folder the AI suggests for an unfiled meeting (DESIGN §11.2); null when there is none. */
+  suggestedFolderId: z.string().min(1).nullable(),
   /** Null when video was not recorded for this meeting (ADR-0011). */
   video: z
     .object({

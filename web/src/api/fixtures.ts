@@ -1,4 +1,4 @@
-import type { Meeting, Note, Segment, SummaryItem } from '@meetyou/contracts';
+import type { Folder, Meeting, Note, Segment, SummaryItem } from '@meetyou/contracts';
 
 import type { MeetingSummary, Participant } from './types.ts';
 
@@ -17,6 +17,12 @@ export const ME = { firstName: 'Asha', name: 'Asha Rao', email: 'asha@example.co
 let segCounter = 0;
 const segId = () => `seg_01JD${String(++segCounter).padStart(22, '0')}`;
 
+/** DESIGN §11.1 folders (counts are recomputed by the mock API). */
+export const folders: Omit<Folder, 'meetingCount'>[] = [
+  { id: 'fld_clients', name: 'Clients' },
+  { id: 'fld_team', name: 'Team' },
+];
+
 export const meetings: Meeting[] = [
   {
     id: 'mtg_q4_launch',
@@ -29,6 +35,8 @@ export const meetings: Meeting[] = [
     template: 'general',
     participantNames: ['Rahul Mehta', 'Neha Kapoor', 'Sameer K.'],
     recordingExpiresAt: at(7 * DAY - 2 * HOUR),
+    folderId: 'fld_team',
+    suggestedFolderId: null,
     video: { status: 'ready', durationMs: 42 * 60_000 },
   },
   {
@@ -42,6 +50,8 @@ export const meetings: Meeting[] = [
     template: 'general',
     participantNames: ['Neha Kapoor'],
     recordingExpiresAt: at(7 * DAY),
+    folderId: null,
+    suggestedFolderId: null,
     video: { status: 'uploading', durationMs: null },
   },
   {
@@ -55,6 +65,8 @@ export const meetings: Meeting[] = [
     template: 'standup',
     participantNames: ['Rahul Mehta', 'Sameer K.', 'Priya S.'],
     recordingExpiresAt: at(6 * DAY - 3 * HOUR),
+    folderId: 'fld_team',
+    suggestedFolderId: null,
     video: null,
   },
   {
@@ -68,6 +80,8 @@ export const meetings: Meeting[] = [
     template: 'client_call',
     participantNames: ['Vikram (Acme)', 'Rahul Mehta'],
     recordingExpiresAt: at(4 * DAY - 5 * HOUR),
+    folderId: null,
+    suggestedFolderId: 'fld_clients',
     video: { status: 'ready', durationMs: 58 * 60_000 },
   },
   {
@@ -81,6 +95,8 @@ export const meetings: Meeting[] = [
     template: 'interview',
     participantNames: ['Karan D.'],
     recordingExpiresAt: at(-2 * DAY),
+    folderId: null,
+    suggestedFolderId: null,
     video: null,
   },
 ];

@@ -2,7 +2,13 @@ import { createServer, type Server } from 'node:http';
 
 import { Db } from '@meetyou/db';
 import { createLogger, errorCode } from '@meetyou/log';
-import { exportExpireTask, exportTask, retranscribeTask, summarizeTask } from '@meetyou/pipeline';
+import {
+  exportExpireTask,
+  exportTask,
+  retranscribeTask,
+  suggestFolderTask,
+  summarizeTask,
+} from '@meetyou/pipeline';
 import type { LlmProvider, SttBatchProvider } from '@meetyou/providers';
 import {
   accountDeleteTask,
@@ -56,8 +62,14 @@ export function workerTasks(deps: {
   const storage = bucketCleanup(deps.bucket);
   const batchStt = deps.batchStt ?? null;
   return [
-    summarizeTask({ db: deps.db, llm: deps.llm ?? null, batch: batchStt !== null }),
+    summarizeTask({
+      db: deps.db,
+      llm: deps.llm ?? null,
+      batch: batchStt !== null,
+      suggestFolders: (deps.llm ?? null) !== null,
+    }),
     retranscribeTask({ db: deps.db, bucket: deps.bucket, stt: batchStt }),
+    suggestFolderTask({ db: deps.db, llm: deps.llm ?? null }),
     videoFinalizeTask({
       db: deps.db,
       store: new ObjectVideoStore(deps.bucket),

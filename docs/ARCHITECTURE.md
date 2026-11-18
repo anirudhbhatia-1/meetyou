@@ -594,6 +594,7 @@ REST over HTTPS, JSON, versioned under `/v1`. Realtime uses the WebSocket protoc
 | Meetings | `GET /v1/meetings` · `GET/PATCH/DELETE /v1/meetings/{id}` · `POST /v1/meetings/{id}:restore` (within the delete grace period) |
 | Action items | `GET /v1/action-items?status=open\|done\|all&owner=me\|any&cursor=` · status, owner, and due changes via `PATCH /v1/summary-items/{id}` |
 | Glossary | `GET /v1/glossary` · `PUT /v1/glossary` (replace list; validated against provider limits) |
+| Folders (DESIGN §11.1–11.2) | `GET/POST /v1/folders` · `PATCH/DELETE /v1/folders/{id}` (delete unfiles) · `GET /v1/meetings?folder={id}\|none` · move via `PATCH /v1/meetings/{id}` `{ folderId }` · `POST /v1/meetings/{id}/folder-suggestion:dismiss`; the worker job `meeting.suggest_folder` runs once after the first notes |
 | Transcript | `GET /v1/meetings/{id}/segments?cursor=` · `PATCH /v1/meetings/{id}/speakers/{clusterId}` |
 | Notes | `GET/PUT /v1/meetings/{id}/notes` |
 | Summaries | `GET /v1/meetings/{id}/summary` · `POST /v1/meetings/{id}/summary:regenerate` · `PATCH /v1/summary-items/{id}` · `POST /v1/feedback` |

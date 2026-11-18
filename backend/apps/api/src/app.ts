@@ -21,6 +21,7 @@ import { askRoutes } from './routes/ask.ts';
 import { audioRoutes } from './routes/audio.ts';
 import { exportRoutes, type SignExportDownload } from './routes/exports.ts';
 import { speakersRoutes } from './routes/speakers.ts';
+import { folderRoutes } from './routes/folders.ts';
 import { glossaryRoutes } from './routes/glossary.ts';
 import { searchRoutes } from './routes/search.ts';
 import { summaryRoutes } from './routes/summary.ts';
@@ -163,6 +164,7 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
   await app.register(summaryRoutes);
   await app.register(searchRoutes);
   await app.register(glossaryRoutes);
+  await app.register(folderRoutes);
 
   await app.register(sessionsRoutes, {
     tokens,

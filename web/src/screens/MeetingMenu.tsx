@@ -44,11 +44,12 @@ export function useDeleteMeeting(after: {
   return { request: setPending, alert };
 }
 
-/** DESIGN §12.1 More menu: Rename · Download as .md · Consent log · Delete meeting… */
+/** DESIGN §12.1 More menu: Rename · Move to folder… · Download as .md · Consent log · Delete… */
 export function MoreMenu({
   onDelete,
   onDownload,
   onRename,
+  onMove,
   onConsentLog,
   label = 'More actions',
 }: {
@@ -56,11 +57,14 @@ export function MoreMenu({
   /** DESIGN §13.2 "Download as .md"; absent while there are no notes to download. */
   onDownload?: () => void;
   onRename?: () => void;
+  /** DESIGN §11.1 item 4. */
+  onMove?: () => void;
   onConsentLog?: () => void;
   label?: string;
 }) {
   const items: MenuEntry[] = [
     ...(onRename !== undefined ? [{ label: 'Rename', onSelect: onRename }] : []),
+    ...(onMove !== undefined ? [{ label: 'Move to folder…', onSelect: onMove }] : []),
     ...(onDownload !== undefined ? [{ label: 'Download as .md', onSelect: onDownload }] : []),
     ...(onConsentLog !== undefined ? [{ label: 'Consent log', onSelect: onConsentLog }] : []),
     { label: 'Delete meeting…', onSelect: onDelete, danger: true, separated: true },

@@ -1,17 +1,23 @@
 import type { FastifyPluginAsync, FastifyReply, FastifyRequest } from 'fastify';
 import type { WorkspaceTx } from '@meetyou/db';
 import { cancelMeetingDeletion, scheduleMeetingDeletion } from '@meetyou/queue';
-import { type Meeting as MeetingType, TemplateId } from '@meetyou/contracts';
-import { z } from 'zod';
+import { type Meeting as MeetingType, PatchMeetingRequest, TemplateId } from '@meetyou/contracts';
 
 import { BadRequestError, NotFoundError, UnauthorizedError } from '../errors.ts';
 import { decodeCursor, encodeCursor, parseLimit } from '../utils/pagination.ts';
 
-const UpdateMeetingRequest = z.object({
-  // Trimmed so a whitespace-only title cannot blank the row (2026-11-09 audit).
-  title: z.string().trim().min(1).max(200).optional(),
-  template: TemplateId.optional(),
-});
+/** DESIGN §11.1–11.2: the folder, and the AI's suggestion only while the meeting is unfiled. */
+function folderFields(m: {
+  folderId: string | null;
+  suggestedFolderId: string | null;
+  folderSuggestion: string | null;
+}): Pick<MeetingType, 'folderId' | 'suggestedFolderId'> {
+  return {
+    folderId: m.folderId,
+    suggestedFolderId:
+      m.folderId === null && m.folderSuggestion === 'suggested' ? m.suggestedFolderId : null,
+  };
+}
 
 export const meetingsRoutes: FastifyPluginAsync = async (fastify) => {
   // 1. GET /v1/meetings (cursor-paginated meeting list)
@@ -28,6 +34,7 @@ export const meetingsRoutes: FastifyPluginAsync = async (fastify) => {
             cursor: { type: 'string' },
             limit: { type: 'integer' },
             template: { type: 'string' },
+            folder: { type: 'string' },
             q: { type: 'string' },
             ids: { type: 'string' },
           },
@@ -44,6 +51,8 @@ export const meetingsRoutes: FastifyPluginAsync = async (fastify) => {
         cursor?: string;
         limit?: string | number;
         template?: string;
+        /** A folder ID, or `none` for unfiled meetings (DESIGN §11.1). */
+        folder?: string;
         q?: string;
         /** Comma-separated meeting ids (≤ 50): the web's search hits, in one request. */
         ids?: string;
@@ -64,6 +73,10 @@ export const meetingsRoutes: FastifyPluginAsync = async (fastify) => {
             q = q.where('template', '=', parsedTemplate.data);
           }
         }
+
+        const folder = query.folder?.trim();
+        if (folder === 'none') q = q.where('folderId', 'is', null);
+        else if (folder) q = q.where('folderId', '=', folder.slice(0, 80));
 
         if (query.ids !== undefined) {
           const ids = query.ids
@@ -171,6 +184,7 @@ export const meetingsRoutes: FastifyPluginAsync = async (fastify) => {
             status: m.status,
             processingStep: m.processingStep,
             template: m.template,
+            ...folderFields(m),
             participantNames: participants.map((p) => p.displayName),
             recordingExpiresAt: recordingExpires ? new Date(recordingExpires).toISOString() : null,
             video: videoAsset
@@ -278,6 +292,7 @@ export const meetingsRoutes: FastifyPluginAsync = async (fastify) => {
         status: m.status,
         processingStep: m.processingStep,
         template: m.template,
+        ...folderFields(m),
         participantNames: participants.map((p) => p.displayName),
         recordingExpiresAt: recordingExpires ? new Date(recordingExpires).toISOString() : null,
         video: videoAsset
@@ -316,7 +331,7 @@ export const meetingsRoutes: FastifyPluginAsync = async (fastify) => {
         throw new UnauthorizedError('Unauthorized');
       }
 
-      const parseResult = UpdateMeetingRequest.safeParse(request.body);
+      const parseResult = PatchMeetingRequest.safeParse(request.body);
       if (!parseResult.success) {
         throw new BadRequestError(parseResult.error.issues[0]?.message ?? 'Invalid update body');
       }
@@ -327,11 +342,23 @@ export const meetingsRoutes: FastifyPluginAsync = async (fastify) => {
       }
 
       const updated = await request.inWorkspace(async (tx) => {
+        if (updates.folderId !== undefined && updates.folderId !== null) {
+          const folder = await tx
+            .selectFrom('folders')
+            .select('id')
+            .where('id', '=', updates.folderId)
+            .executeTakeFirst();
+          if (folder === undefined) throw new BadRequestError('No such folder', 'invalid_folder');
+        }
         const m = await tx
           .updateTable('meetings')
           .set({
             ...(updates.title !== undefined ? { title: updates.title } : {}),
             ...(updates.template !== undefined ? { template: updates.template } : {}),
+            // A move by the user settles the suggestion: it is not offered again (DESIGN §11.2).
+            ...(updates.folderId !== undefined
+              ? { folderId: updates.folderId, folderSuggestion: 'dismissed' as const }
+              : {}),
           })
           .where('workspaceId', '=', workspaceId)
           .where('id', '=', id)
@@ -374,6 +401,7 @@ export const meetingsRoutes: FastifyPluginAsync = async (fastify) => {
         status: m.status,
         processingStep: m.processingStep,
         template: m.template,
+        ...folderFields(m),
         participantNames: participants.map((p) => p.displayName),
         recordingExpiresAt: null,
         video: videoAsset
@@ -464,6 +492,28 @@ export const meetingsRoutes: FastifyPluginAsync = async (fastify) => {
 
     return reply.send({ status: 'restored', id });
   };
+
+  // POST /v1/meetings/{id}/folder-suggestion:dismiss (DESIGN §11.2): never shown again.
+  fastify.post(
+    '/v1/meetings/:id/folder-suggestion::dismiss',
+    { preHandler: fastify.requireAuth, schema: { tags: ['meetings', 'folders'] } },
+    async (request, reply) => {
+      const workspaceId = request.workspaceId;
+      const { id } = request.params as { id: string };
+      if (!workspaceId || !request.inWorkspace) throw new UnauthorizedError('Unauthorized');
+      const row = await request.inWorkspace((tx) =>
+        tx
+          .updateTable('meetings')
+          .set({ folderSuggestion: 'dismissed', suggestedFolderId: null })
+          .where('id', '=', id)
+          .where('deletedAt', 'is', null)
+          .returning('id')
+          .executeTakeFirst(),
+      );
+      if (row === undefined) throw new NotFoundError(`Meeting ${id} not found`);
+      return reply.status(204).send();
+    },
+  );
 
   fastify.post(
     '/v1/meetings/:id:restore',

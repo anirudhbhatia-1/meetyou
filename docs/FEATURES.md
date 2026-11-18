@@ -877,7 +877,8 @@ never shared publicly by default.
 ---
 
 ### G4. Team workspaces and shared folders
-**Phase 3**
+**Phase 3** (personal folders with an AI-suggested folder are in Phase 1 since 2026-11-18,
+DESIGN §11.1–11.2; team sharing and folder permissions stay here)
 
 **What.** Teams share a library, organized by folders/channels (e.g. "Sales", "Hiring").
 

@@ -6,10 +6,13 @@ import {
   Button,
   Card,
   ChipGroup,
+  Menu,
   SearchInput,
   SkeletonRows,
   StatusPill,
+  useToast,
 } from '@meetyou/ui';
+import type { Folder } from '../api/types.ts';
 import { useAnalytics } from '../lib/analytics.ts';
 import { useApi } from '../lib/api-context.ts';
 import {
@@ -22,6 +25,8 @@ import {
 } from '../lib/format.ts';
 import { navigate } from '../lib/router.ts';
 import { useAsync } from '../lib/useAsync.ts';
+import { ConfirmAlert } from './ConfirmAlert.tsx';
+import { FolderNameSheet, MoveToFolderSheet } from './Folders.tsx';
 import { MoreMenu, useDeleteMeeting } from './MeetingMenu.tsx';
 
 /** DESIGN §11.3 page size. */
@@ -37,7 +42,14 @@ const FILTERS: { value: Filter; label: string }[] = [
 ];
 
 /** Kept across navigation so Back from detail restores search and filter (DESIGN §3). */
-const remembered = { query: '', template: 'all' as Filter };
+const remembered = { query: '', template: 'all' as Filter, folder: 'all' as string };
+
+/** Open folder dialog (DESIGN §11.1). */
+type FolderDialog =
+  | { kind: 'new' }
+  | { kind: 'rename'; folder: Folder }
+  | { kind: 'delete'; folder: Folder }
+  | { kind: 'move'; meetingId: string; current: string | null };
 
 /** DESIGN §11 */
 export function Meetings() {
@@ -47,6 +59,13 @@ export function Meetings() {
   const [query, setQuery] = useState(remembered.query);
   const [debounced, setDebounced] = useState(remembered.query);
   const [template, setTemplate] = useState<Filter>(remembered.template);
+  const [folder, setFolder] = useState<string>(remembered.folder);
+  const [dialog, setDialog] = useState<FolderDialog | null>(null);
+  const toast = useToast();
+  const folders = useAsync(() => api.listFolders(), []);
+  const folderList = folders.data ?? [];
+  const folderName = (id: string | null) => folderList.find((f) => f.id === id)?.name ?? null;
+  const selected = folderList.find((f) => f.id === folder);
 
   useEffect(() => {
     remembered.query = query;
@@ -56,14 +75,32 @@ export function Meetings() {
   useEffect(() => {
     remembered.template = template;
   }, [template]);
+  useEffect(() => {
+    remembered.folder = folder;
+  }, [folder]);
+  // A folder deleted elsewhere (or a remembered one that is gone) falls back to all meetings.
+  useEffect(() => {
+    if (
+      folders.data !== undefined &&
+      folder !== 'all' &&
+      folder !== 'none' &&
+      selected === undefined
+    ) {
+      setFolder('all');
+    }
+  }, [folders.data, folder, selected]);
 
   // DESIGN §11.3: 50 at a time; "Show older meetings" asks for 50 more.
   const [count, setCount] = useState(PAGE);
-  useEffect(() => setCount(PAGE), [debounced, template]);
+  useEffect(() => setCount(PAGE), [debounced, template, folder]);
   const list = useAsync(
-    () => api.listMeetings({ query: debounced, template }, count),
-    [debounced, template, count],
+    () => api.listMeetings({ query: debounced, template, folder }, count),
+    [debounced, template, folder, count],
   );
+  const refresh = () => {
+    folders.reload();
+    list.reload();
+  };
   const remove = useDeleteMeeting({ deleted: list.reload, restored: list.reload });
   const tracked = useRef('');
   useEffect(() => {
@@ -86,6 +123,105 @@ export function Meetings() {
         />
       </header>
       <ChipGroup label="Template" options={FILTERS} value={template} onChange={setTemplate} />
+      {folderList.length > 0 ? (
+        <div className="folder-row">
+          <ChipGroup
+            label="Folder"
+            options={[
+              { value: 'all', label: 'All folders' },
+              { value: 'none', label: 'Unfiled' },
+              ...folderList.map((f) => ({ value: f.id, label: f.name })),
+            ]}
+            value={folder}
+            onChange={setFolder}
+          />
+          {selected !== undefined && (
+            <Menu
+              round
+              label="Folder actions"
+              trigger={<Icon name="more-horizontal" />}
+              items={[
+                {
+                  label: 'Rename folder',
+                  onSelect: () => setDialog({ kind: 'rename', folder: selected }),
+                },
+                {
+                  label: 'Delete folder…',
+                  danger: true,
+                  separated: true,
+                  onSelect: () => setDialog({ kind: 'delete', folder: selected }),
+                },
+              ]}
+            />
+          )}
+          <Button variant="ghost" size="sm" onClick={() => setDialog({ kind: 'new' })}>
+            + New folder
+          </Button>
+        </div>
+      ) : (
+        folders.data !== undefined && (
+          <div className="folder-row">
+            <Button variant="ghost" size="sm" onClick={() => setDialog({ kind: 'new' })}>
+              + New folder
+            </Button>
+          </div>
+        )
+      )}
+      {dialog?.kind === 'new' && (
+        <FolderNameSheet
+          title="New folder"
+          submitLabel="Create"
+          onClose={() => setDialog(null)}
+          onSave={async (name) => {
+            const result = await api.createFolder(name);
+            if (result.ok) {
+              setDialog(null);
+              folders.reload();
+            }
+            return result;
+          }}
+        />
+      )}
+      {dialog?.kind === 'rename' && (
+        <FolderNameSheet
+          title="Rename folder"
+          submitLabel="Save"
+          initial={dialog.folder.name}
+          onClose={() => setDialog(null)}
+          onSave={async (name) => {
+            const result = await api.renameFolder(dialog.folder.id, name);
+            if (result.ok) {
+              setDialog(null);
+              refresh();
+            }
+            return result;
+          }}
+        />
+      )}
+      {dialog?.kind === 'delete' && (
+        <ConfirmAlert
+          title={`Delete “${dialog.folder.name}”?`}
+          body="The meetings in it stay in your library, unfiled."
+          confirmLabel="Delete folder"
+          failedText="The folder wasn’t deleted. Try again."
+          onCancel={() => setDialog(null)}
+          onConfirm={async () => {
+            await api.deleteFolder(dialog.folder.id);
+            setDialog(null);
+            setFolder('all');
+            refresh();
+            toast({ message: 'Folder deleted' });
+          }}
+        />
+      )}
+      {dialog?.kind === 'move' && (
+        <MoveToFolderSheet
+          meetingId={dialog.meetingId}
+          current={dialog.current}
+          onClose={() => setDialog(null)}
+          onMoved={refresh}
+        />
+      )}
       {list.error && (
         <Banner
           tone="error"
@@ -109,7 +245,16 @@ export function Meetings() {
           <SkeletonRows />
         ) : (list.data?.meetings ?? []).length === 0 ? (
           <div className="empty">
-            {debounced.trim() === '' && template !== 'all' ? (
+            {debounced.trim() === '' && folder === 'none' ? (
+              <p>Every meeting is in a folder.</p>
+            ) : debounced.trim() === '' && selected !== undefined ? (
+              <>
+                <p>No meetings in {selected.name} yet.</p>
+                <Button variant="ghost" onClick={() => setFolder('all')}>
+                  Show all meetings
+                </Button>
+              </>
+            ) : debounced.trim() === '' && template !== 'all' ? (
               <>
                 <p>No {TEMPLATE_LABEL[template]} meetings yet.</p>
                 <Button variant="ghost" onClick={() => setTemplate('all')}>
@@ -151,7 +296,11 @@ export function Meetings() {
                         {m.video !== null && <Icon name="video" size={14} label="Has video" />}
                       </span>
                       <span className="meta">
-                        {[...m.participantNames, TEMPLATE_LABEL[m.template]].join(' · ')}
+                        {[
+                          ...m.participantNames,
+                          TEMPLATE_LABEL[m.template],
+                          ...(folderName(m.folderId) !== null ? [folderName(m.folderId)] : []),
+                        ].join(' · ')}
                       </span>
                     </span>
                     <span className="cell">{formatWhen(m.startedAt, now)}</span>
@@ -164,6 +313,7 @@ export function Meetings() {
                   <MoreMenu
                     label={`More actions for ${meetingTitle(m)}`}
                     onDelete={() => remove.request(m.id)}
+                    onMove={() => setDialog({ kind: 'move', meetingId: m.id, current: m.folderId })}
                   />
                 </li>
               );

@@ -46,6 +46,7 @@ describe('lifecycle jobs (S2-10)', () => {
     expect(names).toEqual([
       'meeting.summarize',
       'meeting.retranscribe',
+      'meeting.suggest_folder',
       'video.finalize',
       'meeting.delete',
       'account.delete',

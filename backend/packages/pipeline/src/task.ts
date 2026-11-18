@@ -8,6 +8,7 @@ import { z } from 'zod';
 
 import { nameLiveClusters } from './batch/naming.ts';
 import { MIN_BATCH_MS, retranscribeJob, retranscribeJobKey } from './batch/task.ts';
+import { suggestFolderJob, suggestFolderJobKey } from './folder-task.ts';
 import { ensureSelfParticipant, loadMeeting } from './meeting-data.ts';
 import { scheduleAudioRetention } from './retention.ts';
 import { storeFailedSummary, storeSummary } from './store.ts';
@@ -50,6 +51,8 @@ export function summarizeTask(deps: {
   llm: LlmProvider | null;
   /** Queue the batch pass after the first notes (S3-04); off unless a batch provider is set. */
   batch?: boolean;
+  /** Queue a folder suggestion after the first notes (DESIGN §11.2); off unless a model is set. */
+  suggestFolders?: boolean;
 }) {
   return defineTask(MEETING_SUMMARIZE, SummarizePayload, async (payload, helpers) => {
     const { workspaceId, meetingId, reason } = payload;
@@ -108,6 +111,15 @@ export function summarizeTask(deps: {
       if (reason !== 'session_end' || outcome === 'failed') return;
       // §9.2 step 9: retention starts once the first run settled ("immediate" never on failure).
       await scheduleAudioRetention(tx, workspaceId, meetingId, endedAt);
+      // DESIGN §11.2: a folder suggestion once the first notes exist (the job checks the rest).
+      if (outcome === 'stored' && deps.suggestFolders === true) {
+        await enqueue(
+          tx,
+          suggestFolderJob,
+          { workspaceId, meetingId },
+          { jobKey: suggestFolderJobKey(meetingId) },
+        );
+      }
       // The batch pass follows, if the audio is kept long enough to re-read it (D-02). It also
       // covers a meeting whose live transcript failed (too_short), from the stored audio.
       if (deps.batch !== true) return;

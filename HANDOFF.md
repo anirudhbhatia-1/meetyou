@@ -6,7 +6,7 @@ pointer to where the full detail lives — the linked document stays the source 
 
 | Field | Value |
 |---|---|
-| Last updated | 2026-11-18 (Anirudh: Yogurt-inspired speaker naming and echo fixes) |
+| Last updated | 2026-11-18 (Anirudh: folders with an AI-suggested folder) |
 | Updated by | Anirudh (Claude Code) |
 | Repository | [anirudhbhatia-1/meetyou](https://github.com/anirudhbhatia-1/meetyou) — branches `main`, `anirudh`, `Gauravbro` |
 | Current stage | **Stage 4** complete in code; 2026-11-09 audit fixes landed; Stage-5 hardening planned (AUDIT §4); real Chrome/Meet checks pending (§7) |
@@ -206,7 +206,21 @@ Gaurav's S3-07..S3-11 — Gaurav should not start them).** **Stage 4 is complete
 
 Newest first. One entry per working session (either person).
 
-### 2026-11-18 (latest) — Anirudh (Claude Code): participant names as Deepgram keyterms
+### 2026-11-18 (latest) — Anirudh (Claude Code): folders with a suggested folder
+
+Anirudh picked folders (and calendar sync, next) from the Yogurt comparison. Built end to end:
+DESIGN §11.1–11.2 first; contracts (`Folder`, `FolderRequest`, `Meeting.folderId`,
+`suggestedFolderId`, `?folder=`); migration **0011** (`folders` with RLS and a case-insensitive
+unique name, `meetings.folder_id` / `suggested_folder_id` with `ON DELETE SET NULL (col)`,
+`folder_suggestion`); API `/v1/folders` CRUD, move via `PATCH /v1/meetings/{id}`, dismiss route;
+`suggestFolder` in the summarizer (exact folder name from our list, confidence ≥ 0.8) and the
+`meeting.suggest_folder` job queued after the first notes (worker only; cost row `use_fld_…`); web
+folder chips, New/Rename/Delete folder, Move to folder sheet, suggestion banner, folder in row and
+detail meta. Checked on the mock API in the browser (filter, move, suggestion Move, duplicate
+name error, no console errors). `pnpm check` passes. **Needs on staging:** run migration 0011,
+then one real meeting with a folder to see a suggestion.
+
+### 2026-11-18 — Anirudh (Claude Code): participant names as Deepgram keyterms
 
 Names Meet shows (`participant.joined`) now reach Deepgram: the gateway sends the glossary plus
 each name (and a first name of 3+ letters) to both open streams with a mid-stream `Configure`

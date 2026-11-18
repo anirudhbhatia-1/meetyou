@@ -73,16 +73,20 @@ export const ListMeetingsQuery = z.object({
   /** Title and participant search; full-text search over content is /v1/search (S3-09). */
   q: z.string().trim().min(1).max(200).optional(),
   template: TemplateId.optional(),
+  /** A folder ID, or `none` for unfiled meetings (DESIGN §11.1). */
+  folder: z.string().trim().min(1).max(80).optional(),
 });
 export type ListMeetingsQuery = z.infer<typeof ListMeetingsQuery>;
 export const MeetingList = page(Meeting);
 export type MeetingList = z.infer<typeof MeetingList>;
 
-// PATCH /v1/meetings/{id} (rename, change template: DESIGN §12.1–12.2)
+// PATCH /v1/meetings/{id} (rename, change template, move to a folder: DESIGN §12.1–12.2, §11.1)
 export const PatchMeetingRequest = nonEmpty(
   z.object({
     title: z.string().trim().min(1).max(200).optional(),
     template: TemplateId.optional(),
+    /** A folder of the workspace, or null for "No folder". */
+    folderId: z.string().min(1).max(80).nullable().optional(),
   }),
 );
 export type PatchMeetingRequest = z.infer<typeof PatchMeetingRequest>;
@@ -159,6 +163,27 @@ export type ConsentLogResponse = z.infer<typeof ConsentLogResponse>;
 // ---------- Audio (GET /v1/meetings/{id}/audio?lane=me|them) ----------
 // One lane's stored chunks joined into an Ogg Opus file (S4-09); the `x-audio-spans` header
 // carries `AudioSpans` (below) to map file time to the meeting clock.
+
+// ---------- Folders (DESIGN §11.1) ----------
+
+/** Unique per workspace, case-insensitive (checked by the API and the database). */
+export const MAX_FOLDERS = 100;
+export const FolderName = z.string().trim().min(1).max(60);
+export const Folder = z.object({
+  id: z.string().min(1),
+  name: FolderName,
+  /** Meetings in it (deleted ones not counted). */
+  meetingCount: z.number().int().nonnegative(),
+});
+export type Folder = z.infer<typeof Folder>;
+// GET /v1/folders (A→Z)
+export const FolderListResponse = z.object({ folders: z.array(Folder) });
+export type FolderListResponse = z.infer<typeof FolderListResponse>;
+// POST /v1/folders · PATCH /v1/folders/{id}; DELETE /v1/folders/{id} answers 204 and unfiles
+// its meetings. 409 `folder_exists`, 422 `too_many_folders`.
+export const FolderRequest = z.object({ name: FolderName });
+export type FolderRequest = z.infer<typeof FolderRequest>;
+// POST /v1/meetings/{id}/folder-suggestion:dismiss answers 204 (DESIGN §11.2).
 
 // ---------- Glossary (GET/PUT /v1/glossary) ----------
 

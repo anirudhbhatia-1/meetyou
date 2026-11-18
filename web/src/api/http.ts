@@ -20,10 +20,21 @@ import {
   AudioSpans,
   ConsentLogResponse,
   RenameSpeakerResponse,
+  Folder,
+  FolderListResponse,
 } from '@meetyou/contracts';
 
 import type { WebAuth } from './auth.ts';
-import type { LibraryApi, MeetingFilter, MeetingSummary } from './types.ts';
+import type { FolderSaveResult, LibraryApi, MeetingFilter, MeetingSummary } from './types.ts';
+
+/** POST/PATCH folder answers mapped to the sheet's errors (DESIGN §11.1). */
+async function folderResult(res: Response): Promise<FolderSaveResult> {
+  if (res.ok) return { ok: true, folder: Folder.parse(await res.json()) };
+  if (res.status === 409) return { ok: false, error: 'exists' };
+  if (res.status === 422) return { ok: false, error: 'too_many' };
+  if (res.status === 400) return { ok: false, error: 'invalid' };
+  return { ok: false, error: 'failed' };
+}
 
 const SETTLED = new Set(['ready', 'updated', 'failed', 'too_short']);
 
@@ -93,9 +104,12 @@ export function createHttpApi(auth: WebAuth): LibraryApi {
 
     async listMeetings(filter: MeetingFilter, count = PAGE) {
       const q = filter.query.trim().slice(0, 200);
+      const folder =
+        filter.folder === undefined || filter.folder === 'all' ? undefined : filter.folder;
       const listQuery = (cursor: string | null, limit: number) => {
         const query = new URLSearchParams({ limit: String(limit) });
         if (filter.template !== 'all') query.set('template', filter.template);
+        if (folder !== undefined) query.set('folder', folder);
         if (q !== '') query.set('q', q);
         if (cursor !== null) query.set('cursor', cursor);
         return `/v1/meetings?${query.toString()}`;
@@ -123,7 +137,8 @@ export function createHttpApi(auth: WebAuth): LibraryApi {
           : MeetingList.parse(
               await get(
                 `/v1/meetings?limit=50&ids=${encodeURIComponent(hitIds.join(','))}` +
-                  (filter.template !== 'all' ? `&template=${filter.template}` : ''),
+                  (filter.template !== 'all' ? `&template=${filter.template}` : '') +
+                  (folder !== undefined ? `&folder=${encodeURIComponent(folder)}` : ''),
               ),
             ).items;
       // Content hits in rank order, then title/people matches not already listed.
@@ -148,6 +163,52 @@ export function createHttpApi(auth: WebAuth): LibraryApi {
         body: JSON.stringify({ title }),
       });
       if (!res.ok) throw new Error(`rename failed (${res.status})`);
+    },
+
+    async listFolders() {
+      return FolderListResponse.parse(await get('/v1/folders')).folders;
+    },
+
+    async createFolder(name) {
+      const res = await auth.authorized('/v1/folders', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ name }),
+      });
+      return folderResult(res);
+    },
+
+    async renameFolder(id, name) {
+      const res = await auth.authorized(`/v1/folders/${encodeURIComponent(id)}`, {
+        method: 'PATCH',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ name }),
+      });
+      return folderResult(res);
+    },
+
+    async deleteFolder(id) {
+      const res = await auth.authorized(`/v1/folders/${encodeURIComponent(id)}`, {
+        method: 'DELETE',
+      });
+      if (!res.ok) throw new Error(`folder delete failed (${res.status})`);
+    },
+
+    async moveMeeting(id, folderId) {
+      const res = await auth.authorized(`/v1/meetings/${encodeURIComponent(id)}`, {
+        method: 'PATCH',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ folderId }),
+      });
+      if (!res.ok) throw new Error(`move failed (${res.status})`);
+    },
+
+    async dismissFolderSuggestion(id) {
+      const res = await auth.authorized(
+        `/v1/meetings/${encodeURIComponent(id)}/folder-suggestion:dismiss`,
+        { method: 'POST' },
+      );
+      if (!res.ok) throw new Error(`dismiss failed (${res.status})`);
     },
 
     async editSummaryItem(id, patch) {

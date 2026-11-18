@@ -552,6 +552,45 @@ Layout: column, gap 36, max width 1080.
    Results < 1 s (FR-LIB-03). Debounce 250 ms.
 6. Rows in status **Recording** show a live dot and open the Meet tab instead of the detail.
 
+### 11.1 Folders [SPEC] (2026-11-18, idea from the Yogurt recorder)
+
+Personal folders for the library. One folder per meeting at most; a meeting without a folder is
+"Unfiled". Folders belong to the workspace (today one person); names are unique, case-insensitive,
+1–60 characters, at most 100 folders.
+
+1. **Folder chips** under the template chips (single-select, same ChipGroup, `aria-label`
+   "Folder"): All folders · Unfiled · {folder names A→Z}. Hidden until the first folder exists;
+   the row then ends with **+ New folder** (ghost, small). Selection is remembered like the search
+   (§3). Combined with search and the template chip (AND).
+2. **Folder actions:** when a folder chip is selected, a round **More** button ("Folder actions")
+   follows the chips → **Rename folder** · — · **Delete folder…** (danger).
+   - Rename / New folder: Sheet "Rename folder" / "New folder" with one input (`aria-label`
+     "Folder name", placeholder "e.g. Client calls"), footer **Cancel** · **Save** / **Create**.
+     Errors under the input: "A folder with this name already exists." · "Use 1–60 characters." ·
+     "You can have up to 100 folders."
+   - Delete: AlertDialog "Delete “{name}”?" — "The meetings in it stay in your library, unfiled."
+     Confirm **Delete folder**. Toast "Folder deleted".
+3. **Row meta** adds the folder: "{people} · {template} · {folder}" (only when filed).
+4. **Move:** the row and detail **More** menus get **Move to folder…** (above the separator) → Sheet
+   "Move to folder": radio list of folders (A→Z) plus **No folder**, current one checked; a
+   **+ New folder** row at the end opens an inline input and moves the meeting into the new folder
+   on Create. Choosing a folder moves at once, closes the sheet and shows toast "Moved to
+   {folder}" (or "Removed from {folder}").
+5. **Empty folder:** "No meetings in {folder} yet." + **Show all meetings**. Empty Unfiled: "Every
+   meeting is in a folder."
+
+### 11.2 Folder suggestion [SPEC]
+
+After the first notes are ready, if the user has at least one folder and the meeting is unfiled,
+the AI may suggest one existing folder (never a new one). It suggests only when it is confident;
+otherwise nothing is shown. Suggestions never move anything on their own.
+
+- **Meeting detail**, under the header meta: `info` Banner "Looks like this belongs in
+  **{folder}**." · **Move** (secondary, small) · dismiss ×. Move = §11.1 item 4 move with its toast;
+  dismiss = the suggestion is not shown again for this meeting.
+- The Banner disappears once the meeting is in any folder.
+- Meetings rows show nothing for suggestions (no badge), to keep the list quiet.
+
 ---
 
 ## 12. Meeting detail (FR-LIB-02, F1–F4, F10)
@@ -559,8 +598,8 @@ Layout: column, gap 36, max width 1080.
 ### 12.1 Sticky glass toolbar
 Padding `10 32`, glass (no shadow), bottom border. Left → right: **‹ Meetings** (ghost) · centred
 title (14/500, ellipsis) · **Template** button (secondary, refresh icon + current template) → §12.2 ·
-**Share** (primary) → §13.1 · **More** (round, "More actions") → Rename · Download as .md · Consent log
-· — · Delete meeting… (danger).
+**Share** (primary) → §13.1 · **More** (round, "More actions") → Rename · Move to folder… (§11.1) ·
+Download as .md · Consent log · — · Delete meeting… (danger).
 
 ### 12.2 Regenerate menu (F5, F6, FR-SUM-07)
 Helper "Rewrite these notes as…" · General · Standup · Client call · Interview · 1:1 · MoM (✓ current).
@@ -570,7 +609,7 @@ banner **"New version ready · Keep · Go back"** — the previous version stays
 notes" after Keep. Output language changes in Settings apply on the next regenerate.
 
 ### 12.3 Header and tabs
-- Meta: "{When} · {Length} · {People} and you" + recording label ("Recording 5 days left" /
+- Meta: "{When} · {Length} · {People} and you" (+ " · {folder}" when filed, §11.1) + recording label ("Recording 5 days left" /
   "Recording deleted"; covers audio and video).
 - H1 title (46). Double-click or More → Rename = inline input (same type, bottom border 1.5 px
   `olive-line`); Enter/blur saves (toast "Renamed"), `Esc` cancels. `aria-label="Meeting name"`.
@@ -855,7 +894,9 @@ The Meet overlay always uses the light glass (Meet's UI is dark).
 | Video player, click-to-seek | meetings.video | `GET /v1/meetings/{id}/video` (signed URL, `startMs`, `durationMs`) | — |
 | Processing steps | meetings (status, processing_step) | SSE `GET /v1/meetings/{id}/events` (fallback: poll `GET /v1/meetings/{id}`) | — |
 | Notification "Notes ready" | — | — | Service worker `notifications` |
-| Home recent / Meetings list | meetings | `GET /v1/meetings?cursor=&template=` | — |
+| Home recent / Meetings list | meetings | `GET /v1/meetings?cursor=&template=&folder=` | — |
+| Folder chips, new/rename/delete folder | folders | `GET/POST /v1/folders`, `PATCH/DELETE /v1/folders/{id}` | — |
+| Move to folder, folder suggestion | meetings.folder_id, meetings.suggested_folder_id | `PATCH /v1/meetings/{id}` (`folderId`) · `POST /v1/meetings/{id}/folder-suggestion:dismiss` | — |
 | Search | segments, notes, summary_items | `GET /v1/search?q=` | — |
 | Meeting detail header, rename | meetings | `GET/PATCH /v1/meetings/{id}` | — |
 | Notes tab | summaries, summary_items, citations | `GET /v1/meetings/{id}/summary` | — |
