@@ -15,7 +15,7 @@ import {
 
 describe('selectors module', () => {
   it('has a valid version tag', () => {
-    expect(MEET_SELECTORS_VERSION).toBe('2026-11-09');
+    expect(MEET_SELECTORS_VERSION).toBe('2026-11-17');
   });
 
   it('defines valid selector descriptors across all categories', () => {

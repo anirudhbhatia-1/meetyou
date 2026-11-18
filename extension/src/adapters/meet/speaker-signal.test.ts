@@ -39,6 +39,11 @@ function makeMockElement(data: MockDomNode): Element {
 }
 
 function matches(data: MockDomNode, selector: string): boolean {
+  const cls = data.attributes?.['class'] ?? '';
+  const classes = cls.split(/\s+/);
+  if (selector.includes('sxlEM') && classes.includes('sxlEM')) return true;
+  if (selector.includes('BlxGDf') && classes.includes('BlxGDf')) return true;
+  if (selector.includes('oZRSLe') && classes.includes('oZRSLe')) return true;
   if (selector.includes('data-participant-id') && data.attributes?.['data-participant-id'])
     return true;
   if (
@@ -80,6 +85,19 @@ function matches(data: MockDomNode, selector: string): boolean {
   if (
     selector.includes('More options for') &&
     data.attributes?.['aria-label']?.includes('More options for')
+  )
+    return true;
+  if (
+    selector.includes('span.notranslate') &&
+    classes.includes('notranslate') &&
+    !classes.includes('google-symbols') &&
+    !classes.includes('google-material-icons')
+  )
+    return true;
+  if (
+    (selector.includes('Backgrounds') || selector.includes('Reframe')) &&
+    (data.attributes?.['aria-label']?.includes('Backgrounds') ||
+      data.attributes?.['aria-label']?.includes('Reframe'))
   )
     return true;
   return false;
@@ -228,6 +246,73 @@ describe('Meet Active-Speaker Signal Adapter (S1-08)', () => {
       expect(speakers[0]).toEqual({
         participantId: 'self-tile',
         displayName: 'Gaurav',
+        isSelf: true,
+      });
+    });
+
+    it('detects speaker from modern Google Meet DOM classes (.sxlEM, .BlxGDf, .oZRSLe)', () => {
+      const haloNode: MockDomNode = {
+        attributes: { class: 'qg7mD r6DyN xm86Be JBY0Kc eXUaib BlxGDf KXY1yb' },
+      };
+      const waveNode: MockDomNode = {
+        attributes: { class: 'DYfzY cYKTje HX2H7 sxlEM', jsname: 'QgSmzd' },
+      };
+      const labelNode: MockDomNode = {
+        attributes: { 'aria-label': 'More options for Gaurav Sankhla' },
+      };
+      const tileNode: MockDomNode = {
+        attributes: { class: 'oZRSLe', 'data-participant-id': 'spaces/9vSZ4NSfK8oB/devices/72' },
+        children: [haloNode, waveNode, labelNode],
+      };
+      const rootNode: MockDomNode = { children: [tileNode] };
+      haloNode.parent = tileNode;
+      waveNode.parent = tileNode;
+      labelNode.parent = tileNode;
+      tileNode.parent = rootNode;
+
+      const doc = {
+        querySelectorAll: (sel: string) => queryAll(rootNode, sel).map((d) => makeMockElement(d)),
+      } as unknown as ParentNode;
+
+      const speakers = detectActiveSpeakers(doc);
+      expect(speakers).toHaveLength(1);
+      expect(speakers[0]).toEqual({
+        participantId: 'spaces/9vSZ4NSfK8oB/devices/72',
+        displayName: 'Gaurav Sankhla',
+        isSelf: false,
+      });
+    });
+
+    it('detects modern self participant tile from Backgrounds/Reframe quick controls', () => {
+      const waveNode: MockDomNode = {
+        attributes: { class: 'DYfzY sxlEM' },
+      };
+      const reframeNode: MockDomNode = {
+        attributes: { 'aria-label': 'Reframe' },
+      };
+      const nameNode: MockDomNode = {
+        attributes: { class: 'notranslate' },
+        textContent: 'Gaurav Sankhla',
+      };
+      const tileNode: MockDomNode = {
+        attributes: { class: 'oZRSLe', 'data-participant-id': 'spaces/9vSZ4NSfK8oB/devices/72' },
+        children: [waveNode, reframeNode, nameNode],
+      };
+      const rootNode: MockDomNode = { children: [tileNode] };
+      waveNode.parent = tileNode;
+      reframeNode.parent = tileNode;
+      nameNode.parent = tileNode;
+      tileNode.parent = rootNode;
+
+      const doc = {
+        querySelectorAll: (sel: string) => queryAll(rootNode, sel).map((d) => makeMockElement(d)),
+      } as unknown as ParentNode;
+
+      const speakers = detectActiveSpeakers(doc);
+      expect(speakers).toHaveLength(1);
+      expect(speakers[0]).toEqual({
+        participantId: 'spaces/9vSZ4NSfK8oB/devices/72',
+        displayName: 'Gaurav Sankhla',
         isSelf: true,
       });
     });
