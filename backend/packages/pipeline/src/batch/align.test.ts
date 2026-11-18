@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import {
   mapSegmentIds,
   nameClusters,
+  soleOtherParticipant,
   speakerTurns,
   textSimilarity,
   transcriptChange,
@@ -78,5 +79,39 @@ describe('textSimilarity', () => {
       0.6,
     );
     expect(textSimilarity('Fix the refund bug', 'Send the deck')).toBeLessThan(0.2);
+  });
+});
+
+describe('soleOtherParticipant', () => {
+  const row = (
+    id: string,
+    displayName: string,
+    isSelf = false,
+    externalId: string | null = id,
+  ) => ({
+    id,
+    displayName,
+    isSelf,
+    externalId,
+  });
+
+  it('finds the one other person, even when they have two IDs', () => {
+    expect(
+      soleOtherParticipant([
+        row('self', 'You', true, null),
+        row('a', 'Neha Kapoor'),
+        row('b', 'neha  kapoor'),
+      ]),
+    ).toBe('a');
+  });
+
+  it('gives nothing for a call of three or more, or with nobody else seen', () => {
+    expect(soleOtherParticipant([row('a', 'Neha'), row('b', 'Rohan')])).toBeUndefined();
+    expect(soleOtherParticipant([row('self', 'You', true, null)])).toBeUndefined();
+    expect(soleOtherParticipant([])).toBeUndefined();
+  });
+
+  it('ignores user-added rows without a Meet ID', () => {
+    expect(soleOtherParticipant([row('a', 'Neha'), row('x', 'Rohan', false, null)])).toBe('a');
   });
 });

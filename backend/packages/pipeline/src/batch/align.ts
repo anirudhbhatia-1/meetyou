@@ -106,6 +106,27 @@ export function nameClusters(
   return names;
 }
 
+/**
+ * The one other person in a two-person call, or undefined. When Meet showed exactly one other
+ * participant for the whole meeting, the `them` lane can only be them, whatever the talking marks
+ * said (rule adapted from the open-source Yogurt recorder, MIT, FrigadeHQ/yogurt,
+ * callNames/attribute.ts). Rows are compared by name, because a person can have a tile ID and a
+ * name-hash ID; the user's own row never counts.
+ */
+export function soleOtherParticipant(
+  participants: readonly {
+    id: string;
+    displayName: string;
+    isSelf: boolean;
+    externalId: string | null;
+  }[],
+): string | undefined {
+  const norm = (name: string) => name.normalize('NFKC').replace(/\s+/g, ' ').trim().toLowerCase();
+  const others = participants.filter((p) => !p.isSelf && p.externalId !== null);
+  const names = new Set(others.map((p) => norm(p.displayName)));
+  return names.size === 1 ? others[0]?.id : undefined;
+}
+
 const words = (texts: readonly string[]) =>
   texts
     .join(' ')

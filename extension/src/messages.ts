@@ -130,6 +130,14 @@ export type OffscreenMessage =
       displayName: string;
       /** When Meet showed the change (wall clock, ms): the recorder maps it to the session clock. */
       at: number;
+    }
+  /** Everyone else Meet shows a tile for on the recorded tab (S3-04 speaker naming, FR-DET-04). */
+  | {
+      target: 'offscreen';
+      type: 'capture.roster';
+      participants: { participantId: string; displayName: string }[];
+      /** When Meet showed this roster (wall clock, ms). */
+      at: number;
     };
 
 export type SidePanelMessage =
@@ -346,6 +354,9 @@ export function parseOffscreenMessage(message: unknown): OffscreenMessage | null
   if (message.type === 'capture.speaker') {
     return parseSpeakerSignal(message);
   }
+  if (message.type === 'capture.roster') {
+    return parseRoster(message);
+  }
   if (
     message.type === 'capture.start' &&
     typeof message.streamId === 'string' &&
@@ -493,6 +504,29 @@ export function parseSpeakerSignal(
     displayName: name.slice(0, 200),
     at,
   };
+}
+
+/** A Meet tab can show a few hundred people; more than this is not a call we name from tiles. */
+export const MAX_ROSTER = 100;
+
+/**
+ * `meet.roster` from the content script (or `capture.roster` to the offscreen document): the
+ * other participants Meet shows. Entries without an ID or a name are dropped, not the whole list.
+ */
+export function parseRoster(
+  message: Record<string, unknown>,
+): Extract<OffscreenMessage, { type: 'capture.roster' }> | null {
+  const at = typeof message.at === 'number' && Number.isFinite(message.at) ? message.at : null;
+  if (at === null || !Array.isArray(message.participants)) return null;
+  const participants: { participantId: string; displayName: string }[] = [];
+  for (const entry of message.participants.slice(0, MAX_ROSTER)) {
+    if (!isRecord(entry)) continue;
+    const id = typeof entry.participantId === 'string' ? entry.participantId.trim() : '';
+    const name = typeof entry.displayName === 'string' ? entry.displayName.trim() : '';
+    if (id === '' || id.length > 200 || name === '') continue;
+    participants.push({ participantId: id, displayName: name.slice(0, 200) });
+  }
+  return { target: 'offscreen', type: 'capture.roster', participants, at };
 }
 
 /** The last recording's consent notice, for the side panel (DESIGN §8.5 toast or copy banner). */

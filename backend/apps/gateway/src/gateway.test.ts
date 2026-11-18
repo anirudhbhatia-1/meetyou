@@ -11,7 +11,7 @@ import { LocalChunkStore, MemoryChunkStore, type ChunkStore } from './chunk-stor
 import { LaneChunker } from './lane-chunker.ts';
 import { createGateway, SUBPROTOCOL, tokenFromProtocols, type Gateway } from './server.ts';
 import { checkLane } from './session-check.ts';
-import { EchoDetector, echoTokens, wordSimilarity } from './echo.ts';
+import { EchoDetector, echoThreshold, echoTokens, wordSimilarity } from './echo.ts';
 import { DEEPGRAM_CAPABILITIES, deepgramStreamUrl } from '@meetyou/providers';
 import { clusterId, splitBySpeaker } from './speakers.ts';
 import type { SttInput, SttProvider, SttResult } from '@meetyou/providers';
@@ -420,6 +420,23 @@ describe('EchoDetector', () => {
     expect(d.check('me', 30_000, 31_000, 'please send the report today').flag).toBe(false);
     d.check('them', 40_000, 40_500, 'okay');
     expect(d.check('me', 40_100, 40_600, 'okay').flag).toBe(false);
+  });
+
+  it("does not flag the user's short reply that shares a few of their words", () => {
+    const d = new EchoDetector();
+    d.check('them', 1000, 2500, 'can you send it today');
+    expect(d.check('me', 2600, 3500, 'yes I can send it').flag).toBe(false);
+  });
+
+  it('needs a closer copy for shorter lines', () => {
+    expect(echoThreshold(12)).toBe(0.6);
+    expect(echoThreshold(7)).toBe(0.75);
+    expect(echoThreshold(3)).toBe(0.9);
+    const d = new EchoDetector();
+    d.check('them', 1000, 6000, 'we will ship the new pricing page to all users next monday');
+    expect(
+      d.check('me', 1200, 6100, 'will ship the new pricing page to users next monday morning').flag,
+    ).toBe(true);
   });
 
   it('scores word overlap', () => {

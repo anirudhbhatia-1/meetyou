@@ -15,7 +15,7 @@ import {
 } from '../adapters/meet/health.ts';
 import { extractMeetingMetadata, type MeetingMetadata } from '../adapters/meet/metadata.ts';
 import { detectMuteState, observeMuteState } from '../adapters/meet/mute-signal.ts';
-import { observeActiveSpeakers } from '../adapters/meet/speaker-signal.ts';
+import { detectParticipantTiles, observeActiveSpeakers } from '../adapters/meet/speaker-signal.ts';
 import { PILL_LAYOUT_KEY } from './pill-model.ts';
 import { PromptChip } from './prompt-chip.ts';
 import { RecordingPill, type RecordingSnapshot } from './recording-pill.ts';
@@ -32,6 +32,12 @@ import {
 let stopObserving: (() => void) | null = null;
 let stopMuteObserving: (() => void) | null = null;
 let stopSpeakerObserving: (() => void) | null = null;
+let stopRosterWatching: (() => void) | null = null;
+
+/** How often the tile roster is read while in a call (cheap: one query per tile selector). */
+const ROSTER_EVERY_MS = 5_000;
+/** An unchanged roster is sent again after this many reads (30 s). */
+const ROSTER_RESEND_TICKS = 6;
 let tornDown = false;
 
 /** After an extension reload or update this script's runtime is gone (`chrome.runtime.id`). */
@@ -52,6 +58,8 @@ function teardown(): void {
   stopMuteObserving = null;
   stopSpeakerObserving?.();
   stopSpeakerObserving = null;
+  stopRosterWatching?.();
+  stopRosterWatching = null;
   promptChip.unmount();
   recordingPill.unmount();
 }
@@ -136,6 +144,30 @@ function applyRecordingState(value: unknown): void {
   recordingPill.update(snapshot);
 }
 
+/**
+ * Sends the other participants' tiles whenever they change (S3-04): the pipeline can then name a
+ * two-person call even when Meet's talking mark is not read. Names never reach the logs.
+ */
+function watchRoster(): () => void {
+  let last = '';
+  let unchanged = 0;
+  const read = (): void => {
+    const others = detectParticipantTiles(document)
+      .filter((p) => !p.isSelf && p.displayName !== undefined)
+      .map((p) => ({ participantId: p.participantId, displayName: p.displayName ?? '' }));
+    const key = JSON.stringify(others);
+    // Also resent now and then: a recording started after the last change still needs it (the
+    // recorder ignores names it already has).
+    if (key === last && ++unchanged < ROSTER_RESEND_TICKS) return;
+    last = key;
+    unchanged = 0;
+    notifyExtension({ type: 'meet.roster', participants: others, at: Date.now() });
+  };
+  read();
+  const timer = setInterval(read, ROSTER_EVERY_MS);
+  return () => clearInterval(timer);
+}
+
 function updateSignalObservers(state: string): void {
   if (state === 'in_call') {
     if (stopMuteObserving === null) {
@@ -157,11 +189,14 @@ function updateSignalObservers(state: string): void {
         });
       });
     }
+    stopRosterWatching ??= watchRoster();
   } else {
     stopMuteObserving?.();
     stopMuteObserving = null;
     stopSpeakerObserving?.();
     stopSpeakerObserving = null;
+    stopRosterWatching?.();
+    stopRosterWatching = null;
   }
 }
 
@@ -247,5 +282,6 @@ window.addEventListener('beforeunload', () => {
   recordingPill.unmount();
   stopMuteObserving?.();
   stopSpeakerObserving?.();
+  stopRosterWatching?.();
   stopObserving?.();
 });

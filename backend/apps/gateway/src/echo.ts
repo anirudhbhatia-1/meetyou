@@ -7,7 +7,20 @@ import type { Lane } from '@meetyou/contracts';
  * Used by the transcript assembler (S2-05) before segments are stored.
  */
 export const ECHO_WINDOW_MS = 3_000;
+/** Similarity needed when the shorter line has 8+ words. */
 export const ECHO_SIMILARITY = 0.6;
+
+/**
+ * Short lines share words by chance ("can you send it today" / "yes I can send it" share 60%), and
+ * a false flag drops the user's own words from the notes. So the shorter the line, the closer to a
+ * whole copy it must be. Tiers adapted from the open-source Yogurt recorder (MIT,
+ * FrigadeHQ/yogurt, asr/echo.ts): 8+ words 60%, 6–7 words 75%, under 6 nearly all.
+ */
+export function echoThreshold(shorterTokens: number): number {
+  if (shorterTokens >= 8) return ECHO_SIMILARITY;
+  if (shorterTokens >= 6) return 0.75;
+  return 0.9;
+}
 const MIN_TOKENS = 2;
 const KEEP_MS = 20_000;
 
@@ -64,7 +77,8 @@ export class EchoDetector {
           r.lane === other &&
           r.startMs <= endMs + ECHO_WINDOW_MS &&
           startMs <= r.endMs + ECHO_WINDOW_MS &&
-          wordSimilarity(tokens, r.tokens) >= ECHO_SIMILARITY,
+          wordSimilarity(tokens, r.tokens) >=
+            echoThreshold(Math.min(tokens.length, r.tokens.length)),
       );
     this.#recent.push({ lane, startMs, endMs, tokens });
     return { flag: match && lane === 'me', late: match && lane === 'them' };

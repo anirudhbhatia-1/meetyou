@@ -337,6 +337,10 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
       recorder?.noteSpeaker(parsed.participantId, parsed.displayName, parsed.at);
       sendResponse({ ok: true });
       return false;
+    case 'capture.roster':
+      recorder?.noteParticipants(parsed.participants, parsed.at);
+      sendResponse({ ok: true });
+      return false;
     case 'capture.resume':
       recorder?.resume();
       sendResponse({ ok: true });

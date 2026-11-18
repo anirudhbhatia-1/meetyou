@@ -120,6 +120,37 @@ describe('cleanParticipantName', () => {
     expect(cleanParticipantName('Asha Rao')).toEqual({ name: 'Asha Rao', isSelf: false });
   });
 
+  it('rejects Meet text that is not a person (times, codes, toasts, tab titles)', () => {
+    expect(cleanParticipantName('10:42 AM')).toBeNull();
+    expect(cleanParticipantName('abc-defg-hij')).toBeNull();
+    expect(cleanParticipantName('Your camera is on.')).toBeNull();
+    expect(cleanParticipantName('Reducing noise…')).toBeNull();
+    expect(cleanParticipantName('Q3 plan - Google Docs')).toBeNull();
+    expect(cleanParticipantName('Captions')).toBeNull();
+    expect(cleanParticipantName('Raise hand')).toBeNull();
+    expect(cleanParticipantName('You can turn on captions in settings now')).toBeNull();
+  });
+
+  it('keeps real names, including lowercase ones, initials and particles', () => {
+    expect(cleanParticipantName('anirudh bhatia')).toEqual({
+      name: 'anirudh bhatia',
+      isSelf: false,
+    });
+    expect(cleanParticipantName('A. K. Sharma')).toEqual({ name: 'A. K. Sharma', isSelf: false });
+    expect(cleanParticipantName('Martin Luther King Jr.')).toEqual({
+      name: 'Martin Luther King Jr.',
+      isSelf: false,
+    });
+    expect(cleanParticipantName('Ana María de la Cruz')).toEqual({
+      name: 'Ana María de la Cruz',
+      isSelf: false,
+    });
+  });
+
+  it('treats a bare "You" tile label as the user', () => {
+    expect(cleanParticipantName('You')).toEqual({ name: 'You', isSelf: true });
+  });
+
   it('rejects empty or single character strings', () => {
     expect(cleanParticipantName('')).toBeNull();
     expect(cleanParticipantName(' ')).toBeNull();

@@ -12,6 +12,8 @@ import {
   parseSidePanelMessage,
   senderTabId,
   parseConsentResult,
+  parseRoster,
+  MAX_ROSTER,
 } from './messages.ts';
 
 describe('message parsers', () => {
@@ -192,6 +194,39 @@ describe('Meet speaker signal (S3-04)', () => {
         parseOffscreenMessage({ target: 'offscreen', type: 'capture.speaker', ...bad }),
       ).toBeNull();
     }
+  });
+});
+
+describe('Meet roster (S3-04)', () => {
+  it('keeps valid entries, drops broken ones and caps the list', () => {
+    const parsed = parseOffscreenMessage({
+      target: 'offscreen',
+      type: 'capture.roster',
+      at: 1_000,
+      participants: [
+        { participantId: 'p1', displayName: ' Neha Kapoor ' },
+        { participantId: '', displayName: 'No id' },
+        { participantId: 'p2', displayName: '' },
+        'junk',
+      ],
+    });
+    expect(parsed).toEqual({
+      target: 'offscreen',
+      type: 'capture.roster',
+      at: 1_000,
+      participants: [{ participantId: 'p1', displayName: 'Neha Kapoor' }],
+    });
+    const many = Array.from({ length: MAX_ROSTER + 5 }, (_, i) => ({
+      participantId: `p${i}`,
+      displayName: `Person ${String.fromCharCode(65 + (i % 26))}`,
+    }));
+    const capped = parseRoster({ at: 1, participants: many });
+    expect(capped?.participants).toHaveLength(MAX_ROSTER);
+  });
+
+  it('rejects a roster without a time or a list', () => {
+    expect(parseRoster({ participants: [] })).toBeNull();
+    expect(parseRoster({ at: 1, participants: 'p1' })).toBeNull();
   });
 });
 

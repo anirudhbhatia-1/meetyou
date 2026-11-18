@@ -178,7 +178,12 @@ export const SPEAKER_SELECTORS = {
   speakingIndicator: {
     id: 'speaker.active-indicator',
     description: 'Visual speaking wave or volume meter indicator on a participant tile',
+    // `v5h6Xc` is the CSS class Meet puts on the talking participant's tile, measured in
+    // October 2026 by the open-source Yogurt recorder (MIT, FrigadeHQ/yogurt, callNames/parse.ts):
+    // it sits on one tile and moves to whoever talks. A build name Google changes between
+    // releases, so [Verify] on a live call; the attribute selectors stay as fallbacks.
     selectors: [
+      '.v5h6Xc',
       'div[data-is-speaking="true"]',
       'div[jsname="x3Eknd"]',
       'div[data-active-speaker="true"]',

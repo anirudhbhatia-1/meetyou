@@ -6,6 +6,7 @@ import {
   parseMeetStateReply,
   parseMeetMuteReply,
   parseSidePanelMessage,
+  parseRoster,
   parseSpeakerSignal,
   parseMeetTitle,
   senderTabId,
@@ -1038,6 +1039,23 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         } catch (error: unknown) {
           // AGENTS §7: no names or participant IDs in logs.
           logError('forward speaker failed', error);
+        }
+      });
+      return false;
+    }
+    if (record.type === 'meet.roster') {
+      // Who else is in the call, for naming `them` speakers (S3-04); the content script leaves
+      // the user's own tile out.
+      const roster = parseRoster(record);
+      if (roster === null) return false;
+      enqueueCapture(async () => {
+        const state = await loadCaptureState();
+        if (fromTab === null || state.tabId !== fromTab || !canStop(state)) return;
+        try {
+          await sendToOffscreen(roster);
+        } catch (error: unknown) {
+          // AGENTS §7: no names or participant IDs in logs.
+          logError('forward roster failed', error);
         }
       });
       return false;

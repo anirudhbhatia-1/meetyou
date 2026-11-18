@@ -32,6 +32,34 @@ const STATUS_SUFFIX_REGEX = /\s*\((?:you|presenting|presentation|external)\)/i;
 const SELF_SUFFIX_REGEX = /\s*\(you\)/i;
 const HTML_TAGS_REGEX = /<[^>]*>/g;
 
+// Text Meet shows in a box of its own that is never a person: times, meeting codes, toasts and
+// sentences, shared-tab titles ("Plan - Google Docs"). Rules adapted from the open-source Yogurt
+// recorder's Meet reader (MIT, FrigadeHQ/yogurt, callNames/parse.ts). Unlike Yogurt we do not
+// require capitalised words: many Indian Google accounts have lowercase names.
+const NOT_A_NAME_REGEX = /\d|[?!…:/⌘]|\.\.|\s[-–—|]\s/;
+const MEETING_CODE_REGEX = /^[a-z]{3}-[a-z]{4}-[a-z]{3}$/i;
+const MAX_NAME_WORDS = 5;
+/** Meet's own words that can stand alone like a name. */
+const MEET_WORDS = new Set([
+  'meet',
+  'reframe',
+  'captions',
+  'chat',
+  'people',
+  'activities',
+  'host controls',
+  'present',
+  'raise hand',
+  'reactions',
+]);
+
+/** A sentence ends with a period; "Jr." and initials ("A. K.") do too, so short last words pass. */
+function looksLikeSentence(name: string): boolean {
+  if (!name.endsWith('.')) return false;
+  const last = name.split(/\s+/).at(-1) ?? '';
+  return last.replace(/\.$/, '').length > 2;
+}
+
 export interface ParticipantInfo {
   displayName: string;
   isSelf: boolean;
@@ -118,6 +146,17 @@ export function cleanParticipantName(
 
   // Filter out empty names, single chars, email addresses, or Meet UI junk
   if (sanitized.length < 2 || EMAIL_REGEX.test(sanitized) || UI_JUNK_REGEX.test(sanitized)) {
+    return null;
+  }
+  // Meet labels the user's own tile "You".
+  if (sanitized.toLowerCase() === 'you') return { name: sanitized, isSelf: true };
+  if (
+    NOT_A_NAME_REGEX.test(sanitized) ||
+    MEETING_CODE_REGEX.test(sanitized) ||
+    MEET_WORDS.has(sanitized.toLowerCase()) ||
+    looksLikeSentence(sanitized) ||
+    sanitized.split(/\s+/).length > MAX_NAME_WORDS
+  ) {
     return null;
   }
 

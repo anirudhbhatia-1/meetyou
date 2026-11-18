@@ -153,6 +153,27 @@ export function detectActiveSpeakers(container: ParentNode): ActiveSpeakerInfo[]
 }
 
 /**
+ * Everyone Meet shows a tile for (FR-DET-04), with the same IDs as the active-speaker signal, so
+ * the gateway learns who is in the call even when nobody's talking mark is read. Only tiles with a
+ * name count; the user's own tile is included and marked `isSelf`.
+ */
+export function detectParticipantTiles(container: ParentNode): ActiveSpeakerInfo[] {
+  const people = new Map<string, ActiveSpeakerInfo>();
+  for (const selector of SPEAKER_SELECTORS.participantTile.selectors) {
+    try {
+      for (const tile of container.querySelectorAll(selector)) {
+        const identity = extractTileIdentity(tile);
+        if (identity?.displayName === undefined || people.has(identity.participantId)) continue;
+        people.set(identity.participantId, identity);
+      }
+    } catch {
+      continue;
+    }
+  }
+  return [...people.values()];
+}
+
+/**
  * Observes active-speaker changes in the Google Meet DOM.
  * Throttles rapid animation mutations and notifies whenever an active speaker begins talking.
  *

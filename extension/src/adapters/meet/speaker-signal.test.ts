@@ -1,5 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { detectActiveSpeakers, observeActiveSpeakers } from './speaker-signal.ts';
+import {
+  detectActiveSpeakers,
+  detectParticipantTiles,
+  observeActiveSpeakers,
+} from './speaker-signal.ts';
 
 interface MockDomNode {
   attributes?: Record<string, string>;
@@ -60,6 +64,8 @@ function matches(data: MockDomNode, selector: string): boolean {
   )
     return true;
   if (selector.includes('x3Eknd') && data.attributes?.['jsname'] === 'x3Eknd') return true;
+  if (selector === '.v5h6Xc' && (data.attributes?.['class'] ?? '').split(/\s+/).includes('v5h6Xc'))
+    return true;
   if (
     selector.includes('aria-label*="speaking"') &&
     data.attributes?.['aria-label']?.toLowerCase().includes('speaking')
@@ -164,6 +170,38 @@ describe('Meet Active-Speaker Signal Adapter (S1-08)', () => {
       });
     });
 
+    it("detects the speaker from Meet's talking-tile class (v5h6Xc)", () => {
+      const markNode: MockDomNode = { attributes: { class: 'abc v5h6Xc' } };
+      const labelNode: MockDomNode = {
+        attributes: { 'aria-label': 'More options for Rohan Mehta' },
+      };
+      const quietLabel: MockDomNode = {
+        attributes: { 'aria-label': 'More options for Asha Rao' },
+      };
+      const tileNode: MockDomNode = {
+        attributes: { 'data-participant-id': 'spaces/abc/participants/7' },
+        children: [markNode, labelNode],
+      };
+      const quietTile: MockDomNode = {
+        attributes: { 'data-participant-id': 'spaces/abc/participants/8' },
+        children: [quietLabel],
+      };
+      const rootNode: MockDomNode = { children: [tileNode, quietTile] };
+      markNode.parent = tileNode;
+      labelNode.parent = tileNode;
+      quietLabel.parent = quietTile;
+      tileNode.parent = rootNode;
+      quietTile.parent = rootNode;
+
+      const doc = {
+        querySelectorAll: (sel: string) => queryAll(rootNode, sel).map((d) => makeMockElement(d)),
+      } as unknown as ParentNode;
+
+      expect(detectActiveSpeakers(doc)).toEqual([
+        { participantId: 'spaces/abc/participants/7', displayName: 'Rohan Mehta', isSelf: false },
+      ]);
+    });
+
     it('detects self speaker correctly', () => {
       const waveNode: MockDomNode = {
         attributes: { 'data-active-speaker': 'true' },
@@ -261,6 +299,29 @@ describe('Meet Active-Speaker Signal Adapter (S1-08)', () => {
       } as unknown as ParentNode;
 
       expect(detectActiveSpeakers(doc)).toEqual([]);
+    });
+  });
+
+  describe('detectParticipantTiles', () => {
+    it('lists every named tile once, with the speaker IDs, and marks the user', () => {
+      const self: MockDomNode = {
+        attributes: { 'data-participant-id': 'self-tile', 'data-self-name': 'Gaurav' },
+        children: [{ attributes: { 'data-self-name': 'Gaurav' } }],
+      };
+      const other: MockDomNode = {
+        attributes: { 'data-participant-id': 'p9' },
+        children: [{ attributes: { 'aria-label': 'More options for Neha Kapoor' } }],
+      };
+      const unnamed: MockDomNode = { attributes: { 'data-participant-id': 'p10' } };
+      const rootNode: MockDomNode = { children: [self, other, unnamed] };
+      const doc = {
+        querySelectorAll: (sel: string) => queryAll(rootNode, sel).map((d) => makeMockElement(d)),
+      } as unknown as ParentNode;
+
+      expect(detectParticipantTiles(doc)).toEqual([
+        { participantId: 'self-tile', displayName: 'Gaurav', isSelf: true },
+        { participantId: 'p9', displayName: 'Neha Kapoor', isSelf: false },
+      ]);
     });
   });
 

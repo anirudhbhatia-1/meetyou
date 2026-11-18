@@ -6,7 +6,7 @@ pointer to where the full detail lives — the linked document stays the source 
 
 | Field | Value |
 |---|---|
-| Last updated | 2026-11-16 (Anirudh: ADR-0010 accepted; plan Stage B notetaker bot) |
+| Last updated | 2026-11-18 (Anirudh: Yogurt-inspired speaker naming and echo fixes) |
 | Updated by | Anirudh (Claude Code) |
 | Repository | [anirudhbhatia-1/meetyou](https://github.com/anirudhbhatia-1/meetyou) — branches `main`, `anirudh`, `Gauravbro` |
 | Current stage | **Stage 4** complete in code; 2026-11-09 audit fixes landed; Stage-5 hardening planned (AUDIT §4); real Chrome/Meet checks pending (§7) |
@@ -206,7 +206,24 @@ Gaurav's S3-07..S3-11 — Gaurav should not start them).** **Stage 4 is complete
 
 Newest first. One entry per working session (either person).
 
-### 2026-11-16 (latest) — Anirudh (Claude Code): ADR-0010 accepted, Stage B planned
+### 2026-11-18 (latest) — Anirudh (Claude Code): ideas from the Yogurt recorder
+
+Studied [FrigadeHQ/yogurt](https://github.com/FrigadeHQ/yogurt) (MIT, local desktop recorder) and
+took over what it does better than our code, with credit comments:
+- **Talking mark:** Meet's talking-tile class `v5h6Xc` (measured by Yogurt in October 2026) is now
+  the first speaking selector; the old attribute selectors stay as fallbacks. **[Verify] on a live
+  call** — it may explain the 0 `speaker.active` signals of 2026-11-16.
+- **Names:** `cleanParticipantName` rejects times, meeting codes, toasts/sentences, tab titles,
+  Meet's own words and 6+ word strings; a bare "You" tile is the user. Lowercase names still pass.
+- **Roster:** the content script reads every named tile every 5 s (`detectParticipantTiles`) and
+  sends `meet.roster` → `capture.roster` → `participant.joined` (no contract change).
+- **Two-person rule:** the batch/live naming names every unnamed `them` cluster after the other
+  person when Meet showed exactly one (`soleOtherParticipant`).
+- **Echo:** the `me`-copy threshold depends on line length (8+ words 60%, 6–7 75%, shorter 90%),
+  so short replies that share a few words are no longer hidden as echo.
+`pnpm check` passes. Needs `build:dev` and a real Meet check (2 and 3 people, spotlight layout).
+
+### 2026-11-16 — Anirudh (Claude Code): ADR-0010 accepted, Stage B planned
 
 Anirudh accepted ADR-0010 ("make our own bot … give option of either use bot or extension"). The
 ADR is Accepted; AGENTS §2/§9, ARCHITECTURE §1/§24/§26, PRD §3.3, FEATURES C7 and §4.1 here are

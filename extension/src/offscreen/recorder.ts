@@ -64,6 +64,14 @@ export interface Recorder {
    */
   noteSpeaker(participantId: string, displayName: string, shownAt: number): void;
   /**
+   * The other people Meet shows (S3-04): each new one (or a changed name) becomes
+   * `participant.joined`, so the pipeline knows a two-person call even without talking marks.
+   */
+  noteParticipants(
+    participants: readonly { participantId: string; displayName: string }[],
+    shownAt: number,
+  ): void;
+  /**
    * Stops capture now. `drained` settles once the buffered audio reached the gateway (or the
    * deadline passed); the offscreen document stays open until then.
    */
@@ -238,6 +246,17 @@ export async function startRecorder(options: {
   let quality: VideoQuality = options.videoQuality;
   /** Names already sent, by Meet participant ID (per recording; never logged, AGENTS §7). */
   const speakerNames = new Map<string, string>();
+  /** Messages reach this document a little after Meet showed the change: date it back. */
+  const sessionAt = (shownAt: number): number => {
+    const delay = Math.min(Math.max(0, Date.now() - shownAt), MAX_SIGNAL_DELAY_MS);
+    return Math.max(0, Math.round(capture.nowMs() - delay));
+  };
+  /** `participant.joined` the first time a participant is seen, or when their name changes. */
+  const noteJoined = (participantId: string, displayName: string, at: number): void => {
+    if (speakerNames.get(participantId) === displayName) return;
+    speakerNames.set(participantId, displayName);
+    emit({ type: 'participant.joined', sessionId, participantId, displayName, at });
+  };
   let switching: Promise<void> = Promise.resolve();
   const mimeType = pickVideoMimeType((t) => MediaRecorder.isTypeSupported(t));
   const startPart = (): void => {
@@ -349,14 +368,14 @@ export async function startRecorder(options: {
     noteSpeaker(participantId, displayName, shownAt) {
       // Nothing about the call is kept while the user paused the recording.
       if (paused) return;
-      // Messages reach this document a little after Meet showed the change: date it back.
-      const delay = Math.min(Math.max(0, Date.now() - shownAt), MAX_SIGNAL_DELAY_MS);
-      const at = Math.max(0, Math.round(capture.nowMs() - delay));
-      if (speakerNames.get(participantId) !== displayName) {
-        speakerNames.set(participantId, displayName);
-        emit({ type: 'participant.joined', sessionId, participantId, displayName, at });
-      }
+      const at = sessionAt(shownAt);
+      noteJoined(participantId, displayName, at);
       emit({ type: 'speaker.active', sessionId, participantId, at });
+    },
+    noteParticipants(participants, shownAt) {
+      if (paused) return;
+      const at = sessionAt(shownAt);
+      for (const p of participants) noteJoined(p.participantId, p.displayName, at);
     },
     setMicMuted(muted) {
       if (muted === micMuted) return;
