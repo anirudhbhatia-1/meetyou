@@ -6,8 +6,8 @@ pointer to where the full detail lives — the linked document stays the source 
 
 | Field | Value |
 |---|---|
-| Last updated | 2026-11-18 (Anirudh: review fixes for folders, calendar, naming, keyterms) |
-| Updated by | Anirudh (Claude Code) |
+| Last updated | 2026-11-18 (Gaurav: verified modern Meet active-speaker & participant selectors) |
+| Updated by | Gaurav (Google Antigravity) |
 | Repository | [anirudhbhatia-1/meetyou](https://github.com/anirudhbhatia-1/meetyou) — branches `main`, `anirudh`, `Gauravbro` |
 | Current stage | **Stage 4** complete in code; 2026-11-09 audit fixes landed; Stage-5 hardening planned (AUDIT §4); real Chrome/Meet checks pending (§7) |
 
@@ -206,7 +206,26 @@ Gaurav's S3-07..S3-11 — Gaurav should not start them).** **Stage 4 is complete
 
 Newest first. One entry per working session (either person).
 
-### 2026-11-18 (latest) — Anirudh (Claude Code): review fixes for the new features
+### 2026-11-18 (latest) — Gaurav (Google Antigravity): live-verified modern Google Meet active-speaker selectors
+
+- **Live Meet DOM Probe & Modern Selectors:**
+  Investigated live DOM mutations on real Google Meet calls with two participants (Gaurav and Vishal Sharma). Discovered current Google Meet active-speaker signals:
+  - Active volume wave: `div.DYfzY[jsname="QgSmzd"]` adds `.sxlEM` when speaking and removes it when silent.
+  - Active speaker halo: `div.qg7mD` adds `.BlxGDf` when speaking and removes it when silent.
+  - Participant tile container: `div.oZRSLe` with `data-participant-id`.
+  - Participant name: `[aria-label*="More options for " i]` and `span.notranslate:not(i)...`.
+  - Self tile identification: `[aria-label*="Backgrounds" i]`, `[aria-label*="Reframe" i]` quick controls.
+- **Code Updates:**
+  - `extension/src/adapters/meet/selectors.ts`: added `.sxlEM`, `.BlxGDf`, `div.oZRSLe`, and `[aria-label*="More options for " i]`. Kept `.v5h6Xc` as fallback. Bumped version to `2026-11-17`.
+  - `extension/src/adapters/meet/speaker-signal.ts`: updated `extractTileIdentity` to query all matching name candidates (`querySelectorAll`) and identify self-tiles via quick controls.
+  - Tests updated and added in `selectors.test.ts` and `speaker-signal.test.ts`. All 237 extension unit tests passing.
+- **End-to-End Live Staging Verification:**
+  - Built staging extension and verified on live 10-minute Meet call with 2 participants.
+  - Console verified active speaker events: `self=true` (37+ times) for Gaurav, `self=false` (18+ times) for Vishal Sharma.
+  - Real-time Deepgram streaming STT captured English and Hindi turns.
+  - Post-meeting pass on staging web app (`mtg_01M7PZZVHGJAENS5YFGEMF8CN7`) correctly resolved and attributed all segments to `vishal sharma` alongside synchronized 10:48 screen recording video.
+
+### 2026-11-18 — Anirudh (Claude Code): review fixes for the new features
 
 Three independent reviews (calendar backend; speaker naming, keyterms and folders; web wiring)
 plus an integration check. Fixed:
