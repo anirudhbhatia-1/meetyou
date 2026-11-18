@@ -28,6 +28,7 @@ resource "azurerm_container_app_job" "job" {
   resource_group_name          = azurerm_resource_group.main.name
   container_app_environment_id = data.azurerm_container_app_environment.main.id
   replica_timeout_in_seconds   = each.value.timeout
+  workload_profile_name        = "Consumption"
   replica_retry_limit          = 0 # a failed migration or smoke run must fail the deploy, not retry
 
   manual_trigger_config {

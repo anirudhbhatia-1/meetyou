@@ -80,7 +80,10 @@ resource "azurerm_container_app" "backend" {
   container_app_environment_id = data.azurerm_container_app_environment.main.id
   resource_group_name          = azurerm_resource_group.main.name
   revision_mode                = "Single"
-  max_inactive_revisions       = 3
+  # The shared environment runs workload profiles; Azure puts apps on "Consumption". Pinned so
+  # plans do not try to clear it (2026-11-18).
+  workload_profile_name  = "Consumption"
+  max_inactive_revisions = 3
 
   identity {
     type         = "UserAssigned"
@@ -176,7 +179,10 @@ resource "azurerm_container_app" "web" {
   container_app_environment_id = data.azurerm_container_app_environment.main.id
   resource_group_name          = azurerm_resource_group.main.name
   revision_mode                = "Single"
-  max_inactive_revisions       = 3
+  # The shared environment runs workload profiles; Azure puts apps on "Consumption". Pinned so
+  # plans do not try to clear it (2026-11-18).
+  workload_profile_name  = "Consumption"
+  max_inactive_revisions = 3
 
   identity {
     type         = "UserAssigned"
