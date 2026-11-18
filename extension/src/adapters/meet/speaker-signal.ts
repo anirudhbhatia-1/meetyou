@@ -85,7 +85,7 @@ function extractTileIdentity(tile: Element): ActiveSpeakerInfo | null {
           labelEl.getAttribute('data-self-name') ??
           labelEl.getAttribute('aria-label') ??
           labelEl.textContent;
-        const cleaned = cleanParticipantName(raw);
+        const cleaned = cleanParticipantName(raw, { tileLabel: true });
         if (cleaned !== null) {
           displayName = cleaned.name;
           if (cleaned.isSelf) {

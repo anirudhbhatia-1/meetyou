@@ -245,9 +245,9 @@ export function Meetings() {
           <SkeletonRows />
         ) : (list.data?.meetings ?? []).length === 0 ? (
           <div className="empty">
-            {debounced.trim() === '' && folder === 'none' ? (
+            {debounced.trim() === '' && folder === 'none' && template === 'all' ? (
               <p>Every meeting is in a folder.</p>
-            ) : debounced.trim() === '' && selected !== undefined ? (
+            ) : debounced.trim() === '' && selected !== undefined && template === 'all' ? (
               <>
                 <p>No meetings in {selected.name} yet.</p>
                 <Button variant="ghost" onClick={() => setFolder('all')}>
@@ -256,8 +256,22 @@ export function Meetings() {
               </>
             ) : debounced.trim() === '' && template !== 'all' ? (
               <>
-                <p>No {TEMPLATE_LABEL[template]} meetings yet.</p>
-                <Button variant="ghost" onClick={() => setTemplate('all')}>
+                <p>
+                  No {TEMPLATE_LABEL[template]} meetings
+                  {selected !== undefined
+                    ? ` in ${selected.name}`
+                    : folder === 'none'
+                      ? ' outside folders'
+                      : ''}{' '}
+                  yet.
+                </p>
+                <Button
+                  variant="ghost"
+                  onClick={() => {
+                    setTemplate('all');
+                    setFolder('all');
+                  }}
+                >
                   Show all meetings
                 </Button>
               </>

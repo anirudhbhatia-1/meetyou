@@ -62,6 +62,7 @@ export function MeetingDetail({
   /** Folder names for the meta line and the suggestion (DESIGN §11.1–11.2). */
   const folders = useAsync(() => api.listFolders(), [meetingId]);
   const [moving, setMoving] = useState(false);
+  const [filing, setFiling] = useState(false);
   const [selected, setSelected] = useState<SummaryItem | null>(null);
   const opened = useRef(false);
   useEffect(() => {
@@ -298,23 +299,31 @@ export function MeetingDetail({
             action={
               <Button
                 size="sm"
+                disabled={filing}
                 onClick={() => {
                   const target = m.suggestedFolderId;
-                  if (target === null) return;
-                  api.moveMeeting(meetingId, target).then(
-                    () => {
-                      toast({ message: `Moved to ${suggested}` });
-                      meeting.reload();
-                    },
-                    () => toast({ message: 'Couldn’t move the meeting. Try again.' }),
-                  );
+                  if (target === null || filing) return;
+                  setFiling(true);
+                  api
+                    .moveMeeting(meetingId, target)
+                    .then(
+                      () => {
+                        toast({ message: `Moved to ${suggested}` });
+                        meeting.reload();
+                        folders.reload();
+                      },
+                      () => toast({ message: 'Couldn’t move the meeting. Try again.' }),
+                    )
+                    .finally(() => setFiling(false));
                 }}
               >
                 Move
               </Button>
             }
             onDismiss={() => {
-              api.dismissFolderSuggestion(meetingId).then(meeting.reload, () => meeting.reload());
+              api.dismissFolderSuggestion(meetingId).then(meeting.reload, () => {
+                toast({ message: 'Couldn’t dismiss that. Try again.' });
+              });
             }}
           >
             Looks like this belongs in <strong>{suggested}</strong>.

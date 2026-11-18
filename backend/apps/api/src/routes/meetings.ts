@@ -341,51 +341,68 @@ export const meetingsRoutes: FastifyPluginAsync = async (fastify) => {
         throw new BadRequestError('No update fields provided');
       }
 
-      const updated = await request.inWorkspace(async (tx) => {
-        if (updates.folderId !== undefined && updates.folderId !== null) {
-          const folder = await tx
-            .selectFrom('folders')
-            .select('id')
-            .where('id', '=', updates.folderId)
-            .executeTakeFirst();
-          if (folder === undefined) throw new BadRequestError('No such folder', 'invalid_folder');
+      // A folder deleted at the same moment fails the foreign key: the same answer as no folder.
+      const inWorkspace = request.inWorkspace;
+      const updated = await (async () => {
+        try {
+          return await inWorkspace(async (tx) => {
+            if (updates.folderId !== undefined && updates.folderId !== null) {
+              const folder = await tx
+                .selectFrom('folders')
+                .select('id')
+                .where('id', '=', updates.folderId)
+                .executeTakeFirst();
+              if (folder === undefined)
+                throw new BadRequestError('No such folder', 'invalid_folder');
+            }
+            const m = await tx
+              .updateTable('meetings')
+              .set({
+                ...(updates.title !== undefined ? { title: updates.title } : {}),
+                ...(updates.template !== undefined ? { template: updates.template } : {}),
+                // A move by the user settles the suggestion: it is not offered again (DESIGN §11.2).
+                ...(updates.folderId !== undefined
+                  ? { folderId: updates.folderId, folderSuggestion: 'dismissed' as const }
+                  : {}),
+              })
+              .where('workspaceId', '=', workspaceId)
+              .where('id', '=', id)
+              .where('deletedAt', 'is', null)
+              .returningAll()
+              .executeTakeFirst();
+
+            if (!m) return null;
+
+            const participants = await tx
+              .selectFrom('participants')
+              .select(['displayName'])
+              .where('workspaceId', '=', workspaceId)
+              .where('meetingId', '=', id)
+              .where('isSelf', '=', false)
+              .execute();
+
+            const videoAsset = await tx
+              .selectFrom('videoAssets')
+              .select(['status', 'durationMs', 'deleteAfter'])
+              .where('partId', 'is', null)
+              .where('workspaceId', '=', workspaceId)
+              .where('meetingId', '=', id)
+              .executeTakeFirst();
+
+            return { m, participants, videoAsset };
+          });
+        } catch (error) {
+          if (
+            typeof error === 'object' &&
+            error !== null &&
+            'code' in error &&
+            error.code === '23503'
+          ) {
+            throw new BadRequestError('No such folder', 'invalid_folder');
+          }
+          throw error;
         }
-        const m = await tx
-          .updateTable('meetings')
-          .set({
-            ...(updates.title !== undefined ? { title: updates.title } : {}),
-            ...(updates.template !== undefined ? { template: updates.template } : {}),
-            // A move by the user settles the suggestion: it is not offered again (DESIGN §11.2).
-            ...(updates.folderId !== undefined
-              ? { folderId: updates.folderId, folderSuggestion: 'dismissed' as const }
-              : {}),
-          })
-          .where('workspaceId', '=', workspaceId)
-          .where('id', '=', id)
-          .where('deletedAt', 'is', null)
-          .returningAll()
-          .executeTakeFirst();
-
-        if (!m) return null;
-
-        const participants = await tx
-          .selectFrom('participants')
-          .select(['displayName'])
-          .where('workspaceId', '=', workspaceId)
-          .where('meetingId', '=', id)
-          .where('isSelf', '=', false)
-          .execute();
-
-        const videoAsset = await tx
-          .selectFrom('videoAssets')
-          .select(['status', 'durationMs', 'deleteAfter'])
-          .where('partId', 'is', null)
-          .where('workspaceId', '=', workspaceId)
-          .where('meetingId', '=', id)
-          .executeTakeFirst();
-
-        return { m, participants, videoAsset };
-      });
+      })();
 
       if (!updated) {
         throw new NotFoundError(`Meeting ${id} not found`);

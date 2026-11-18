@@ -162,7 +162,12 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
   });
 
   await app.register(meRoutes);
-  await app.register(accountRoutes);
+  await app.register(accountRoutes, {
+    ...(config.calendarTokenKeys !== undefined
+      ? { calendarTokenKeys: config.calendarTokenKeys }
+      : {}),
+    ...(options.calendarGoogleDeps !== undefined ? { googleDeps: options.calendarGoogleDeps } : {}),
+  });
   await app.register(settingsRoutes);
   await app.register(meetingsRoutes);
   await app.register(notesRoutes);

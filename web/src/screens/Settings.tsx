@@ -21,7 +21,7 @@ import { useEffect, useState, type ReactNode } from 'react';
 import type { PatchSettingsRequest, UserSettings } from '../api/types.ts';
 import { useAnalytics } from '../lib/analytics.ts';
 import { useApi } from '../lib/api-context.ts';
-import { TEMPLATE_LABEL, type TemplateId } from '../lib/format.ts';
+import { clockTime, TEMPLATE_LABEL, type TemplateId } from '../lib/format.ts';
 import { useAsync } from '../lib/useAsync.ts';
 import { takePendingCalendarConnect } from '../lib/calendar-connect.ts';
 import { DataExport } from './DataExport.tsx';
@@ -499,42 +499,66 @@ function CalendarRow({ loginHint }: { loginHint: string | undefined }) {
       return;
     }
     setBusy(true);
-    void api.connectCalendar(pending).then((result) => {
-      setBusy(false);
-      if (result.ok) {
-        toast({ message: 'Calendar connected' });
-        status.reload();
-      } else {
+    api.connectCalendar(pending).then(
+      (result) => {
+        setBusy(false);
+        if (result.ok) {
+          toast({ message: 'Calendar connected' });
+          status.reload();
+        } else {
+          setFailed(true);
+        }
+      },
+      // A network error or a failed refresh: the code is spent, so the user connects again.
+      () => {
+        setBusy(false);
         setFailed(true);
-      }
-    });
+      },
+    );
     // Runs once per visit; the pending code can be used only once.
+  }, []);
+
+  // Back from Google's page (bfcache) restores this page with the button still busy.
+  useEffect(() => {
+    const restored = (e: PageTransitionEvent) => {
+      if (e.persisted) setBusy(false);
+    };
+    window.addEventListener('pageshow', restored);
+    return () => window.removeEventListener('pageshow', restored);
   }, []);
 
   const connect = () => {
     setBusy(true);
     setFailed(false);
-    api.startCalendarConnect(loginHint).catch(() => {
-      setBusy(false);
-      setFailed(true);
-    });
+    api.startCalendarConnect(loginHint).then(
+      // Normally the page has left for Google; the mock connects in place.
+      () => {
+        setBusy(false);
+        status.reload();
+      },
+      () => {
+        setBusy(false);
+        setFailed(true);
+      },
+    );
   };
   const s = status.data;
-  const synced =
-    s?.lastSyncedAt != null
-      ? ` · synced ${new Date(s.lastSyncedAt).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })}`
-      : '';
+  const synced = s?.lastSyncedAt != null ? ` · synced ${clockTime(s.lastSyncedAt)}` : '';
   return (
     <>
       <Row
         title="Google Calendar"
         helper={
           <>
-            {s?.connected === true
-              ? s.status === 'needs_reconnect'
-                ? 'Google stopped our access.'
-                : `Connected as ${s.accountEmail ?? ''}${synced}`
-              : 'See your upcoming Meet calls on Home, write notes before them, and get names right from the start. Read-only; we never change your calendar.'}
+            {s?.connected === true ? (
+              s.status === 'needs_reconnect' ? (
+                <span className="warning-text">Google stopped our access.</span>
+              ) : (
+                `Connected as ${s.accountEmail ?? ''}${synced}`
+              )
+            ) : (
+              'See your upcoming Meet calls on Home, write notes before them, and get names right from the start. Read-only; we never change your calendar.'
+            )}
             {failed && (
               <span className="field-error" role="alert">
                 {' '}
@@ -544,7 +568,11 @@ function CalendarRow({ loginHint }: { loginHint: string | undefined }) {
           </>
         }
         control={
-          s === undefined ? null : !s.connected ? (
+          s === undefined ? (
+            status.error ? (
+              <Button onClick={status.reload}>Try again</Button>
+            ) : null
+          ) : !s.connected ? (
             <Button disabled={busy} onClick={connect}>
               Connect
             </Button>
@@ -553,7 +581,7 @@ function CalendarRow({ loginHint }: { loginHint: string | undefined }) {
               Reconnect
             </Button>
           ) : (
-            <Button variant="ghost" onClick={() => setConfirm(true)}>
+            <Button variant="ghost" className="danger-text" onClick={() => setConfirm(true)}>
               Disconnect
             </Button>
           )

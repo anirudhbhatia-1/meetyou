@@ -1,7 +1,12 @@
 import { newUlid, type Lane, type Segment } from '@meetyou/contracts';
-import { glossaryTerms, storeSegments, type Db } from '@meetyou/db';
+import { calendarAttendees, glossaryTerms, storeSegments, type Db } from '@meetyou/db';
 import { createLogger, errorCode } from '@meetyou/log';
-import { sessionKeyterms, type BatchSegment, type SttBatchProvider } from '@meetyou/providers';
+import {
+  calendarKeyterms,
+  sessionKeyterms,
+  type BatchSegment,
+  type SttBatchProvider,
+} from '@meetyou/providers';
 import { defineTask, enqueue, jobKey } from '@meetyou/queue';
 import type { ObjectBucket } from '@meetyou/storage';
 import { z } from 'zod';
@@ -152,9 +157,13 @@ export function retranscribeTask(deps: {
           .where('isSelf', '=', false)
           .orderBy('createdAt')
           .execute();
-        return sessionKeyterms(
-          await glossaryTerms(tx),
-          names.map((n) => n.displayName),
+        // Glossary, then the people Meet showed, then the calendar invite's (ADR-0013).
+        return calendarKeyterms(
+          sessionKeyterms(
+            await glossaryTerms(tx),
+            names.map((n) => n.displayName),
+          ),
+          await calendarAttendees(tx, meetingId),
         );
       });
 

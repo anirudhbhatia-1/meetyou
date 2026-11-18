@@ -639,6 +639,8 @@ export class StreamSession {
       )
       .then((stream) => {
         stt.stream = stream;
+        // Names learned during the handshake (the stream opened with the older list).
+        stream.updateKeyterms?.(this.#keyterms());
         for (const queued of stt.queued) {
           stream.send(queued.bytes);
           this.#meter.sttSent(lane, queued.durationMs);

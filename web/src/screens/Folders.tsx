@@ -110,11 +110,15 @@ export function MoveToFolderSheet({
   const [creating, setCreating] = useState(false);
   const nameOf = (id: string | null, list: Folder[]) => list.find((f) => f.id === id)?.name ?? '';
 
-  const move = async (folderId: string | null, list: Folder[]) => {
+  const [moving, setMoving] = useState(false);
+  /** True when the meeting moved. */
+  const move = async (folderId: string | null, list: Folder[]): Promise<boolean> => {
     if (folderId === current) {
       onClose();
-      return;
+      return true;
     }
+    if (moving) return false;
+    setMoving(true);
     try {
       await api.moveMeeting(meetingId, folderId);
       toast({
@@ -125,8 +129,12 @@ export function MoveToFolderSheet({
       });
       onMoved(folderId);
       onClose();
+      return true;
     } catch {
       toast({ message: 'Couldn’t move the meeting. Try again.' });
+      return false;
+    } finally {
+      setMoving(false);
     }
   };
 
@@ -138,7 +146,12 @@ export function MoveToFolderSheet({
         onClose={() => setCreating(false)}
         onSave={async (name) => {
           const result = await api.createFolder(name);
-          if (result.ok) await move(result.folder.id, [result.folder]);
+          if (result.ok && !(await move(result.folder.id, [result.folder]))) {
+            // The folder exists now; back to the list, where it can be picked again.
+            setCreating(false);
+            folders.reload();
+            onMoved(current);
+          }
           return result;
         }}
       />
@@ -159,7 +172,7 @@ export function MoveToFolderSheet({
                 role="radio"
                 aria-checked={f.id === current}
                 className="folder-pick-row"
-                disabled={folders.loading && folders.data === undefined}
+                disabled={moving || (folders.loading && folders.data === undefined)}
                 onClick={() => void move(f.id, list)}
               >
                 <span className="folder-pick-mark" aria-hidden>

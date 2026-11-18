@@ -33,6 +33,9 @@ let stopObserving: (() => void) | null = null;
 let stopMuteObserving: (() => void) | null = null;
 let stopSpeakerObserving: (() => void) | null = null;
 let stopRosterWatching: (() => void) | null = null;
+/** Sends the roster now (a recording just started); null while not in a call. */
+let sendRosterNow: (() => void) | null = null;
+let lastRecordingStatus: string | null = null;
 
 /** How often the tile roster is read while in a call (cheap: one query per tile selector). */
 const ROSTER_EVERY_MS = 5_000;
@@ -140,6 +143,12 @@ function parseRecordingSnapshot(value: unknown): RecordingSnapshot | null {
 function applyRecordingState(value: unknown): void {
   const snapshot = parseRecordingSnapshot(value);
   if (snapshot === null) return;
+  // Everyone on screen when the recording starts, not up to 30 s later: someone who leaves early
+  // would otherwise be missing, and a three-person call would look like a two-person one.
+  if (snapshot.status === 'recording' && lastRecordingStatus !== 'recording') {
+    setTimeout(() => sendRosterNow?.(), 1_000);
+  }
+  lastRecordingStatus = snapshot.status;
   promptChip.updateRecordingStatus(snapshot.status);
   recordingPill.update(snapshot);
 }
@@ -151,6 +160,10 @@ function applyRecordingState(value: unknown): void {
 function watchRoster(): () => void {
   let last = '';
   let unchanged = 0;
+  sendRosterNow = () => {
+    last = '';
+    read();
+  };
   const read = (): void => {
     const others = detectParticipantTiles(document)
       .filter((p) => !p.isSelf && p.displayName !== undefined)
@@ -165,7 +178,10 @@ function watchRoster(): () => void {
   };
   read();
   const timer = setInterval(read, ROSTER_EVERY_MS);
-  return () => clearInterval(timer);
+  return () => {
+    clearInterval(timer);
+    sendRosterNow = null;
+  };
 }
 
 function updateSignalObservers(state: string): void {

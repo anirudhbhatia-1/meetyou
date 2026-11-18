@@ -155,6 +155,34 @@ describe('KeytermUpdates (mid-stream Configure)', () => {
     expect(sent).toHaveLength(2);
   });
 
+  it('after a lost reply sends only the newest list, and a timer flushes a waiting one', () => {
+    const { updates, sent, advance } = setup([]);
+    updates.update(['A']);
+    updates.update(['A', 'B']);
+    advance(20_000);
+    updates.update(['A', 'B', 'C']);
+    updates.handle(JSON.stringify({ type: 'ConfigureSuccess' }));
+    expect(sent.map((m) => (m as { keyterms: string[] }).keyterms.join('|'))).toEqual([
+      'A',
+      'A|B|C',
+    ]);
+    expect(updates.active).toEqual(['A', 'B', 'C']);
+
+    const second = setup([]);
+    second.updates.update(['X']);
+    second.updates.update(['X', 'Y']);
+    second.advance(16_000);
+    second.updates.tick();
+    expect(second.sent.map((m) => (m as { keyterms: string[] }).keyterms.join('|'))).toEqual([
+      'X',
+      'X|Y',
+    ]);
+    // A late reply with nothing pending changes nothing.
+    const third = setup(['Q']);
+    expect(third.updates.handle(JSON.stringify({ type: 'ConfigureSuccess' }))).toBe(true);
+    expect(third.updates.active).toEqual(['Q']);
+  });
+
   it('leaves transcript results to the result parser', () => {
     const { updates } = setup();
     expect(updates.handle(JSON.stringify({ type: 'Results' }))).toBe(false);

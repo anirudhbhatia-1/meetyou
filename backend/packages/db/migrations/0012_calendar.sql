@@ -1,6 +1,6 @@
 -- 0012 — Google Calendar sync (ADR-0013, DESIGN §10.1, §15.7; Anirudh, 2026-11-18).
 --
--- Sync polls a window (yesterday to two days ahead) instead of sync tokens, which Google does not
+-- Sync polls a window (yesterday to three days ahead) instead of sync tokens, which Google does not
 -- allow together with a time window; `synced_at` marks the events the last poll returned, so an
 -- event moved out of the window stops showing without losing the notes written for it.
 --

@@ -7,6 +7,7 @@ import {
   seal,
   unseal,
   type GoogleDeps,
+  type SealingKey,
 } from '@meetyou/auth';
 import {
   CALENDAR_SCOPE,
@@ -59,6 +60,34 @@ async function statusOf(tx: WorkspaceTx, userId: string): Promise<CalendarStatus
         status: row.status,
         lastSyncedAt: row.lastSyncedAt === null ? null : new Date(row.lastSyncedAt).toISOString(),
       };
+}
+
+/** Deletes the user's connection (events and notes cascade) and returns what to revoke. */
+export async function removeCalendarConnection(
+  tx: WorkspaceTx,
+  userId: string,
+): Promise<{ id: string; refreshTokenSealed: string } | null> {
+  const row = await tx
+    .deleteFrom('calendarConnections')
+    .where('userId', '=', userId)
+    .returning(['id', 'refreshTokenSealed'])
+    .executeTakeFirst();
+  return row ?? null;
+}
+
+/** After the delete committed: revoke the grant at Google (best effort, never logged). */
+export async function revokeRemovedCalendar(
+  removed: { id: string; refreshTokenSealed: string } | null,
+  keys: readonly SealingKey[],
+  deps: Pick<GoogleDeps, 'fetch'>,
+): Promise<void> {
+  if (removed === null || keys.length === 0) return;
+  try {
+    // Revoking the refresh token removes every scope the user granted us.
+    await revokeGoogleToken(unseal(removed.refreshTokenSealed, keys, removed.id), deps);
+  } catch {
+    // The row is gone either way; the grant lapses on its own if revoking fails.
+  }
 }
 
 export const calendarRoutes: FastifyPluginAsync<CalendarRoutesOptions> = async (
@@ -124,18 +153,26 @@ export const calendarRoutes: FastifyPluginAsync<CalendarRoutesOptions> = async (
         throw error;
       }
       const { replaced, status } = await inWorkspace(async (tx) => {
+        // Serialized per user: a double submit must not race the one-calendar-per-user row.
+        await sql`select pg_advisory_xact_lock(hashtext(${`calendar:${userId}`}))`.execute(tx);
         const existing = await tx
           .selectFrom('calendarConnections')
-          .select(['id', 'refreshTokenSealed'])
+          .select(['id', 'refreshTokenSealed', 'accountEmail'])
           .where('userId', '=', userId)
           .executeTakeFirst();
         const id = existing?.id ?? `cal_${newUlid()}`;
+        const accountEmail = grant.profile.email.slice(0, 320);
+        const switched =
+          existing !== undefined &&
+          existing.accountEmail.toLowerCase() !== accountEmail.toLowerCase();
         const values = {
-          accountEmail: grant.profile.email.slice(0, 320),
+          accountEmail,
           refreshTokenSealed: seal(grant.refreshToken, keys, id),
           scope: grant.scope.slice(0, 2000),
           status: 'active' as const,
           lastErrorCode: null,
+          // Another Google account: its events are not this one's.
+          ...(switched ? { lastSyncedAt: null } : {}),
         };
         if (existing === undefined) {
           await tx
@@ -143,6 +180,8 @@ export const calendarRoutes: FastifyPluginAsync<CalendarRoutesOptions> = async (
             .values({ id, workspaceId, userId, ...values })
             .execute();
         } else {
+          if (switched)
+            await tx.deleteFrom('calendarEvents').where('connectionId', '=', id).execute();
           await tx.updateTable('calendarConnections').set(values).where('id', '=', id).execute();
         }
         // First sync now; it schedules the next ones itself.
@@ -152,8 +191,10 @@ export const calendarRoutes: FastifyPluginAsync<CalendarRoutesOptions> = async (
           { workspaceId, connectionId: id },
           { jobKey: calendarSyncJobKey(id) },
         );
+        // Revoking works on the whole grant (user + client): for the same account it would also
+        // kill the token just issued, so only a switched account's old grant is revoked.
         let old: string | null = null;
-        if (existing !== undefined) {
+        if (switched) {
           try {
             old = unseal(existing.refreshTokenSealed, keys, existing.id);
           } catch {
@@ -162,10 +203,7 @@ export const calendarRoutes: FastifyPluginAsync<CalendarRoutesOptions> = async (
         }
         return { replaced: old, status: await statusOf(tx, userId) };
       });
-      // A reconnect gets a new token; the old one is revoked when it differs (best effort).
-      if (replaced !== null && replaced !== grant.refreshToken) {
-        void revokeGoogleToken(replaced, options.googleDeps ?? {});
-      }
+      if (replaced !== null) void revokeGoogleToken(replaced, options.googleDeps ?? {});
       return reply.send(status);
     },
   );
@@ -175,24 +213,8 @@ export const calendarRoutes: FastifyPluginAsync<CalendarRoutesOptions> = async (
     { preHandler: fastify.requireAuth, schema: { tags: ['calendar'] } },
     async (request, reply) => {
       const { userId, inWorkspace } = who(request);
-      const removed = await inWorkspace(async (tx) => {
-        const row = await tx
-          .deleteFrom('calendarConnections')
-          .where('userId', '=', userId)
-          .returning(['id', 'refreshTokenSealed'])
-          .executeTakeFirst();
-        return row ?? null;
-      });
-      if (removed === null) return reply.status(204).send();
-      if (keys.length > 0) {
-        try {
-          const token = unseal(removed.refreshTokenSealed, keys, removed.id);
-          // Revoking the refresh token removes every scope the user granted us.
-          await revokeGoogleToken(token, options.googleDeps ?? {});
-        } catch {
-          // The row is gone either way; the grant lapses on its own if revoking fails.
-        }
-      }
+      const removed = await inWorkspace((tx) => removeCalendarConnection(tx, userId));
+      await revokeRemovedCalendar(removed, keys, options.googleDeps ?? {});
       return reply.status(204).send();
     },
   );

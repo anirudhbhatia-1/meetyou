@@ -348,6 +348,10 @@ async function startCloudSession(
  */
 async function discardCloudSession(session: StartedSession | undefined): Promise<void> {
   if (auth === null || session === undefined) return;
+  // Notes before the call stored for this session (ADR-0013) go with it.
+  await chrome.storage.local
+    .remove(notesKey(session.sessionId))
+    .catch((error: unknown) => logError('discard notes failed', error));
   try {
     const token = await auth.accessToken();
     if (token !== null) await discardApiMeeting(API_URL, token, session.meetingId);

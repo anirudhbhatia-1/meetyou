@@ -110,3 +110,8 @@ export const MARKER_LABEL = {
   question: 'Question',
   important: 'Important',
 } as const;
+
+/** "16:00" — 24-hour clock, as in the rest of the app (en-GB). */
+export function clockTime(iso: string): string {
+  return new Date(iso).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
+}

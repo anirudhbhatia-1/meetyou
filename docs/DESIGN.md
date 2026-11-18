@@ -551,7 +551,8 @@ have a Google Meet link, soonest first, at most 5 (+ "{n} more tomorrow" muted).
   line, up to 30 lines, `aria-label` "Notes before the call"), footer **Cancel** · **Save**; toast
   "Notes saved". When the recording starts in Meet, these lines appear in the side panel as your
   first notes (sessionMs 0) and anchor the summary like any other note (F2).
-- Empty: "No Meet calls today or tomorrow." Needs reconnect: `warning` Banner "Your calendar
+- Empty: "No Meet calls today or tomorrow." Before the first sync: "Syncing your calendar… this
+  takes up to a minute." Needs reconnect: `warning` Banner "Your calendar
   stopped syncing. Reconnect it in Settings." with **Settings**.
 - Recordings on a calendar meeting take the event's title; the AI title never replaces it.
   Attendee names (and company names from their email domains) are sent to the transcription as
@@ -582,8 +583,9 @@ Personal folders for the library. One folder per meeting at most; a meeting with
 1–60 characters, at most 100 folders.
 
 1. **Folder chips** under the template chips (single-select, same ChipGroup, `aria-label`
-   "Folder"): All folders · Unfiled · {folder names A→Z}. Hidden until the first folder exists;
-   the row then ends with **+ New folder** (ghost, small). Selection is remembered like the search
+   "Folder"): All folders · Unfiled · {folder names A→Z}. The chips are hidden until the first
+   folder exists; the row always ends with **+ New folder** (ghost, small), alone before then so
+   folders can be found. Selection is remembered like the search
    (§3). Combined with search and the template chip (AND).
 2. **Folder actions:** when a folder chip is selected, a round **More** button ("Folder actions")
    follows the chips → **Rename folder** · — · **Delete folder…** (danger).

@@ -142,6 +142,24 @@ describe('calendar.sync', () => {
     expect(again.calls).toEqual([]);
   });
 
+  it('asks for reconnection when the sealing key is gone', async () => {
+    const id = await connection();
+    const otherKeys = parseSealingKeys(`k9:${randomBytes(32).toString('base64')}`);
+    const fake = google([], { status: 200, body: { access_token: 'x' } });
+    expect(
+      await syncCalendar({ ...deps(fake.fake), sealingKeys: otherKeys }, workspaceId, id),
+    ).toBe('needs_reconnect');
+    expect(fake.calls).toEqual([]);
+    const row = await env.db.inWorkspace(workspaceId, (tx) =>
+      tx
+        .selectFrom('calendarConnections')
+        .select(['status', 'lastErrorCode'])
+        .where('id', '=', id)
+        .executeTakeFirstOrThrow(),
+    );
+    expect(row).toEqual({ status: 'needs_reconnect', lastErrorCode: 'key_missing' });
+  });
+
   it('does nothing without configuration or for a removed connection', async () => {
     const off = { ...deps(google([], { status: 200, body: {} }).fake), google: null };
     expect(await syncCalendar(off, workspaceId, 'cal_x')).toBe('off');

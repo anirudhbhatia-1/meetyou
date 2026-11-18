@@ -1,7 +1,9 @@
+import { parseSealingKeys, type GoogleDeps } from '@meetyou/auth';
 import { scheduleAccountDeletion } from '@meetyou/queue';
 import type { FastifyPluginAsync } from 'fastify';
 
 import { UnauthorizedError } from '../errors.ts';
+import { removeCalendarConnection, revokeRemovedCalendar } from './calendar.ts';
 import { clearRefreshCookie, isWebClient } from '../web-session.ts';
 
 /**
@@ -9,7 +11,14 @@ import { clearRefreshCookie, isWebClient } from '../web-session.ts';
  * log and enqueues `account.delete` in the same transaction; the worker removes every meeting's
  * objects, the workspace and the user (refresh tokens cascade). 202: it completes asynchronously.
  */
-export const accountRoutes: FastifyPluginAsync = async (fastify) => {
+export interface AccountRoutesOptions {
+  /** ADR-0013: to revoke a connected Google Calendar when the account goes. */
+  calendarTokenKeys?: string;
+  googleDeps?: GoogleDeps;
+}
+
+export const accountRoutes: FastifyPluginAsync<AccountRoutesOptions> = async (fastify, options) => {
+  const keys = parseSealingKeys(options.calendarTokenKeys);
   fastify.post(
     '/v1/account::delete',
     { preHandler: fastify.requireAuth },
@@ -18,9 +27,12 @@ export const accountRoutes: FastifyPluginAsync = async (fastify) => {
       if (!workspaceId || !userId || !request.inWorkspace) {
         throw new UnauthorizedError('Unauthorized');
       }
-      const { requestId } = await request.inWorkspace((tx) =>
-        scheduleAccountDeletion(tx, { userId, workspaceId }),
-      );
+      const { requestId, calendar } = await request.inWorkspace(async (tx) => ({
+        ...(await scheduleAccountDeletion(tx, { userId, workspaceId })),
+        // The calendar grant is revoked now, not when the worker deletes the workspace.
+        calendar: await removeCalendarConnection(tx, userId),
+      }));
+      await revokeRemovedCalendar(calendar, keys, options.googleDeps ?? {});
       // The web session ends here; its refresh token disappears with the user.
       if (isWebClient(request)) clearRefreshCookie(reply);
       return reply.status(202).send({ requestId });

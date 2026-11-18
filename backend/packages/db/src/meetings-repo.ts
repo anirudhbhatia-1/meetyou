@@ -249,6 +249,9 @@ export async function linkCalendarEvent(
     .select(['e.id', 'e.title', 'e.startsAt'])
     .where('c.userId', '=', input.userId)
     .where('e.meetCode', '=', input.meetCode)
+    // Only events the latest poll still saw: a moved or cancelled instance of a recurring series
+    // shares the Meet code and must not give its title or notes.
+    .whereRef('e.syncedAt', '>=', 'c.lastSyncedAt')
     .where('e.startsAt', '<=', new Date(input.at.getTime() + EVENT_MATCH_MS))
     .where('e.endsAt', '>=', new Date(input.at.getTime() - EVENT_MATCH_MS))
     .orderBy(sql`abs(extract(epoch from (e.starts_at - ${input.at.toISOString()}::timestamptz)))`)

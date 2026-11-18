@@ -9,6 +9,21 @@ import { companyFromEmail, nameFromEmail } from '../calendar/google-calendar.ts'
 
 /** A first name shorter than this is too easy to boost into ordinary words ("Al", "Om"). */
 const MIN_FIRST_NAME = 3;
+/** Titles that come first in a name but are not one ("Dr. Ramesh Kumar", "Sri Lakshmi N"). */
+const HONORIFICS = new Set([
+  'dr',
+  'mr',
+  'mrs',
+  'ms',
+  'miss',
+  'sri',
+  'shri',
+  'smt',
+  'prof',
+  'er',
+  'ca',
+  'adv',
+]);
 
 /** Terms for one display name: the full name, and the first name when there is more than one word. */
 export function nameKeyterms(displayName: string): string[] {
@@ -19,8 +34,10 @@ export function nameKeyterms(displayName: string): string[] {
     .trim();
   if (name === '') return [];
   const words = name.split(' ');
-  const first = words[0] ?? '';
-  return words.length > 1 && first.length >= MIN_FIRST_NAME ? [name, first] : [name];
+  const isTitle = (w: string) => HONORIFICS.has(w.toLowerCase().replace(/\.$/, ''));
+  const given = words.filter((w) => !isTitle(w));
+  const first = given[0] ?? '';
+  return given.length > 1 && first.length >= MIN_FIRST_NAME ? [name, first] : [name];
 }
 
 /** Glossary first, then each name's terms in the order people were seen, without repeats. */
@@ -39,6 +56,13 @@ export function sessionKeyterms(glossary: readonly string[], names: Iterable<str
 }
 
 /**
+ * A big invite must not fill the provider's list (50 terms): names Meet shows during the call are
+ * appended after these and need room too.
+ */
+const MAX_INVITE_NAMES = 12;
+const MAX_INVITE_COMPANIES = 4;
+
+/**
  * ADR-0013: the glossary plus the calendar invite's people (their names, or the name part of the
  * email) and their companies (from work email domains), so names are right before anyone speaks.
  */
@@ -48,9 +72,14 @@ export function calendarKeyterms(
 ): string[] {
   const names = attendees
     .map((a) => a.name ?? (a.email !== null ? nameFromEmail(a.email) : ''))
-    .filter((n) => n.trim() !== '');
-  const companies = attendees
-    .map((a) => (a.email !== null ? companyFromEmail(a.email) : null))
-    .filter((c): c is string => c !== null);
+    .filter((n) => n.trim() !== '')
+    .slice(0, MAX_INVITE_NAMES);
+  const companies = [
+    ...new Set(
+      attendees
+        .map((a) => (a.email !== null ? companyFromEmail(a.email) : null))
+        .filter((c): c is string => c !== null),
+    ),
+  ].slice(0, MAX_INVITE_COMPANIES);
   return sessionKeyterms([...glossary], [...names, ...companies]);
 }

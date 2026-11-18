@@ -507,6 +507,8 @@ describe('participant names as keyterms', () => {
     expect(nameKeyterms('Om Prakash')).toEqual(['Om Prakash']);
     expect(nameKeyterms('Rohan (Presenting)')).toEqual(['Rohan']);
     expect(nameKeyterms('  ')).toEqual([]);
+    expect(nameKeyterms('Dr. Ramesh Kumar')).toEqual(['Dr. Ramesh Kumar', 'Ramesh']);
+    expect(nameKeyterms('Sri Lakshmi N')).toEqual(['Sri Lakshmi N', 'Lakshmi']);
   });
 
   it('puts the glossary first and drops repeats', () => {

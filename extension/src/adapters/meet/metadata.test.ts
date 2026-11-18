@@ -147,6 +147,29 @@ describe('cleanParticipantName', () => {
     });
   });
 
+  it('keeps dotted initials and long South Indian names', () => {
+    expect(cleanParticipantName('Ramesh K.V.')?.name).toBe('Ramesh K.V.');
+    expect(cleanParticipantName('Suresh M.K.')?.name).toBe('Suresh M.K.');
+    expect(cleanParticipantName('Venkata Sai Krishna Prasad Rao Kodali')?.name).toBe(
+      'Venkata Sai Krishna Prasad Rao Kodali',
+    );
+  });
+
+  it('accepts dial-ins, rooms and "Name - Company" on a tile label only', () => {
+    expect(cleanParticipantName('+91 98765 43210', { tileLabel: true })?.name).toBe(
+      '+91 98765 43210',
+    );
+    expect(cleanParticipantName('BLR-5F-Everest (8)', { tileLabel: true })?.name).toBe(
+      'BLR-5F-Everest (8)',
+    );
+    expect(cleanParticipantName('Priya Sharma - Acme', { tileLabel: true })?.name).toBe(
+      'Priya Sharma - Acme',
+    );
+    expect(cleanParticipantName('10:42 AM', { tileLabel: true })).toBeNull();
+    expect(cleanParticipantName('abc-defg-hij', { tileLabel: true })).toBeNull();
+    expect(cleanParticipantName('+91 98765 43210')).toBeNull();
+  });
+
   it('treats a bare "You" tile label as the user', () => {
     expect(cleanParticipantName('You')).toEqual({ name: 'You', isSelf: true });
   });

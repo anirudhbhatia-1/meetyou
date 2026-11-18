@@ -109,6 +109,46 @@ describe('account.export', () => {
           createdBy: people[0]?.userId ?? '',
         })
         .execute();
+      // DESIGN §11.1 and ADR-0013 data that the export must carry.
+      const folderId = `fld_${newUlid()}`;
+      await tx
+        .insertInto('folders')
+        .values({ id: folderId, workspaceId, name: 'Clients', createdBy: null })
+        .execute();
+      await tx.updateTable('meetings').set({ folderId }).where('id', '=', meetingId).execute();
+      const connectionId = `cal_${newUlid()}`;
+      await tx
+        .insertInto('calendarConnections')
+        .values({
+          id: connectionId,
+          workspaceId,
+          userId: people[0]?.userId ?? '',
+          accountEmail: 'asha@work.example',
+          refreshTokenSealed: 'v1.k1.secret-never-exported',
+          scope: 'calendar.events.readonly',
+        })
+        .execute();
+      const eventId = `cev_${newUlid()}`;
+      await tx
+        .insertInto('calendarEvents')
+        .values({
+          id: eventId,
+          workspaceId,
+          connectionId,
+          externalId: 'g1',
+          title: 'Acme weekly',
+          startsAt: new Date('2026-11-10T04:30:00Z'),
+          endsAt: new Date('2026-11-10T05:00:00Z'),
+          meetCode: 'abc-defg-hij',
+          attendees: JSON.stringify([
+            { name: 'Neha', email: 'neha@acme.com', self: false, organizer: false },
+          ]),
+        })
+        .execute();
+      await tx
+        .insertInto('calendarEventNotes')
+        .values({ id: `cen_${newUlid()}`, workspaceId, eventId, text: 'Pricing for Q1' })
+        .execute();
       await storeSummary(tx, {
         workspaceId,
         meetingId,
@@ -197,13 +237,28 @@ describe('account.export', () => {
       [
         'README.txt',
         'account.json',
+        'calendar.json',
         `${folder}/meeting.json`,
         `${folder}/notes.md`,
         `${folder}/transcript.md`,
       ].sort(),
     );
     const account = JSON.parse(files.get('account.json') ?? '{}') as Record<string, unknown>;
-    expect(account).toMatchObject({ meetingCount: 1, vocabulary: ['Razorpay'] });
+    expect(account).toMatchObject({
+      meetingCount: 1,
+      vocabulary: ['Razorpay'],
+      folders: ['Clients'],
+    });
+    const calendar = files.get('calendar.json') ?? '';
+    expect(JSON.parse(calendar)).toMatchObject({
+      account: 'asha@work.example',
+      events: [{ title: 'Acme weekly', notesBeforeCall: ['Pricing for Q1'] }],
+    });
+    expect(calendar).not.toContain('secret-never-exported');
+    expect(
+      (JSON.parse(files.get(`${folder}/meeting.json`) ?? '{}') as { meeting: { folder: string } })
+        .meeting.folder,
+    ).toBe('Clients');
     expect(account.settings).not.toHaveProperty('workspaceId');
     const record = JSON.parse(files.get(`${folder}/meeting.json`) ?? '{}') as {
       transcript: { speaker: string; rawText: string }[];

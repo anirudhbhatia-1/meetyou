@@ -6,7 +6,7 @@ pointer to where the full detail lives — the linked document stays the source 
 
 | Field | Value |
 |---|---|
-| Last updated | 2026-11-18 (Anirudh: Google Calendar sync, ADR-0013) |
+| Last updated | 2026-11-18 (Anirudh: review fixes for folders, calendar, naming, keyterms) |
 | Updated by | Anirudh (Claude Code) |
 | Repository | [anirudhbhatia-1/meetyou](https://github.com/anirudhbhatia-1/meetyou) — branches `main`, `anirudh`, `Gauravbro` |
 | Current stage | **Stage 4** complete in code; 2026-11-09 audit fixes landed; Stage-5 hardening planned (AUDIT §4); real Chrome/Meet checks pending (§7) |
@@ -206,7 +206,32 @@ Gaurav's S3-07..S3-11 — Gaurav should not start them).** **Stage 4 is complete
 
 Newest first. One entry per working session (either person).
 
-### 2026-11-18 (latest) — Anirudh (Claude Code): Google Calendar sync (ADR-0013)
+### 2026-11-18 (latest) — Anirudh (Claude Code): review fixes for the new features
+
+Three independent reviews (calendar backend; speaker naming, keyterms and folders; web wiring)
+plus an integration check. Fixed:
+- **Calendar:** a same-account reconnect no longer revokes the new grant (revoke only on an
+  account switch, which also clears the old events); recordings link only to events the last
+  poll saw; a lost sealing key shows Reconnect (`key_missing`); a sync never marks a fresh
+  reconnect broken; double Connect is serialized; GCM tag length pinned; invite keyterms capped
+  (12 names, 4 companies) and added to the batch pass; account deletion revokes the grant;
+  "Download all my data" now has `calendar.json` and folders.
+- **Naming:** tile labels keep dial-ins, rooms and "Name - Company" (so a 3-person call is not
+  taken for a 2-person one); dotted initials ("Ramesh K.V.") and names up to 7 words pass; the
+  roster is sent when recording starts; honorifics are not boosted as first names.
+- **Keyterms:** after a lost Configure reply only the newest list is sent, a timer flushes
+  waiting lists, late replies are ignored; names learned during the stream handshake are sent
+  once it opens.
+- **Folders:** a folder deleted during a move gives 400 `invalid_folder`, not 500.
+- **Web:** a failed notes load no longer lets Save wipe saved notes; failed calendar connect and
+  bfcache no longer leave Connect stuck; Up next does not flash for users without a calendar,
+  shows "Syncing…" and polls until the first sync; 24-hour times; notes chip; labelled
+  Notes/Join; danger/warning text in Settings; move sheet recovers when the move fails; the
+  suggestion's Move can't double-submit; combined empty states; STAGING_SETUP redirect list.
+Tests added for each. `pnpm check` passes; rechecked in the browser on the mock API.
+Still open: live keyterm names are lost after a gateway failover (the batch pass has them).
+
+### 2026-11-18 — Anirudh (Claude Code): Google Calendar sync (ADR-0013)
 
 Anirudh chose the Google Calendar API with all four first-version features. Built end to end:
 ADR-0013; DESIGN §10.1 (Up next, notes before the call) and §15.7 (Settings row); migration

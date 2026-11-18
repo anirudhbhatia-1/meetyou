@@ -1,6 +1,12 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { pkceChallenge, SignedOutError, WebAuth } from './auth.ts';
+import {
+  pkceChallenge,
+  SignedOutError,
+  startCalendarConnect,
+  takeCalendarCallback,
+  WebAuth,
+} from './auth.ts';
 import { createHttpApi } from './http.ts';
 
 const json = (status: number, body: unknown) =>
@@ -146,5 +152,51 @@ describe('HTTP library API', () => {
     const [segment] = await api.getSegments('m');
     expect(segment?.speakerName).toBeUndefined();
     expect(segment?.text).toBe('haan theek hai');
+  });
+});
+
+describe('calendar consent (ADR-0013)', () => {
+  const SCOPE = 'https://www.googleapis.com/auth/calendar.events.readonly';
+
+  it('asks for offline, read-only calendar access with PKCE and a fresh consent', async () => {
+    vi.stubGlobal('sessionStorage', memoryStorage());
+    const assigned: string[] = [];
+    vi.stubGlobal('window', {
+      location: { origin: 'https://web.example', assign: (u: string) => assigned.push(u) },
+    });
+    await startCalendarConnect('cid', {
+      scope: SCOPE,
+      callbackPath: '/calendar/callback',
+      loginHint: 'asha@example.com',
+    });
+    const url = new URL(assigned[0] ?? '');
+    expect(url.searchParams.get('redirect_uri')).toBe('https://web.example/calendar/callback');
+    expect(url.searchParams.get('scope')).toBe(`openid email ${SCOPE}`);
+    expect(url.searchParams.get('access_type')).toBe('offline');
+    expect(url.searchParams.get('prompt')).toBe('consent');
+    expect(url.searchParams.get('code_challenge_method')).toBe('S256');
+    expect(url.searchParams.get('login_hint')).toBe('asha@example.com');
+
+    const state = url.searchParams.get('state') ?? '';
+    expect(
+      takeCalendarCallback(new URL(`https://web.example/calendar/callback?code=c1&state=${state}`)),
+    ).toMatchObject({ code: 'c1', redirectUri: 'https://web.example/calendar/callback' });
+    // Single use: the same callback again is refused.
+    expect(
+      takeCalendarCallback(new URL(`https://web.example/calendar/callback?code=c1&state=${state}`)),
+    ).toBeNull();
+  });
+
+  it('refuses a wrong state, a missing code and a refused consent', async () => {
+    vi.stubGlobal('sessionStorage', memoryStorage());
+    vi.stubGlobal('window', {
+      location: { origin: 'https://web.example', assign: () => undefined },
+    });
+    for (const query of ['code=c&state=wrong', 'state=s', 'error=access_denied&state=s']) {
+      await startCalendarConnect('cid', { scope: SCOPE, callbackPath: '/calendar/callback' });
+      expect(
+        takeCalendarCallback(new URL(`https://web.example/calendar/callback?${query}`)),
+      ).toBeNull();
+    }
   });
 });

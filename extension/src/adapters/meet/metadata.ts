@@ -37,8 +37,17 @@ const HTML_TAGS_REGEX = /<[^>]*>/g;
 // recorder's Meet reader (MIT, FrigadeHQ/yogurt, callNames/parse.ts). Unlike Yogurt we do not
 // require capitalised words: many Indian Google accounts have lowercase names.
 const NOT_A_NAME_REGEX = /\d|[?!…:/⌘]|\.\.|\s[-–—|]\s/;
+/**
+ * A video tile's own label ("More options for <name>") names exactly one participant, so digits
+ * and separators are allowed there: dial-ins ("+91 98765 43210"), room devices ("BLR-5F (8)") and
+ * "Priya Sharma - Acme" are real participants, and dropping them would make a three-person call
+ * look like a two-person one (speaker naming, S3-04).
+ */
+const NOT_A_TILE_NAME_REGEX = /[?!…:⌘]|\.\./;
 const MEETING_CODE_REGEX = /^[a-z]{3}-[a-z]{4}-[a-z]{3}$/i;
-const MAX_NAME_WORDS = 5;
+const MAX_NAME_WORDS = 7;
+/** Trailing initials: "K.V.", "M.K.", "A." */
+const INITIALS_REGEX = /^(\p{L}\.)+$/u;
 /** Meet's own words that can stand alone like a name. */
 const MEET_WORDS = new Set([
   'meet',
@@ -57,6 +66,7 @@ const MEET_WORDS = new Set([
 function looksLikeSentence(name: string): boolean {
   if (!name.endsWith('.')) return false;
   const last = name.split(/\s+/).at(-1) ?? '';
+  if (INITIALS_REGEX.test(last)) return false;
   return last.replace(/\.$/, '').length > 2;
 }
 
@@ -131,6 +141,7 @@ export function extractMeetingTitle(container: ParentNode, fallbackCode?: string
  */
 export function cleanParticipantName(
   rawName: string | null | undefined,
+  options: { tileLabel?: boolean } = {},
 ): { name: string; isSelf: boolean } | null {
   if (rawName === null || rawName === undefined) {
     return null;
@@ -151,7 +162,7 @@ export function cleanParticipantName(
   // Meet labels the user's own tile "You".
   if (sanitized.toLowerCase() === 'you') return { name: sanitized, isSelf: true };
   if (
-    NOT_A_NAME_REGEX.test(sanitized) ||
+    (options.tileLabel === true ? NOT_A_TILE_NAME_REGEX : NOT_A_NAME_REGEX).test(sanitized) ||
     MEETING_CODE_REGEX.test(sanitized) ||
     MEET_WORDS.has(sanitized.toLowerCase()) ||
     looksLikeSentence(sanitized) ||

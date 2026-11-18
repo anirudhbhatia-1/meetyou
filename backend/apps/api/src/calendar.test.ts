@@ -150,7 +150,7 @@ describe('calendar', () => {
         .values([
           row('cev_a', 'Acme weekly', 5, 'abc-defg-hij'),
           row('cev_b', 'Lunch', 60, null),
-          row('cev_c', 'Moved away', 90, 'xyz-abcd-efg', new Date(now - 3_600_000)),
+          row('cev_c', 'Moved away', 10, 'xyz-abcd-efg', new Date(now - 3_600_000)),
         ])
         .execute();
       return { event: 'cev_a' };
@@ -198,6 +198,36 @@ describe('calendar', () => {
     expect(upcoming.meetings[0]?.meetingId).toBe(started.meetingId);
   });
 
+  it('never links a recording to an event the last poll no longer saw', async () => {
+    const res = await call('POST', '/v1/sessions', {
+      platform: 'google_meet',
+      meetingCode: 'xyz-abcd-efg',
+      title: 'Meet',
+      recordVideo: false,
+      clientInfo: { extensionVersion: '0.1.0', browser: 'Chrome' },
+    });
+    const started = StartSessionResponse.parse(res.json());
+    expect(started.notes).toBeUndefined();
+    const meeting = await env.db.inWorkspace(workspaceId, (tx) =>
+      tx
+        .selectFrom('meetings')
+        .select(['title', 'calendarEventId'])
+        .where('id', '=', started.meetingId)
+        .executeTakeFirstOrThrow(),
+    );
+    expect(meeting).toEqual({ title: 'Meet', calendarEventId: null });
+  });
+
+  it('a reconnect with the same account keeps the new grant (no revoke)', async () => {
+    revoked.length = 0;
+    expect((await connect()).statusCode).toBe(200);
+    expect(revoked).toEqual([]);
+    const events = await env.db.inWorkspace(workspaceId, (tx) =>
+      tx.selectFrom('calendarEvents').select('id').execute(),
+    );
+    expect(events.length).toBeGreaterThan(0);
+  });
+
   it('disconnects: revokes at Google and deletes events and their notes', async () => {
     expect((await call('DELETE', '/v1/calendar')).statusCode).toBe(204);
     expect(revoked).toEqual(['1//fresh']);
@@ -209,6 +239,14 @@ describe('calendar', () => {
       ).rows[0]?.n,
     }));
     expect(left).toEqual({ events: 0, notes: 0 });
+    expect(CalendarStatus.parse((await call('GET', '/v1/calendar')).json()).connected).toBe(false);
+  });
+
+  it('revokes the calendar when the account is deleted', async () => {
+    expect((await connect()).statusCode).toBe(200);
+    revoked.length = 0;
+    expect((await call('POST', '/v1/account:delete')).statusCode).toBe(202);
+    expect(revoked).toEqual(['1//fresh']);
     expect(CalendarStatus.parse((await call('GET', '/v1/calendar')).json()).connected).toBe(false);
   });
 });

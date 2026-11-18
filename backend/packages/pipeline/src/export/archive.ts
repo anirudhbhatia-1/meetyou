@@ -24,7 +24,9 @@ const json = (name: string, value: unknown): ZipEntry =>
 const README = `Your Minutes data
 =================
 
-account.json            Your settings and vocabulary.
+account.json            Your settings, vocabulary and folders.
+calendar.json           If you connected Google Calendar: the account, the events we keep and
+                        the notes you wrote before calls (no access tokens).
 meetings/<meeting>/     One folder per meeting:
   meeting.json          Everything we store for it: participants, transcript (display text and
                         the speech-to-text original), your notes, the current AI notes with the
@@ -67,11 +69,19 @@ const dateOnly = (value: string | Date | null): string | null =>
 async function meetingFiles(tx: WorkspaceTx, meetingId: string): Promise<ZipEntry[]> {
   const meeting = await tx
     .selectFrom('meetings')
-    .select(['id', 'platform', 'title', 'template', 'status', 'startedAt', 'endedAt'])
+    .select(['id', 'platform', 'title', 'template', 'status', 'startedAt', 'endedAt', 'folderId'])
     .where('id', '=', meetingId)
     .where('deletedAt', 'is', null)
     .executeTakeFirst();
   if (meeting === undefined) return [];
+  const filedIn =
+    meeting.folderId === null
+      ? undefined
+      : await tx
+          .selectFrom('folders')
+          .select('name')
+          .where('id', '=', meeting.folderId)
+          .executeTakeFirst();
   const [participants, segments, notes, summary, questions, consent] = await Promise.all([
     tx
       .selectFrom('participants')
@@ -181,6 +191,7 @@ async function meetingFiles(tx: WorkspaceTx, meetingId: string): Promise<ZipEntr
       status: meeting.status,
       startedAt: meeting.startedAt.toISOString(),
       endedAt: meeting.endedAt?.toISOString() ?? null,
+      folder: filedIn?.name ?? null,
     },
     participants: participants.map((p) => ({
       id: p.id,
@@ -297,6 +308,41 @@ async function meetingFiles(tx: WorkspaceTx, meetingId: string): Promise<ZipEntr
   ];
 }
 
+/** ADR-0013: the connected calendar as we keep it; the sealed token never leaves. */
+async function calendarExport(tx: WorkspaceTx, userId: string) {
+  const connection = await tx
+    .selectFrom('calendarConnections')
+    .select(['id', 'accountEmail', 'scope', 'createdAt', 'lastSyncedAt'])
+    .where('userId', '=', userId)
+    .executeTakeFirst();
+  if (connection === undefined) return null;
+  const events = await tx
+    .selectFrom('calendarEvents')
+    .select(['id', 'title', 'startsAt', 'endsAt', 'meetCode', 'attendees'])
+    .where('connectionId', '=', connection.id)
+    .orderBy('startsAt')
+    .execute();
+  const notes = await tx
+    .selectFrom('calendarEventNotes')
+    .select(['eventId', 'text'])
+    .orderBy('order')
+    .execute();
+  return {
+    account: connection.accountEmail,
+    scope: connection.scope,
+    connectedAt: connection.createdAt.toISOString(),
+    lastSyncedAt: connection.lastSyncedAt?.toISOString() ?? null,
+    events: events.map((e) => ({
+      title: e.title,
+      startsAt: e.startsAt.toISOString(),
+      endsAt: e.endsAt.toISOString(),
+      meetCode: e.meetCode,
+      attendees: e.attendees.map((a) => ({ name: a.name, email: a.email })),
+      notesBeforeCall: notes.filter((n) => n.eventId === e.id).map((n) => n.text),
+    })),
+  };
+}
+
 /** All files of one export, meeting by meeting (one short transaction each). */
 export async function buildArchive(
   db: Db,
@@ -304,8 +350,8 @@ export async function buildArchive(
   userId: string,
   exportedAt: Date,
 ): Promise<{ entries: ZipEntry[]; meetingCount: number }> {
-  const { meetingIds, account } = await db.inWorkspace(workspaceId, async (tx) => {
-    const [meetings, settings, glossary] = await Promise.all([
+  const { meetingIds, account, calendar } = await db.inWorkspace(workspaceId, async (tx) => {
+    const [meetings, settings, glossary, folders, calendar] = await Promise.all([
       tx
         .selectFrom('meetings')
         .select('id')
@@ -314,6 +360,8 @@ export async function buildArchive(
         .execute(),
       tx.selectFrom('userSettings').selectAll().where('userId', '=', userId).executeTakeFirst(),
       tx.selectFrom('glossaryTerms').select('term').orderBy('createdAt').orderBy('id').execute(),
+      tx.selectFrom('folders').select('name').orderBy('name').execute(),
+      calendarExport(tx, userId),
     ]);
     return {
       meetingIds: meetings.map((m) => m.id),
@@ -335,10 +383,13 @@ export async function buildArchive(
                 consentMessage: settings.consentMessage,
               },
         vocabulary: glossary.map((g) => g.term),
+        folders: folders.map((f) => f.name),
       },
+      calendar,
     };
   });
   const entries: ZipEntry[] = [text('README.txt', README), json('account.json', account)];
+  if (calendar !== null) entries.push(json('calendar.json', calendar));
   for (const meetingId of meetingIds) {
     entries.push(...(await db.inWorkspace(workspaceId, (tx) => meetingFiles(tx, meetingId))));
   }

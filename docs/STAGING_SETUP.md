@@ -416,7 +416,7 @@ Dev endpoints are **off** outside `local`/`ci`; sessions come from the API.
 | `DATABASE_URL` | secret |
 | `AUTH_SIGNING_JWKS` | secret |
 | `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` | §7.2 |
-| `ALLOWED_REDIRECT_URIS` | `https://<extension-id>.chromiumapp.org/oauth2,https://<web host>/auth/callback` (comma list) |
+| `ALLOWED_REDIRECT_URIS` | `https://<extension-id>.chromiumapp.org/oauth2,https://<web host>/auth/callback,https://<web host>/calendar/callback` (comma list; the last is ADR-0013) |
 | `CORS_ALLOWED_ORIGINS` | extra origins only; `chrome-extension://*` is built in, and the web app needs none (its server proxies `/v1`) |
 | `GCS_AUDIO_BUCKET` | as above (signed video PUT/GET URLs) |
 | `GATEWAY_WS_URL` | `wss://<gateway host>/v1/stream` (returned by `POST /sessions`) |

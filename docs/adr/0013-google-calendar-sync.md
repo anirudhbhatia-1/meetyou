@@ -31,7 +31,11 @@ sign-in, and calendar access becomes its own opt-in step.
 3. **Refresh token sealed.** AES-256-GCM (`auth/sealed.ts`), the connection ID as associated
    data, keys from `CALENDAR_TOKEN_KEYS` (`id:base64,…`, first seals, all open) in Key Vault. The
    token never leaves the API and worker, is never logged, and is revoked at Google on
-   disconnect (`POST https://oauth2.googleapis.com/revoke`).
+   disconnect and on account deletion (`POST https://oauth2.googleapis.com/revoke`). A reconnect
+   with the **same** Google account does not revoke the old token: revoking works on the whole
+   grant and would kill the new one too. A reconnect with another account revokes the old grant,
+   deletes the old account's events and waits for a fresh sync. A token whose sealing key is gone
+   sets `needs_reconnect` (`key_missing`).
 4. **Polling a window, not sync tokens.** Google does not allow `timeMin`/`timeMax` with a
    `syncToken`, so each run of `calendar.sync` asks `events.list` (primary calendar,
    `singleEvents=true`, `orderBy=startTime`, `eventTypes=default`) for yesterday to three days
@@ -47,11 +51,15 @@ sign-in, and calendar access becomes its own opt-in step.
    `calendar_event_notes`, and `meetings.calendar_event_id`. All with `workspace_id` and RLS.
    Disconnect deletes the connection, its events and their notes; recordings stay.
 7. **Linking a recording.** `POST /v1/sessions` matches the user's event with the same Meet code
-   on now (±30 min): the meeting takes the event's title (the AI title never replaces it), the
+   on now (±30 min) that the latest poll still returned (a moved instance of a recurring series
+   shares the code): the meeting takes the event's title (the AI title never replaces it), the
    notes before the call are copied into the meeting at session time 0 and returned in
    `StartSessionResponse.notes`, which the extension stores so the side panel starts with them
    (its first save keeps them). The gateway adds the invite's names (or the email's name part) and
-   company names (work email domains) to the Deepgram keyterms from the first second.
+   company names (work email domains) to the Deepgram keyterms from the first second, capped at
+   12 names and 4 companies so names seen live still fit; the post-meeting pass uses the same
+   terms. Export ("Download all my data") includes `calendar.json` (events, attendees, notes
+   before the call; never the token).
 
 ## 3. Consequences
 

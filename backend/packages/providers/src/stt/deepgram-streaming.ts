@@ -195,9 +195,8 @@ export class KeytermUpdates {
 
   update(terms: readonly string[]): void {
     const list = keytermsWithinBudget(terms);
-    if (this.#pending !== null && this.#now() - this.#pending.since > CONFIGURE_REPLY_MS) {
-      this.#pending = null;
-    }
+    // Lists replace each other whole, so this one supersedes anything still waiting.
+    if (this.#expire()) this.#next = null;
     if (this.#pending !== null) {
       this.#next = same(list, this.#pending.terms) ? null : list;
       return;
@@ -205,6 +204,26 @@ export class KeytermUpdates {
     if (same(list, this.#active)) return;
     this.#pending = { terms: list, since: this.#now() };
     this.#send(JSON.stringify({ type: 'Configure', keyterms: list }));
+  }
+
+  /**
+   * Called every second by the stream: a Configure whose reply never came (lost, or a shape we do
+   * not parse) stops blocking, and the newest waiting list goes out.
+   */
+  tick(): void {
+    if (!this.#expire()) return;
+    const next = this.#next;
+    this.#next = null;
+    if (next !== null) this.update(next);
+  }
+
+  /** Drops a pending Configure older than the reply timeout; true when it did. */
+  #expire(): boolean {
+    if (this.#pending === null || this.#now() - this.#pending.since <= CONFIGURE_REPLY_MS) {
+      return false;
+    }
+    this.#pending = null;
+    return true;
   }
 
   /** True when `raw` was a reply to a Configure (and is consumed here). */
@@ -217,6 +236,8 @@ export class KeytermUpdates {
     }
     const reply = DgConfigureReply.safeParse(json);
     if (!reply.success) return false;
+    // A late reply to a Configure we already gave up on: it says nothing about the current one.
+    if (this.#pending === null) return true;
     const pending = this.#pending;
     this.#pending = null;
     if (reply.data.type === 'ConfigureSuccess') {
@@ -278,6 +299,7 @@ export function deepgramProvider(apiKey: string): SttStreamingProvider {
         onRejected: (code) => handlers.onKeytermsRejected?.(code),
       });
       const keepAlive = setInterval(() => {
+        keyterms.tick();
         if (Date.now() - lastSend > 3000 && ws.readyState === WebSocket.OPEN) {
           ws.send(JSON.stringify({ type: 'KeepAlive' }));
         }

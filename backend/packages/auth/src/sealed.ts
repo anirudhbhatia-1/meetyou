@@ -49,7 +49,10 @@ export function unseal(sealed: string, keys: readonly SealingKey[], aad: string)
   }
   const key = keys.find((k) => k.id === keyId);
   if (key === undefined) throw new Error('sealed with a key that is not configured');
-  const decipher = createDecipheriv(ALGORITHM, key.key, Buffer.from(iv, 'base64url'));
+  // A full 16-byte tag only: Node would accept a truncated GCM tag otherwise (DEP0182).
+  const decipher = createDecipheriv(ALGORITHM, key.key, Buffer.from(iv, 'base64url'), {
+    authTagLength: 16,
+  });
   decipher.setAAD(Buffer.from(aad, 'utf8'));
   decipher.setAuthTag(Buffer.from(tag, 'base64url'));
   return Buffer.concat([

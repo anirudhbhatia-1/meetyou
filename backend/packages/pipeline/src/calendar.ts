@@ -74,18 +74,28 @@ export async function syncCalendar(
   if (connection === undefined) return 'gone';
   if (connection.status === 'needs_reconnect') return 'needs_reconnect';
 
+  // Only the grant this run used: a reconnect during the run replaced it and stays active.
   const markReconnect = (code: string) =>
     deps.db.inWorkspace(workspaceId, (tx) =>
       tx
         .updateTable('calendarConnections')
         .set({ status: 'needs_reconnect', lastErrorCode: code })
         .where('id', '=', connectionId)
+        .where('refreshTokenSealed', '=', connection.refreshTokenSealed)
         .execute(),
     );
 
+  let refreshToken: string;
+  try {
+    refreshToken = unseal(connection.refreshTokenSealed, deps.sealingKeys, connectionId);
+  } catch {
+    // The key that sealed it is gone (rotated out): only a new consent helps.
+    await markReconnect('key_missing');
+    log.log('calendar.needs_reconnect', { connectionId, code: 'key_missing' });
+    return 'needs_reconnect';
+  }
   let accessToken: string;
   try {
-    const refreshToken = unseal(connection.refreshTokenSealed, deps.sealingKeys, connectionId);
     accessToken = await refreshCalendarAccess(refreshToken, google, {
       ...(deps.fetch !== undefined ? { fetch: deps.fetch } : {}),
     });

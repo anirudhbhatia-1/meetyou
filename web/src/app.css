@@ -1613,3 +1613,21 @@ mark.match-current {
     gap: 6px;
   }
 }
+.note-chip {
+  justify-self: start;
+  margin-top: 4px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--olive-tint);
+  color: var(--olive-ink);
+  font-size: 12px;
+}
+.up-next-row .row-main {
+  display: grid;
+}
+.danger-text {
+  color: var(--danger);
+}
+.warning-text {
+  color: var(--olive-ink);
+}
